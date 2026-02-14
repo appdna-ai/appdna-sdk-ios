@@ -117,7 +117,7 @@ enum EventEnvelopeBuilder {
             app_version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0",
             sdk_version: AppDNA.sdkVersion,
             locale: Locale.current.identifier,
-            country: Locale.current.region?.identifier ?? ""
+            country: (Locale.current as NSLocale).countryCode ?? ""
         )
 
         let props: [String: AnyCodable]? = properties?.mapValues { AnyCodable($0) }

@@ -27,7 +27,7 @@ struct SocialProof: View {
                     .font(.callout)
                     .foregroundColor(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
-                    .italic()
+                    .font(.subheadline.italic())
                     .padding(.horizontal)
             }
         }
