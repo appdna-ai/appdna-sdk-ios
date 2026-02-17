@@ -1,7 +1,7 @@
 import Foundation
 import FirebaseFirestore
 
-/// Manages remote config, flags, experiments, and paywalls from Firestore.
+/// Manages remote config, flags, experiments, paywalls, onboarding flows, and messages from Firestore.
 /// Uses stale-while-revalidate: always returns cached value, refreshes in background.
 final class RemoteConfigManager {
     private let queue = DispatchQueue(label: "ai.appdna.sdk.config")
@@ -15,6 +15,9 @@ final class RemoteConfigManager {
     private var experiments: [String: ExperimentConfig] = [:]
     private var flags: [String: Any] = [:]
     private var flows: [String: Any] = [:]
+    private var onboardingFlows: [String: OnboardingFlowConfig] = [:]
+    private var activeOnboardingFlowId: String?
+    private var messages: [String: MessageConfig] = [:]
 
     init(firestorePath: String?, configCache: ConfigCache, configTTL: TimeInterval) {
         self.firestorePath = firestorePath
@@ -52,6 +55,26 @@ final class RemoteConfigManager {
         queue.sync { flags }
     }
 
+    // MARK: - Onboarding (v0.2)
+
+    /// Get an onboarding flow by ID, or the active flow if id is nil.
+    func getOnboardingFlow(id: String?) -> OnboardingFlowConfig? {
+        queue.sync {
+            if let id {
+                return onboardingFlows[id]
+            }
+            guard let activeId = activeOnboardingFlowId else { return nil }
+            return onboardingFlows[activeId]
+        }
+    }
+
+    // MARK: - Messages (v0.2)
+
+    /// Get all active message configs.
+    func getActiveMessages() -> [String: MessageConfig] {
+        queue.sync { messages }
+    }
+
     // MARK: - Fetch from Firestore
 
     func fetchConfigs() {
@@ -63,7 +86,7 @@ final class RemoteConfigManager {
         let db = Firestore.firestore()
         let basePath = "\(firestorePath)/config"
 
-        // Fetch all 4 config documents in parallel
+        // Fetch all 6 config documents in parallel
         let group = DispatchGroup()
 
         group.enter()
@@ -112,6 +135,28 @@ final class RemoteConfigManager {
             }
         }
 
+        // v0.2: Onboarding flows
+        group.enter()
+        db.document("\(basePath)/onboarding").getDocument { [weak self] snapshot, error in
+            defer { group.leave() }
+            if let data = snapshot?.data() {
+                self?.parseOnboarding(data)
+            } else if let error {
+                Log.error("Failed to fetch onboarding config: \(error.localizedDescription)")
+            }
+        }
+
+        // v0.2: In-app messages
+        group.enter()
+        db.document("\(basePath)/messages").getDocument { [weak self] snapshot, error in
+            defer { group.leave() }
+            if let data = snapshot?.data() {
+                self?.parseMessages(data)
+            } else if let error {
+                Log.error("Failed to fetch messages config: \(error.localizedDescription)")
+            }
+        }
+
         group.notify(queue: .global()) {
             self.configCache.markFetched()
             Log.info("Remote config fetched successfully")
@@ -150,11 +195,20 @@ final class RemoteConfigManager {
                 queue.async { self.flows = dict }
             }
         }
+        if let data = configCache.loadOnboarding() {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                parseOnboarding(dict)
+            }
+        }
+        if let data = configCache.loadMessages() {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                parseMessages(dict)
+            }
+        }
         Log.debug("Loaded cached configs from disk")
     }
 
     private func parsePaywalls(_ data: [String: Any]) {
-        // Each key in the document is a paywall ID mapping to its config
         var parsed: [String: PaywallConfig] = [:]
         for (key, value) in data {
             guard let dict = value as? [String: Any],
@@ -185,6 +239,54 @@ final class RemoteConfigManager {
 
         if let jsonData = try? JSONSerialization.data(withJSONObject: data) {
             configCache.storeExperiments(jsonData)
+        }
+    }
+
+    private func parseOnboarding(_ data: [String: Any]) {
+        // Parse active_flow_id
+        let activeId = data["active_flow_id"] as? String
+
+        // Parse flows map
+        var parsed: [String: OnboardingFlowConfig] = [:]
+        if let flowsDict = data["flows"] as? [String: Any] {
+            for (key, value) in flowsDict {
+                guard let dict = value as? [String: Any],
+                      let jsonData = try? JSONSerialization.data(withJSONObject: dict),
+                      let config = try? JSONDecoder().decode(OnboardingFlowConfig.self, from: jsonData) else {
+                    continue
+                }
+                parsed[key] = config
+            }
+        }
+
+        queue.async {
+            self.onboardingFlows = parsed
+            self.activeOnboardingFlowId = activeId
+        }
+
+        if let jsonData = try? JSONSerialization.data(withJSONObject: data) {
+            configCache.storeOnboarding(jsonData)
+        }
+    }
+
+    private func parseMessages(_ data: [String: Any]) {
+        // Parse messages map (may be nested under "messages" key)
+        let messagesDict = data["messages"] as? [String: Any] ?? data
+        var parsed: [String: MessageConfig] = [:]
+        for (key, value) in messagesDict {
+            guard key != "version" else { continue }
+            guard let dict = value as? [String: Any],
+                  let jsonData = try? JSONSerialization.data(withJSONObject: dict),
+                  let config = try? JSONDecoder().decode(MessageConfig.self, from: jsonData) else {
+                continue
+            }
+            parsed[key] = config
+        }
+
+        queue.async { self.messages = parsed }
+
+        if let jsonData = try? JSONSerialization.data(withJSONObject: data) {
+            configCache.storeMessages(jsonData)
         }
     }
 }

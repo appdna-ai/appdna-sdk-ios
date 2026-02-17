@@ -55,4 +55,14 @@ final class KeychainStore {
     func clearUserTraits() {
         try? keychain.remove(Keys.userTraits)
     }
+
+    // MARK: - Generic string storage
+
+    func getString(key: String) -> String? {
+        try? keychain.get(key)
+    }
+
+    func setString(key: String, value: String) {
+        try? keychain.set(value, key: key)
+    }
 }

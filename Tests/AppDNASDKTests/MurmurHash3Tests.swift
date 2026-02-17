@@ -17,10 +17,9 @@ final class MurmurHash3Tests: XCTestCase {
     }
 
     func testKnownVector1() {
-        // MurmurHash3_x86_32("Hello", 0) = 316307400 (0x12DA9B50... varies by impl)
+        // MurmurHash3_x86_32("Hello", 0) = 316307400 (0x12da77c8)
         let hash = MurmurHash3.hash32("Hello", seed: 0)
-        // Just ensure it's deterministic and non-zero
-        XCTAssertNotEqual(hash, 0)
+        XCTAssertEqual(hash, 316307400)
     }
 
     func testDeterminism() {
@@ -87,27 +86,22 @@ final class MurmurHash3Tests: XCTestCase {
     // MARK: - Byte alignment edge cases
 
     func testOneByteString() {
-        let hash = MurmurHash3.hash32("a")
-        XCTAssertNotEqual(hash, 0)
+        XCTAssertEqual(MurmurHash3.hash32("a"), 1009084850)
     }
 
     func testTwoByteString() {
-        let hash = MurmurHash3.hash32("ab")
-        XCTAssertNotEqual(hash, 0)
+        XCTAssertEqual(MurmurHash3.hash32("ab"), 2613040991)
     }
 
     func testThreeByteString() {
-        let hash = MurmurHash3.hash32("abc")
-        XCTAssertNotEqual(hash, 0)
+        XCTAssertEqual(MurmurHash3.hash32("abc"), 3017643002)
     }
 
     func testFourByteString() {
-        let hash = MurmurHash3.hash32("abcd")
-        XCTAssertNotEqual(hash, 0)
+        XCTAssertEqual(MurmurHash3.hash32("abcd"), 1139631978)
     }
 
     func testFiveByteString() {
-        let hash = MurmurHash3.hash32("abcde")
-        XCTAssertNotEqual(hash, 0)
+        XCTAssertEqual(MurmurHash3.hash32("abcde"), 3902511862)
     }
 }

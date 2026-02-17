@@ -23,6 +23,7 @@ public enum LogLevel: Int, Comparable, Sendable {
 public enum BillingProvider: Sendable {
     case revenueCat
     case storeKit2
+    case adapty(apiKey: String)
     case none
 }
 

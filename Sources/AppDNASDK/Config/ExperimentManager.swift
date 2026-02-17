@@ -24,30 +24,15 @@ final class ExperimentManager {
     /// Get the variant for an experiment. Returns nil if not eligible.
     /// Auto-tracks exposure event on first call per session.
     func getVariant(experimentId: String) -> String? {
-        guard let config = remoteConfigManager.getExperimentConfig(id: experimentId) else {
-            Log.debug("Experiment '\(experimentId)' not found in config")
-            return nil
-        }
-
-        // Check experiment is running
-        guard config.status == "running" else {
-            Log.debug("Experiment '\(experimentId)' is not running (status: \(config.status))")
-            return nil
-        }
-
-        // Check platform targeting
-        guard config.platforms.contains("ios") else {
-            Log.debug("Experiment '\(experimentId)' does not target iOS")
-            return nil
-        }
+        guard let config = resolveConfig(experimentId: experimentId) else { return nil }
 
         let identity = identityManager.currentIdentity
         let userId = identity.userId ?? identity.anonId
 
-        // Deterministic bucketing
-        guard let variant = assignVariant(
-            userId: userId,
+        // Deterministic bucketing via ExperimentBucketer
+        guard let variant = ExperimentBucketer.assignVariant(
             experimentId: experimentId,
+            userId: userId,
             salt: config.salt,
             variants: config.variants
         ) else {
@@ -55,6 +40,71 @@ final class ExperimentManager {
         }
 
         // Track exposure (once per session)
+        trackExposure(experimentId: experimentId, variant: variant)
+
+        return variant
+    }
+
+    /// Check if the user is assigned to a specific variant.
+    func isInVariant(experimentId: String, variantId: String) -> Bool {
+        return getVariant(experimentId: experimentId) == variantId
+    }
+
+    /// Get a specific config value from the assigned variant's payload.
+    func getExperimentConfig(experimentId: String, key: String) -> Any? {
+        guard let config = resolveConfig(experimentId: experimentId) else { return nil }
+
+        let identity = identityManager.currentIdentity
+        let userId = identity.userId ?? identity.anonId
+
+        guard let variantId = ExperimentBucketer.assignVariant(
+            experimentId: experimentId,
+            userId: userId,
+            salt: config.salt,
+            variants: config.variants
+        ) else {
+            return nil
+        }
+
+        // Track exposure (once per session)
+        trackExposure(experimentId: experimentId, variant: variantId)
+
+        // Find variant and return config value
+        guard let variant = config.variants.first(where: { $0.id == variantId }),
+              let payload = variant.payload else {
+            return nil
+        }
+
+        return payload[key]?.value
+    }
+
+    /// Reset exposure tracking (called on identity reset or new session).
+    func resetExposures() {
+        queue.sync { exposedExperiments.removeAll() }
+    }
+
+    // MARK: - Private
+
+    private func resolveConfig(experimentId: String) -> ExperimentConfig? {
+        guard let config = remoteConfigManager.getExperimentConfig(id: experimentId) else {
+            Log.debug("Experiment '\(experimentId)' not found in config")
+            return nil
+        }
+
+        guard config.status == "running" else {
+            Log.debug("Experiment '\(experimentId)' is not running (status: \(config.status))")
+            return nil
+        }
+
+        guard config.platforms.contains("ios") else {
+            Log.debug("Experiment '\(experimentId)' does not target iOS")
+            return nil
+        }
+
+        return config
+    }
+
+    private func trackExposure(experimentId: String, variant: String) {
         queue.sync {
             if !exposedExperiments.contains(experimentId) {
                 exposedExperiments.insert(experimentId)
@@ -65,101 +115,13 @@ final class ExperimentManager {
                 ])
             }
         }
-
-        return variant
-    }
-
-    /// Reset exposure tracking (called on identity reset).
-    func resetExposures() {
-        queue.sync { exposedExperiments.removeAll() }
-    }
-
-    // MARK: - Deterministic bucketing
-
-    private func assignVariant(
-        userId: String,
-        experimentId: String,
-        salt: String,
-        variants: [ExperimentVariant]
-    ) -> String? {
-        guard !variants.isEmpty else { return nil }
-
-        let hashInput = "\(userId).\(experimentId).\(salt)"
-        let hash = MurmurHash3.hash32(hashInput)
-        let bucket = Double(hash % 10000) / 10000.0 // 0.0000 - 0.9999
-
-        var cumulative: Double = 0
-        for variant in variants {
-            cumulative += variant.weight
-            if bucket < cumulative {
-                return variant.id
-            }
-        }
-
-        return variants.last?.id
     }
 }
 
-// MARK: - MurmurHash3 (32-bit, inline implementation)
+// MARK: - MurmurHash3 (kept for backward compatibility; delegates to ExperimentBucketer)
 
 enum MurmurHash3 {
-    /// Standard MurmurHash3 32-bit implementation.
     static func hash32(_ key: String, seed: UInt32 = 0) -> UInt32 {
-        let data = Array(key.utf8)
-        let len = data.count
-        let nblocks = len / 4
-
-        var h1: UInt32 = seed
-
-        let c1: UInt32 = 0xcc9e2d51
-        let c2: UInt32 = 0x1b873593
-
-        // Body — process 4-byte blocks
-        for i in 0..<nblocks {
-            let offset = i * 4
-            var k1: UInt32 = UInt32(data[offset])
-            k1 |= UInt32(data[offset + 1]) << 8
-            k1 |= UInt32(data[offset + 2]) << 16
-            k1 |= UInt32(data[offset + 3]) << 24
-
-            k1 = k1 &* c1
-            k1 = (k1 << 15) | (k1 >> 17)
-            k1 = k1 &* c2
-
-            h1 ^= k1
-            h1 = (h1 << 13) | (h1 >> 19)
-            h1 = h1 &* 5 &+ 0xe6546b64
-        }
-
-        // Tail — process remaining bytes
-        let tail = nblocks * 4
-        var k1: UInt32 = 0
-
-        switch len & 3 {
-        case 3:
-            k1 ^= UInt32(data[tail + 2]) << 16
-            fallthrough
-        case 2:
-            k1 ^= UInt32(data[tail + 1]) << 8
-            fallthrough
-        case 1:
-            k1 ^= UInt32(data[tail])
-            k1 = k1 &* c1
-            k1 = (k1 << 15) | (k1 >> 17)
-            k1 = k1 &* c2
-            h1 ^= k1
-        default:
-            break
-        }
-
-        // Finalization
-        h1 ^= UInt32(len)
-        h1 ^= h1 >> 16
-        h1 = h1 &* 0x85ebca6b
-        h1 ^= h1 >> 13
-        h1 = h1 &* 0xc2b2ae35
-        h1 ^= h1 >> 16
-
-        return h1
+        ExperimentBucketer.hash32(key, seed: seed)
     }
 }

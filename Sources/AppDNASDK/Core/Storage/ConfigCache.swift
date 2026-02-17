@@ -10,6 +10,8 @@ final class ConfigCache {
         static let experiments = "experiments"
         static let flags = "flags"
         static let flows = "flows"
+        static let onboarding = "onboarding"
+        static let messages = "messages"
         static let fetchedAt = "fetchedAt"
     }
 
@@ -49,6 +51,14 @@ final class ConfigCache {
         defaults.set(data, forKey: Keys.flows)
     }
 
+    func storeOnboarding(_ data: Data) {
+        defaults.set(data, forKey: Keys.onboarding)
+    }
+
+    func storeMessages(_ data: Data) {
+        defaults.set(data, forKey: Keys.messages)
+    }
+
     // MARK: - Retrieve
 
     func loadPaywalls() -> Data? {
@@ -65,6 +75,14 @@ final class ConfigCache {
 
     func loadFlows() -> Data? {
         defaults.data(forKey: Keys.flows)
+    }
+
+    func loadOnboarding() -> Data? {
+        defaults.data(forKey: Keys.onboarding)
+    }
+
+    func loadMessages() -> Data? {
+        defaults.data(forKey: Keys.messages)
     }
 
     func loadFetchedAt() -> Date? {
