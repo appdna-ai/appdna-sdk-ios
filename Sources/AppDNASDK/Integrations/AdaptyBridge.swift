@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Adapty)
+import Adapty
+#endif
 
 /// Adapty SDK billing bridge implementation.
 /// Wraps Adapty SDK calls and maps models to AppDNA's billing types.
@@ -20,7 +23,6 @@ final class AdaptyBridge: BillingBridgeProtocol {
 
     private func activate() {
         #if canImport(Adapty)
-        import Adapty
         Adapty.activate(apiKey)
         isActivated = true
         Log.info("Adapty bridge activated")
