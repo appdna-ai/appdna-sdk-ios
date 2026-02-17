@@ -50,7 +50,7 @@ final class PushTokenManager {
         let data = Data(string.utf8)
         var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
         data.withUnsafeBytes { bytes in
-            _ = CC_SHA256(bytes.baseAddress, CC_UINT(data.count), &hash)
+            _ = CC_SHA256(bytes.baseAddress, CC_LONG(data.count), &hash)
         }
         return hash.map { String(format: "%02x", $0) }.joined()
     }

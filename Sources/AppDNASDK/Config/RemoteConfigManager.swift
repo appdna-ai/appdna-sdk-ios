@@ -303,7 +303,7 @@ struct ExperimentConfig: Codable {
     let segments: [String]?
 }
 
-struct ExperimentVariant: Codable {
+public struct ExperimentVariant: Codable {
     let id: String
     let weight: Double
     let payload: [String: AnyCodable]?

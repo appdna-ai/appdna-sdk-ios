@@ -49,14 +49,14 @@ struct Consent: Codable {
 
 // MARK: - AnyCodable wrapper for properties dict
 
-struct AnyCodable: Codable {
+public struct AnyCodable: Codable {
     let value: Any
 
     init(_ value: Any) {
         self.value = value
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() {
             value = NSNull()
@@ -77,7 +77,7 @@ struct AnyCodable: Codable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         switch value {
         case is NSNull:
