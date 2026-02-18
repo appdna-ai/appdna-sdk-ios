@@ -30,7 +30,7 @@ public struct SurveyQuestion: Codable {
     public let nps_config: NPSConfig?
     public let csat_config: CSATConfig?
     public let rating_config: RatingConfig?
-    public let options: [QuestionOption]?
+    public let options: [SurveyQuestionOption]?
     public let emoji_config: EmojiConfig?
     public let free_text_config: FreeTextConfig?
 }
@@ -55,7 +55,7 @@ public struct RatingConfig: Codable {
     public let style: String?    // "star", "heart", "thumb"
 }
 
-public struct QuestionOption: Codable {
+public struct SurveyQuestionOption: Codable {
     public let id: String
     public let text: String
     public let icon: String?

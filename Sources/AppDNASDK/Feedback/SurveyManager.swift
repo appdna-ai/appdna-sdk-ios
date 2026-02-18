@@ -171,10 +171,17 @@ final class SurveyManager {
 
     private func presentFeedbackForm(message: String?) {
         DispatchQueue.main.async {
-            guard let topVC = UIApplication.shared.connectedScenes
+            guard let windowScene = UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene })
-                .flatMap({ $0.windows })
-                .first(where: { $0.isKeyWindow })?.rootViewController?.topMostViewController() else { return }
+                .first,
+                  var rootVC = windowScene.windows
+                .first(where: { $0.isKeyWindow })?
+                .rootViewController else { return }
+
+            while let presented = rootVC.presentedViewController {
+                rootVC = presented
+            }
+            let topVC = rootVC
 
             let alert = UIAlertController(
                 title: message ?? "We'd love your feedback",

@@ -321,7 +321,6 @@ final class RemoteConfigManager {
             configCache.storeMessages(jsonData)
         }
     }
-}
 
     private func parseSurveys(_ data: [String: Any]) {
         let surveysDict = data["surveys"] as? [String: Any] ?? data
