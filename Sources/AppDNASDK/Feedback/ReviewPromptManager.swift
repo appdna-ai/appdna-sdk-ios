@@ -9,12 +9,31 @@ final class ReviewPromptManager {
     private let defaults = UserDefaults.standard
     private let prefix = "ai.appdna.sdk.review."
 
+    private static let maxPromptsPerYear = 3
+    private static let minDaysBetweenPrompts = 90
+
     private init() {}
+
+    // MARK: - Rate limiting
+
+    /// Check if a review prompt can be shown (max 3/year, 90 days between prompts).
+    private func canShowReviewPrompt() -> Bool {
+        let count = defaults.integer(forKey: "\(prefix)request_count")
+        if count >= Self.maxPromptsPerYear { return false }
+
+        if let lastDate = defaults.object(forKey: "\(prefix)last_request_date") as? Date {
+            let daysSinceLast = Calendar.current.dateComponents([.day], from: lastDate, to: Date()).day ?? 0
+            if daysSinceLast < Self.minDaysBetweenPrompts { return false }
+        }
+
+        return true
+    }
 
     // MARK: - Two-step review prompt
 
     /// Present "Do you enjoy [App]?" → yes → native review, no → decline event.
     func triggerTwoStepReview(appName: String? = nil) {
+        guard canShowReviewPrompt() else { return }
         let name = appName ?? Bundle.main.displayName ?? "this app"
 
         DispatchQueue.main.async { [weak self] in
@@ -42,6 +61,7 @@ final class ReviewPromptManager {
 
     /// Trigger native SKStoreReviewController immediately.
     func triggerReview() {
+        guard canShowReviewPrompt() else { return }
         DispatchQueue.main.async { [weak self] in
             self?.requestNativeReview()
             AppDNA.track(event: "review_prompt_shown", properties: ["prompt_type": "direct"])
