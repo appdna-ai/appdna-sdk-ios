@@ -110,6 +110,7 @@ public struct SurveyFollowUpActions: Codable {
 
 public struct FollowUpAction: Codable {
     public let action: String // "prompt_review", "show_feedback_form", "dismiss"
+    public let message: String?
 }
 
 /// A single survey answer.
