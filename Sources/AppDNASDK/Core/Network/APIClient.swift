@@ -77,6 +77,43 @@ final class APIClient {
         throw lastError ?? APIError.networkError(URLError(.unknown))
     }
 
+    /// Fire-and-forget POST with JSON body. Callback with success/error.
+    func post(path: String, body: [String: Any], completion: ((Result<Void, Error>) -> Void)? = nil) {
+        Task {
+            do {
+                let base: String
+                switch environment {
+                case .production: base = "https://api.appdna.ai"
+                case .sandbox:    base = "https://sandbox-api.appdna.ai"
+                }
+                guard let url = URL(string: base + path) else {
+                    completion?(.failure(APIError.invalidURL))
+                    return
+                }
+
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.setValue(
+                    "AppDNASDK/\(AppDNA.sdkVersion) iOS/\(UIDevice.current.systemVersion)",
+                    forHTTPHeaderField: "User-Agent"
+                )
+                request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+                let (_, response) = try await session.data(for: request)
+                guard let httpResponse = response as? HTTPURLResponse,
+                      (200..<300).contains(httpResponse.statusCode) else {
+                    completion?(.failure(APIError.httpError(statusCode: (response as? HTTPURLResponse)?.statusCode ?? 0, data: nil)))
+                    return
+                }
+                completion?(.success(()))
+            } catch {
+                completion?(.failure(error))
+            }
+        }
+    }
+
     /// Fire-and-forget POST for event batches. Returns success status.
     func sendEvents(_ data: Data) async -> Bool {
         do {

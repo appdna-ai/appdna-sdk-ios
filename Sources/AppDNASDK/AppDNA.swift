@@ -6,7 +6,7 @@ import UIKit
 public final class AppDNA: @unchecked Sendable {
 
     /// SDK version string.
-    public static let sdkVersion = "0.2.0"
+    public static let sdkVersion = "0.3.0"
 
     /// Notification posted when remote config is refreshed.
     public static let configUpdated = Notification.Name("AppDNA.configUpdated")
@@ -35,6 +35,9 @@ public final class AppDNA: @unchecked Sendable {
     private var onboardingFlowManager: OnboardingFlowManager?
     private var messageManager: MessageManager?
     private var pushTokenManager: PushTokenManager?
+    private var surveyManager: SurveyManager?
+    private var webEntitlementManager: WebEntitlementManager?
+    private var deferredDeepLinkManager: DeferredDeepLinkManager?
 
     private var bootstrapData: BootstrapData?
     private var isConfigured = false
@@ -62,6 +65,15 @@ public final class AppDNA: @unchecked Sendable {
         shared.queue.async {
             shared.identityManager?.identify(userId: userId, traits: traits)
             Log.info("Identified user: \(userId)")
+
+            // Start web entitlement observer for this user (v0.3)
+            if let bootstrapData = shared.bootstrapData {
+                shared.webEntitlementManager?.startObserving(
+                    orgId: bootstrapData.orgId,
+                    appId: bootstrapData.appId,
+                    userId: userId
+                )
+            }
         }
     }
 
@@ -71,6 +83,8 @@ public final class AppDNA: @unchecked Sendable {
             shared.identityManager?.reset()
             shared.experimentManager?.resetExposures()
             shared.messageManager?.resetSession()
+            shared.surveyManager?.resetSession()
+            shared.webEntitlementManager?.stopObserving()
             Log.info("Identity reset")
         }
     }
@@ -83,6 +97,8 @@ public final class AppDNA: @unchecked Sendable {
             shared.eventTracker?.track(event: event, properties: properties)
             // Evaluate in-app messages on every tracked event
             shared.messageManager?.onEvent(eventName: event, properties: properties)
+            // Evaluate surveys on every tracked event (v0.3)
+            shared.surveyManager?.onEvent(eventName: event, properties: properties)
         }
     }
 
@@ -181,6 +197,38 @@ public final class AppDNA: @unchecked Sendable {
     public static func setPushPermission(granted: Bool) {
         shared.queue.async {
             shared.pushTokenManager?.setPushPermission(granted: granted)
+        }
+    }
+
+    // MARK: - Public API: Web Entitlements (v0.3)
+
+    /// Web subscription entitlement (from Stripe web checkout).
+    public static var webEntitlement: WebEntitlement? {
+        shared.webEntitlementManager?.currentEntitlement
+    }
+
+    /// Register a callback for when the web entitlement changes.
+    public static func onWebEntitlementChanged(_ handler: @escaping (WebEntitlement?) -> Void) {
+        NotificationCenter.default.addObserver(
+            forName: .webEntitlementChanged,
+            object: nil,
+            queue: .main
+        ) { notification in
+            handler(notification.object as? WebEntitlement)
+        }
+    }
+
+    // MARK: - Public API: Deferred Deep Links (v0.3)
+
+    /// Check for a deferred deep link on first launch.
+    /// Call after `AppDNA.configure()` and `AppDNA.onReady`.
+    public static func checkDeferredDeepLink(completion: @escaping (DeferredDeepLink?) -> Void) {
+        shared.queue.async {
+            guard let manager = shared.deferredDeepLinkManager else {
+                completion(nil)
+                return
+            }
+            manager.checkDeferredDeepLink(completion: completion)
         }
     }
 
@@ -353,8 +401,39 @@ public final class AppDNA: @unchecked Sendable {
             eventTracker: tracker
         )
 
-        // Fetch Firestore configs (includes onboarding + messages)
+        // v0.3 managers
+        let surveyMgr = SurveyManager(
+            remoteConfigManager: remoteCfg,
+            eventTracker: tracker,
+            apiClient: self.apiClient
+        )
+        self.surveyManager = surveyMgr
+        remoteCfg.onSurveyConfigsUpdated { configs in
+            surveyMgr.updateConfigs(configs)
+        }
+
+        self.webEntitlementManager = WebEntitlementManager(eventTracker: tracker)
+
+        if let bootstrapData = self.bootstrapData {
+            self.deferredDeepLinkManager = DeferredDeepLinkManager(
+                orgId: bootstrapData.orgId,
+                appId: bootstrapData.appId,
+                eventTracker: tracker
+            )
+        }
+
+        // Fetch Firestore configs (includes onboarding + messages + surveys)
         remoteCfg.fetchConfigs()
+
+        // Start web entitlement observer if user is identified
+        if let userId = self.identityManager?.currentIdentity.userId,
+           let bootstrapData = self.bootstrapData {
+            self.webEntitlementManager?.startObserving(
+                orgId: bootstrapData.orgId,
+                appId: bootstrapData.appId,
+                userId: userId
+            )
+        }
 
         // Mark ready
         self.isConfigured = true

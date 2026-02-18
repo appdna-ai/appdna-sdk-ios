@@ -18,6 +18,10 @@ final class RemoteConfigManager {
     private var onboardingFlows: [String: OnboardingFlowConfig] = [:]
     private var activeOnboardingFlowId: String?
     private var messages: [String: MessageConfig] = [:]
+    private var surveys: [String: SurveyConfig] = [:]
+
+    /// Called by SurveyManager to get current survey configs.
+    private var surveyUpdateHandler: (([String: SurveyConfig]) -> Void)?
 
     init(firestorePath: String?, configCache: ConfigCache, configTTL: TimeInterval) {
         self.firestorePath = firestorePath
@@ -73,6 +77,18 @@ final class RemoteConfigManager {
     /// Get all active message configs.
     func getActiveMessages() -> [String: MessageConfig] {
         queue.sync { messages }
+    }
+
+    // MARK: - Surveys (v0.3)
+
+    /// Get all survey configs.
+    func getSurveyConfigs() -> [String: SurveyConfig] {
+        queue.sync { surveys }
+    }
+
+    /// Register a handler that fires when survey configs are updated.
+    func onSurveyConfigsUpdated(_ handler: @escaping ([String: SurveyConfig]) -> Void) {
+        self.surveyUpdateHandler = handler
     }
 
     // MARK: - Fetch from Firestore
@@ -157,6 +173,17 @@ final class RemoteConfigManager {
             }
         }
 
+        // v0.3: Surveys
+        group.enter()
+        db.document("\(basePath)/surveys").getDocument { [weak self] snapshot, error in
+            defer { group.leave() }
+            if let data = snapshot?.data() {
+                self?.parseSurveys(data)
+            } else if let error {
+                Log.error("Failed to fetch surveys config: \(error.localizedDescription)")
+            }
+        }
+
         group.notify(queue: .global()) {
             self.configCache.markFetched()
             Log.info("Remote config fetched successfully")
@@ -203,6 +230,11 @@ final class RemoteConfigManager {
         if let data = configCache.loadMessages() {
             if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 parseMessages(dict)
+            }
+        }
+        if let data = configCache.loadSurveys() {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                parseSurveys(dict)
             }
         }
         Log.debug("Loaded cached configs from disk")
@@ -287,6 +319,30 @@ final class RemoteConfigManager {
 
         if let jsonData = try? JSONSerialization.data(withJSONObject: data) {
             configCache.storeMessages(jsonData)
+        }
+    }
+}
+
+    private func parseSurveys(_ data: [String: Any]) {
+        let surveysDict = data["surveys"] as? [String: Any] ?? data
+        var parsed: [String: SurveyConfig] = [:]
+        for (key, value) in surveysDict {
+            guard key != "version" else { continue }
+            guard let dict = value as? [String: Any],
+                  let jsonData = try? JSONSerialization.data(withJSONObject: dict),
+                  let config = try? JSONDecoder().decode(SurveyConfig.self, from: jsonData) else {
+                continue
+            }
+            parsed[key] = config
+        }
+
+        queue.async {
+            self.surveys = parsed
+            self.surveyUpdateHandler?(parsed)
+        }
+
+        if let jsonData = try? JSONSerialization.data(withJSONObject: data) {
+            configCache.storeSurveys(jsonData)
         }
     }
 }
