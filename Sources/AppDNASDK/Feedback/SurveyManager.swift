@@ -132,7 +132,10 @@ final class SurveyManager {
             "context": [
                 "sdk_version": AppDNA.sdkVersion,
                 "platform": "ios",
+                "device": UIDevice.current.model,
+                "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
                 "session_count": UserDefaults.standard.integer(forKey: "ai.appdna.sdk.session_count"),
+                "days_since_install": self.daysSinceInstall(),
             ],
         ]
 
@@ -159,11 +162,38 @@ final class SurveyManager {
             }
         case .negative:
             if actions.on_negative?.action == "show_feedback_form" {
-                // Could present a follow-up free-text form; for now just track
-                Log.info("Negative sentiment — feedback form follow-up")
+                presentFeedbackForm(message: actions.on_negative?.message)
             }
         case .neutral:
             break
+        }
+    }
+
+    private func presentFeedbackForm(message: String?) {
+        DispatchQueue.main.async {
+            guard let topVC = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .flatMap({ $0.windows })
+                .first(where: { $0.isKeyWindow })?.rootViewController?.topMostViewController() else { return }
+
+            let alert = UIAlertController(
+                title: message ?? "We'd love your feedback",
+                message: "What could we do better?",
+                preferredStyle: .alert
+            )
+            alert.addTextField { textField in
+                textField.placeholder = "Tell us what you think..."
+            }
+            alert.addAction(UIAlertAction(title: "Submit", style: .default) { [weak self] _ in
+                let feedback = alert.textFields?.first?.text ?? ""
+                self?.eventTracker.track(event: "feedback_form_submitted", properties: [
+                    "feedback": feedback,
+                ])
+            })
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
+                self?.eventTracker.track(event: "feedback_form_dismissed", properties: nil)
+            })
+            topVC.present(alert, animated: true)
         }
     }
 
@@ -241,5 +271,16 @@ final class SurveyManager {
         guard let min = minSessions, min > 0 else { return true }
         let sessionCount = UserDefaults.standard.integer(forKey: "ai.appdna.sdk.session_count")
         return sessionCount >= min
+    }
+
+    private func daysSinceInstall() -> Int {
+        let installKey = "ai.appdna.sdk.install_date"
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: installKey) == nil {
+            defaults.set(Date().timeIntervalSince1970, forKey: installKey)
+        }
+        let installTs = defaults.double(forKey: installKey)
+        let elapsed = Date().timeIntervalSince1970 - installTs
+        return max(0, Int(elapsed / 86400))
     }
 }

@@ -90,6 +90,7 @@ final class DeferredDeepLinkManager {
             // Track event
             self.eventTracker?.track(event: "deferred_deep_link_resolved", properties: [
                 "path": deepLink.screen,
+                "params": deepLink.params,
                 "visitor_id": visitorId,
             ])
 
