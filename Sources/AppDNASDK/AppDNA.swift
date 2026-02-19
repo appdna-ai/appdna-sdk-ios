@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import UserNotifications
 
 /// Main entry point for the AppDNA SDK.
 /// All public methods are thread-safe.
@@ -10,6 +11,14 @@ public final class AppDNA: @unchecked Sendable {
 
     /// Notification posted when remote config is refreshed.
     public static let configUpdated = Notification.Name("AppDNA.configUpdated")
+
+    // MARK: - Push Delegate
+
+    /// Delegate for push notification events (taps, receives).
+    public static weak var pushDelegate: AppDNAPushDelegate?
+
+    /// Public accessor for the push token manager.
+    public static var push: PushTokenManager? { shared.pushTokenManager }
 
     // MARK: - Singleton
 
@@ -184,9 +193,10 @@ public final class AppDNA: @unchecked Sendable {
         return result
     }
 
-    // MARK: - Public API: Push Token (v0.2)
+    // MARK: - Public API: Push Token (v0.2) + Push Tracking (v0.4 / SPEC-030)
 
     /// Set the APNS push token. Call from `didRegisterForRemoteNotificationsWithDeviceToken`.
+    /// This registers the token with the backend for direct push delivery.
     public static func setPushToken(_ token: Data) {
         shared.queue.async {
             shared.pushTokenManager?.setPushToken(token)
@@ -197,6 +207,42 @@ public final class AppDNA: @unchecked Sendable {
     public static func setPushPermission(granted: Bool) {
         shared.queue.async {
             shared.pushTokenManager?.setPushPermission(granted: granted)
+        }
+    }
+
+    /// Track that a push notification was delivered (call from UNNotificationServiceExtension or foreground handler).
+    public static func trackPushDelivered(pushId: String) {
+        shared.queue.async {
+            shared.pushTokenManager?.trackDelivered(pushId: pushId)
+        }
+    }
+
+    /// Track that a push notification was tapped (call from notification response handler).
+    public static func trackPushTapped(pushId: String, action: String? = nil) {
+        shared.queue.async {
+            shared.pushTokenManager?.trackTapped(pushId: pushId, action: action)
+        }
+    }
+
+    // MARK: - Public API: Push Registration (v0.4 / SPEC-030)
+
+    /// Request push notification permission and register for remote notifications.
+    /// Returns `true` if the user granted permission, `false` otherwise.
+    @discardableResult
+    public static func registerForPush() async -> Bool {
+        do {
+            let center = UNUserNotificationCenter.current()
+            let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
+            shared.pushTokenManager?.setPushPermission(granted: granted)
+            if granted {
+                await MainActor.run {
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
+            }
+            return granted
+        } catch {
+            Log.error("Failed to request push permission: \(error)")
+            return false
         }
     }
 
@@ -317,8 +363,8 @@ public final class AppDNA: @unchecked Sendable {
             self.billingBridge = nil
         }
 
-        // 5. Initialize push token manager (v0.2)
-        self.pushTokenManager = PushTokenManager(keychainStore: keychainStore, eventTracker: tracker)
+        // 5. Initialize push token manager (v0.2 + v0.4 SPEC-030: backend registration)
+        self.pushTokenManager = PushTokenManager(keychainStore: keychainStore, eventTracker: tracker, apiClient: client)
 
         // 6. Bootstrap async (fetch orgId/appId, then Firestore configs)
         Task { [weak self] in
