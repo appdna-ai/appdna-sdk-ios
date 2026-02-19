@@ -146,6 +146,11 @@ final class APIClient {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
 
+        // Serialize body from endpoint if present
+        if let body = endpoint.body {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+
         return request
     }
 }
