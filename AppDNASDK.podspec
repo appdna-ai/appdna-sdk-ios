@@ -1,7 +1,7 @@
 Pod::Spec.new do |s|
   s.name             = 'AppDNASDK'
-  s.version          = '0.3.0'
-  s.summary          = 'AppDNA iOS SDK — analytics, experiments, paywalls, surveys, and more.'
+  s.version          = '1.0.0'
+  s.summary          = 'AppDNA iOS SDK — analytics, experiments, paywalls, onboarding, billing, push, and more.'
   s.description      = <<-DESC
 Native iOS SDK for AppDNA providing analytics, remote configuration, feature flags,
 experiments, paywalls, onboarding flows, surveys, web entitlements, and deferred deep links.

@@ -7,18 +7,49 @@ import UserNotifications
 public final class AppDNA: @unchecked Sendable {
 
     /// SDK version string.
-    public static let sdkVersion = "0.3.0"
+    public static let sdkVersion = "1.0.0"
 
     /// Notification posted when remote config is refreshed.
     public static let configUpdated = Notification.Name("AppDNA.configUpdated")
 
-    // MARK: - Push Delegate
+    // MARK: - Delegates
 
     /// Delegate for push notification events (taps, receives).
     public static weak var pushDelegate: AppDNAPushDelegate?
 
-    /// Public accessor for the push token manager.
+    /// Delegate for billing/purchase events.
+    public static weak var billingDelegate: AppDNABillingDelegate?
+
+    /// Public accessor for the push token manager (legacy).
     public static var push: PushTokenManager? { shared.pushTokenManager }
+
+    // MARK: - Module Namespaces (v1.0)
+
+    /// Push notification module.
+    public static let pushModule = PushModule(manager: nil)
+    /// Billing module.
+    public static let billing = BillingModule()
+    /// Onboarding module.
+    public static let onboarding = OnboardingModule(manager: nil)
+    /// Paywall module.
+    public static let paywall = PaywallModule(manager: nil)
+    /// Remote config module.
+    public static let remoteConfig = RemoteConfigModule(manager: nil)
+    /// Feature flags module.
+    public static let features = FeaturesModule(manager: nil)
+    /// In-app messages module.
+    public static let inAppMessages = InAppMessagesModule(manager: nil)
+    /// Surveys module.
+    public static let surveys = SurveysModule(manager: nil)
+    /// Deep links module.
+    public static let deepLinks = DeepLinksModule()
+    /// Experiments module.
+    public static let experiments = ExperimentsModule(manager: nil)
+
+    // MARK: - Config Bundle (v1.0)
+
+    /// Current config bundle version reported by events.
+    internal static var currentBundleVersion: Int = 0
 
     // MARK: - Singleton
 
@@ -278,6 +309,15 @@ public final class AppDNA: @unchecked Sendable {
         }
     }
 
+    // MARK: - Public API: Log Level (v1.0 / SPEC-041)
+
+    /// Dynamically change the SDK log level at runtime.
+    /// Matches unified API: `AppDNA.setLogLevel(.debug)`
+    public static func setLogLevel(_ level: LogLevel) {
+        Log.level = level
+        Log.info("Log level changed to \(level)")
+    }
+
     // MARK: - Public API: Privacy
 
     /// Set analytics consent. When false, events are silently dropped.
@@ -365,6 +405,7 @@ public final class AppDNA: @unchecked Sendable {
 
         // 5. Initialize push token manager (v0.2 + v0.4 SPEC-030: backend registration)
         self.pushTokenManager = PushTokenManager(keychainStore: keychainStore, eventTracker: tracker, apiClient: client)
+        AppDNA.pushModule.manager = self.pushTokenManager
 
         // 6. Bootstrap async (fetch orgId/appId, then Firestore configs)
         Task { [weak self] in
@@ -481,6 +522,19 @@ public final class AppDNA: @unchecked Sendable {
             )
         }
 
+        // Wire module namespaces (v1.0)
+        AppDNA.billing.bridge = self.billingBridge
+        AppDNA.onboarding.manager = self.onboardingFlowManager
+        AppDNA.paywall.paywallManager = self.paywallManager
+        AppDNA.remoteConfig.manager = remoteCfg
+        AppDNA.features.manager = self.featureFlagManager
+        AppDNA.inAppMessages.manager = self.messageManager
+        AppDNA.surveys.manager = self.surveyManager
+        AppDNA.experiments.manager = self.experimentManager
+
+        // Load config bundle version (v1.0 offline-first)
+        self.loadConfigBundle()
+
         // Mark ready
         self.isConfigured = true
         tracker.track(event: "sdk_initialized", properties: nil)
@@ -493,9 +547,44 @@ public final class AppDNA: @unchecked Sendable {
         }
     }
 
+    // MARK: - Config Bundle (v1.0 offline-first)
+
+    /// Load config from bundle embedded in app binary.
+    /// Priority: remote (already fetched) > cached > bundled.
+    private func loadConfigBundle() {
+        // Try to load bundled config from app resources
+        guard let bundleURL = Bundle.main.url(forResource: "appdna-config", withExtension: "json"),
+              let data = try? Data(contentsOf: bundleURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Log.debug("No bundled config found at appdna-config.json — using remote/cached only")
+            return
+        }
+
+        let bundleVersion = json["bundle_version"] as? Int ?? 0
+        AppDNA.currentBundleVersion = bundleVersion
+        Log.info("Loaded bundled config (version \(bundleVersion))")
+    }
+
     // MARK: - Helpers
 
-    private static func topViewController() -> UIViewController? {
+    // MARK: - Lifecycle
+
+    /// Shut down the SDK and release resources.
+    /// Flushes the event queue and resets internal state.
+    /// After calling shutdown the SDK must be re-configured before use.
+    public static func shutdown() {
+        shared.queue.async {
+            shared.eventQueue?.flush()
+            shared.eventQueue = nil
+            shared.eventTracker = nil
+            shared.sessionManager = nil
+            shared.apiClient = nil
+            shared.isConfigured = false
+            Log.info("AppDNA SDK shut down")
+        }
+    }
+
+    internal static func topViewController() -> UIViewController? {
         guard let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first,

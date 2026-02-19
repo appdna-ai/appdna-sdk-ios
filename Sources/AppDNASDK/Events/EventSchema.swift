@@ -24,6 +24,7 @@ struct EventDevice: Codable {
     let os: String
     let app_version: String
     let sdk_version: String
+    let bundle_version: Int?
     let locale: String
     let country: String
 }
@@ -111,11 +112,13 @@ enum EventEnvelopeBuilder {
         analyticsConsent: Bool,
         experimentExposures: [ExperimentExposure]? = nil
     ) -> SDKEvent {
+        let bundleVer = AppDNA.currentBundleVersion > 0 ? AppDNA.currentBundleVersion : nil
         let device = EventDevice(
             platform: "ios",
             os: UIDevice.current.systemVersion,
             app_version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0",
             sdk_version: AppDNA.sdkVersion,
+            bundle_version: bundleVer,
             locale: Locale.current.identifier,
             country: (Locale.current as NSLocale).countryCode ?? ""
         )

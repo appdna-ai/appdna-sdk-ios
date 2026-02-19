@@ -115,9 +115,19 @@ public enum DismissReason: String {
     case programmatic
 }
 
+/// Action taken by the user on a paywall.
+public enum PaywallAction: String {
+    case ctaTapped = "cta_tapped"
+    case featureSelected = "feature_selected"
+    case planChanged = "plan_changed"
+    case linkTapped = "link_tapped"
+    case custom = "custom"
+}
+
 /// Delegate for paywall lifecycle events.
 public protocol AppDNAPaywallDelegate: AnyObject {
     func paywallDidAppear(paywallId: String)
+    func paywallDidAction(paywallId: String, action: PaywallAction)
     func paywallDidDismiss(paywallId: String, reason: DismissReason)
     func paywallDidStartPurchase(paywallId: String, productId: String)
     func paywallDidCompletePurchase(paywallId: String, productId: String, transactionId: String)
@@ -128,6 +138,7 @@ public protocol AppDNAPaywallDelegate: AnyObject {
 /// Default empty implementations so delegates can opt into specific callbacks.
 public extension AppDNAPaywallDelegate {
     func paywallDidAppear(paywallId: String) {}
+    func paywallDidAction(paywallId: String, action: PaywallAction) {}
     func paywallDidDismiss(paywallId: String, reason: DismissReason) {}
     func paywallDidStartPurchase(paywallId: String, productId: String) {}
     func paywallDidCompletePurchase(paywallId: String, productId: String, transactionId: String) {}

@@ -18,6 +18,14 @@ public struct PushAction {
 
 /// Delegate protocol for push notification events.
 public protocol AppDNAPushDelegate: AnyObject {
+    func onPushTokenRegistered(token: String)
     func onPushReceived(notification: PushPayload)
     func onPushTapped(notification: PushPayload, action: String?)
+}
+
+/// Default empty implementations so delegates can opt into specific callbacks.
+public extension AppDNAPushDelegate {
+    func onPushTokenRegistered(token: String) {}
+    func onPushReceived(notification: PushPayload) {}
+    func onPushTapped(notification: PushPayload, action: String?) {}
 }
