@@ -46,7 +46,7 @@ class ReceiptVerifier {
         self.apiClient = apiClient
     }
 
-    func verify(signedTransaction: String, platform: String, paywallId: String?, experimentId: String?) async throws -> Entitlement {
+    func verify(signedTransaction: String, platform: String, paywallId: String?, experimentId: String?) async throws -> ServerEntitlement {
         var body: [String: Any] = [
             "platform": platform,
             "transaction": signedTransaction,
@@ -56,7 +56,7 @@ class ReceiptVerifier {
 
         let response: VerifyResponse = try await apiClient.request(.verifyReceipt(body: body))
 
-        return Entitlement(
+        return ServerEntitlement(
             productId: response.data.subscription.product_id,
             store: response.data.subscription.store,
             status: response.data.subscription.status,
@@ -66,7 +66,7 @@ class ReceiptVerifier {
         )
     }
 
-    func restore(transactions: [String]) async throws -> [Entitlement] {
+    func restore(transactions: [String]) async throws -> [ServerEntitlement] {
         let body: [String: Any] = [
             "platform": "ios",
             "transactions": transactions,
@@ -75,7 +75,7 @@ class ReceiptVerifier {
         let response: RestoreResponse = try await apiClient.request(.restorePurchases(body: body))
 
         return response.data.map { data in
-            Entitlement(
+            ServerEntitlement(
                 productId: data.product_id,
                 store: data.store,
                 status: data.status,

@@ -20,7 +20,7 @@ import Foundation
 public protocol AppDNABillingDelegate: AnyObject {
     func onPurchaseCompleted(productId: String, transaction: TransactionInfo)
     func onPurchaseFailed(productId: String, error: Error)
-    func onEntitlementsChanged(entitlements: [EntitlementInfo])
+    func onEntitlementsChanged(entitlements: [Entitlement])
     func onRestoreCompleted(restoredProducts: [String])
 }
 
@@ -28,7 +28,7 @@ public protocol AppDNABillingDelegate: AnyObject {
 public extension AppDNABillingDelegate {
     func onPurchaseCompleted(productId: String, transaction: TransactionInfo) {}
     func onPurchaseFailed(productId: String, error: Error) {}
-    func onEntitlementsChanged(entitlements: [EntitlementInfo]) {}
+    func onEntitlementsChanged(entitlements: [Entitlement]) {}
     func onRestoreCompleted(restoredProducts: [String]) {}
 }
 
@@ -90,7 +90,7 @@ public struct TransactionInfo {
 }
 
 /// Entitlement info.
-public struct EntitlementInfo {
+public struct Entitlement {
     public let identifier: String
     public let isActive: Bool
     public let expiresAt: Date?

@@ -3,9 +3,9 @@ import FirebaseFirestore
 
 /// Caches entitlements locally and listens to Firestore for real-time updates.
 class EntitlementCache {
-    private(set) var entitlements: [Entitlement] = []
+    private(set) var entitlements: [ServerEntitlement] = []
     private var firestoreListener: ListenerRegistration?
-    private var changeHandlers: [([Entitlement]) -> Void] = []
+    private var changeHandlers: [([ServerEntitlement]) -> Void] = []
 
     private let userDefaultsKey = "com.appdna.entitlements"
 
@@ -13,11 +13,11 @@ class EntitlementCache {
         entitlements.contains { $0.status == "active" || $0.status == "trialing" || $0.status == "grace_period" }
     }
 
-    func entitlement(for productId: String) -> Entitlement? {
+    func entitlement(for productId: String) -> ServerEntitlement? {
         entitlements.first { $0.productId == productId && ($0.status == "active" || $0.status == "trialing") }
     }
 
-    func update(_ entitlement: Entitlement) {
+    func update(_ entitlement: ServerEntitlement) {
         if let index = entitlements.firstIndex(where: { $0.productId == entitlement.productId }) {
             entitlements[index] = entitlement
         } else {
@@ -42,7 +42,7 @@ class EntitlementCache {
         firestoreListener = nil
     }
 
-    func onEntitlementsChanged(_ handler: @escaping ([Entitlement]) -> Void) {
+    func onEntitlementsChanged(_ handler: @escaping ([ServerEntitlement]) -> Void) {
         changeHandlers.append(handler)
     }
 
@@ -54,7 +54,7 @@ class EntitlementCache {
 
     func loadFromLocalCache() {
         if let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-           let cached = try? JSONDecoder().decode([Entitlement].self, from: data) {
+           let cached = try? JSONDecoder().decode([ServerEntitlement].self, from: data) {
             entitlements = cached
         }
     }
@@ -67,7 +67,7 @@ class EntitlementCache {
                   let store = sub["store"] as? String,
                   let status = sub["status"] as? String else { return nil }
 
-            return Entitlement(
+            return ServerEntitlement(
                 productId: productId,
                 store: store,
                 status: status,

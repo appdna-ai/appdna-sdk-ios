@@ -45,7 +45,7 @@ extension AppDNA {
     /// Delegates to the configured `BillingBridgeProtocol` (StoreKit2, RevenueCat, or Adapty).
     public final class BillingModule: @unchecked Sendable {
         internal var bridge: BillingBridgeProtocol?
-        private var entitlementChangeHandlers: [([EntitlementInfo]) -> Void] = []
+        private var entitlementChangeHandlers: [([Entitlement]) -> Void] = []
 
         internal init() {}
 
@@ -86,15 +86,15 @@ extension AppDNA {
             return try await bridge.restore()
         }
 
-        /// Get current entitlements as `EntitlementInfo` objects.
-        public func getEntitlements() async -> [EntitlementInfo] {
+        /// Get current entitlements as `Entitlement` objects.
+        public func getEntitlements() async -> [Entitlement] {
             guard let bridge = bridge else {
                 Log.warning("BillingModule: No billing provider configured")
                 return []
             }
             let productIds = await bridge.getEntitlements()
             return productIds.map { productId in
-                EntitlementInfo(
+                Entitlement(
                     identifier: productId,
                     isActive: true,
                     expiresAt: nil,
@@ -112,7 +112,7 @@ extension AppDNA {
 
         /// Register a callback that fires when entitlements change.
         /// Listens to the internal `entitlementsChanged` notification.
-        public func onEntitlementsChanged(_ callback: @escaping ([EntitlementInfo]) -> Void) {
+        public func onEntitlementsChanged(_ callback: @escaping ([Entitlement]) -> Void) {
             entitlementChangeHandlers.append(callback)
             NotificationCenter.default.addObserver(
                 forName: .entitlementsChanged,
@@ -120,9 +120,9 @@ extension AppDNA {
                 queue: .main
             ) { [weak self] notification in
                 guard let self = self else { return }
-                if let entitlements = notification.userInfo?["entitlements"] as? [Entitlement] {
+                if let entitlements = notification.userInfo?["entitlements"] as? [ServerEntitlement] {
                     let infos = entitlements.map { e in
-                        EntitlementInfo(
+                        Entitlement(
                             identifier: e.productId,
                             isActive: e.status == "active" || e.status == "trialing" || e.status == "grace_period",
                             expiresAt: e.expiresAt.flatMap { ISO8601DateFormatter().date(from: $0) },

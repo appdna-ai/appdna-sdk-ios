@@ -1,8 +1,8 @@
 import Foundation
 import StoreKit
 
-/// Entitlement model returned from server verification.
-public struct Entitlement: Codable {
+/// ServerEntitlement model returned from server verification.
+public struct ServerEntitlement: Codable {
     public let productId: String
     public let store: String
     public let status: String
@@ -13,7 +13,7 @@ public struct Entitlement: Codable {
 
 /// Result of a billing operation.
 public enum BillingResult {
-    case purchased(Entitlement)
+    case purchased(ServerEntitlement)
     case cancelled
     case pending
     case unknown
@@ -179,7 +179,7 @@ public class NativeBillingManager {
     }
 
     /// Restore purchases via AppStore.sync() and Transaction.currentEntitlements.
-    public func restorePurchases() async throws -> [Entitlement] {
+    public func restorePurchases() async throws -> [ServerEntitlement] {
         try await AppStore.sync()
 
         var transactions: [String] = []
