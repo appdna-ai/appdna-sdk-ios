@@ -87,18 +87,16 @@ public struct ValuePropItem: Codable, Identifiable {
 
 /// Delegate for receiving onboarding flow lifecycle events.
 public protocol AppDNAOnboardingDelegate: AnyObject {
-    func onboardingStepViewed(flowId: String, stepId: String, stepIndex: Int)
-    func onboardingStepCompleted(flowId: String, stepId: String, data: [String: Any]?)
-    func onboardingStepSkipped(flowId: String, stepId: String)
-    func onboardingFlowCompleted(flowId: String, data: [String: Any])
-    func onboardingFlowDismissed(flowId: String, lastStepId: String)
+    func onOnboardingStarted(flowId: String)
+    func onOnboardingStepChanged(flowId: String, stepId: String, stepIndex: Int, totalSteps: Int)
+    func onOnboardingCompleted(flowId: String, responses: [String: Any])
+    func onOnboardingDismissed(flowId: String, atStep: Int)
 }
 
 /// Default empty implementations so delegates can be partial.
 public extension AppDNAOnboardingDelegate {
-    func onboardingStepViewed(flowId: String, stepId: String, stepIndex: Int) {}
-    func onboardingStepCompleted(flowId: String, stepId: String, data: [String: Any]?) {}
-    func onboardingStepSkipped(flowId: String, stepId: String) {}
-    func onboardingFlowCompleted(flowId: String, data: [String: Any]) {}
-    func onboardingFlowDismissed(flowId: String, lastStepId: String) {}
+    func onOnboardingStarted(flowId: String) {}
+    func onOnboardingStepChanged(flowId: String, stepId: String, stepIndex: Int, totalSteps: Int) {}
+    func onOnboardingCompleted(flowId: String, responses: [String: Any]) {}
+    func onOnboardingDismissed(flowId: String, atStep: Int) {}
 }

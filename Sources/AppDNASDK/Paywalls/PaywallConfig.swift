@@ -126,22 +126,20 @@ public enum PaywallAction: String {
 
 /// Delegate for paywall lifecycle events.
 public protocol AppDNAPaywallDelegate: AnyObject {
-    func paywallDidAppear(paywallId: String)
-    func paywallDidAction(paywallId: String, action: PaywallAction)
-    func paywallDidDismiss(paywallId: String, reason: DismissReason)
-    func paywallDidStartPurchase(paywallId: String, productId: String)
-    func paywallDidCompletePurchase(paywallId: String, productId: String, transactionId: String)
-    func paywallDidFailPurchase(paywallId: String, productId: String, error: Error)
-    func paywallDidRestorePurchases(paywallId: String, restoredProductIds: [String])
+    func onPaywallPresented(paywallId: String)
+    func onPaywallAction(paywallId: String, action: PaywallAction)
+    func onPaywallPurchaseStarted(paywallId: String, productId: String)
+    func onPaywallPurchaseCompleted(paywallId: String, productId: String, transaction: TransactionInfo)
+    func onPaywallPurchaseFailed(paywallId: String, error: Error)
+    func onPaywallDismissed(paywallId: String)
 }
 
 /// Default empty implementations so delegates can opt into specific callbacks.
 public extension AppDNAPaywallDelegate {
-    func paywallDidAppear(paywallId: String) {}
-    func paywallDidAction(paywallId: String, action: PaywallAction) {}
-    func paywallDidDismiss(paywallId: String, reason: DismissReason) {}
-    func paywallDidStartPurchase(paywallId: String, productId: String) {}
-    func paywallDidCompletePurchase(paywallId: String, productId: String, transactionId: String) {}
-    func paywallDidFailPurchase(paywallId: String, productId: String, error: Error) {}
-    func paywallDidRestorePurchases(paywallId: String, restoredProductIds: [String]) {}
+    func onPaywallPresented(paywallId: String) {}
+    func onPaywallAction(paywallId: String, action: PaywallAction) {}
+    func onPaywallPurchaseStarted(paywallId: String, productId: String) {}
+    func onPaywallPurchaseCompleted(paywallId: String, productId: String, transaction: TransactionInfo) {}
+    func onPaywallPurchaseFailed(paywallId: String, error: Error) {}
+    func onPaywallDismissed(paywallId: String) {}
 }

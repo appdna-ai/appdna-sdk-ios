@@ -28,6 +28,11 @@ extension AppDNA {
             manager?.currentTokenString
         }
 
+        /// Get the current push token (spec-compliant method form).
+        public func getToken() -> String? {
+            return manager?.currentTokenString
+        }
+
         /// Set a delegate for push notification events.
         public func setDelegate(_ delegate: AppDNAPushDelegate?) {
             AppDNA.pushDelegate = delegate

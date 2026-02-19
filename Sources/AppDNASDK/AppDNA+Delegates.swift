@@ -6,15 +6,14 @@ import Foundation
 // and are NOT duplicated here to avoid compilation conflicts:
 //
 //   - AppDNAOnboardingDelegate → Sources/AppDNASDK/Onboarding/OnboardingConfig.swift
-//     Methods: onboardingStepViewed, onboardingStepCompleted, onboardingStepSkipped,
-//              onboardingFlowCompleted, onboardingFlowDismissed
+//     Methods: onOnboardingStarted, onOnboardingStepChanged, onOnboardingCompleted, onOnboardingDismissed
 //
 //   - AppDNAPaywallDelegate → Sources/AppDNASDK/Paywalls/PaywallConfig.swift
-//     Methods: paywallDidAppear, paywallDidDismiss, paywallDidStartPurchase,
-//              paywallDidCompletePurchase, paywallDidFailPurchase, paywallDidRestorePurchases
+//     Methods: onPaywallPresented, onPaywallAction, onPaywallPurchaseStarted,
+//              onPaywallPurchaseCompleted, onPaywallPurchaseFailed, onPaywallDismissed
 //
 //   - AppDNAPushDelegate → Sources/AppDNASDK/Integrations/AppDNAPushDelegate.swift
-//     Methods: onPushReceived, onPushTapped
+//     Methods: onPushTokenRegistered, onPushReceived, onPushTapped
 //
 
 /// Delegate for billing/purchase events.
