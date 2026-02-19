@@ -27,9 +27,10 @@ class PriceResolver {
         do {
             let products = try await Product.products(for: Set(productIds))
 
-            return plans.compactMap { plan in
+            var resolved: [ResolvedPlan] = []
+            for plan in plans {
                 guard let productId = plan["product_id"] as? String,
-                      let product = products.first(where: { $0.id == productId }) else { return nil }
+                      let product = products.first(where: { $0.id == productId }) else { continue }
 
                 var introOffer: IntroOffer?
                 if let subOffer = product.subscription?.introductoryOffer {
@@ -40,15 +41,23 @@ class PriceResolver {
                     )
                 }
 
-                return ResolvedPlan(
+                let eligible: Bool
+                if let sub = product.subscription {
+                    eligible = await sub.isEligibleForIntroOffer
+                } else {
+                    eligible = false
+                }
+
+                resolved.append(ResolvedPlan(
                     productId: product.id,
                     displayPrice: product.displayPrice,
                     price: product.price,
                     currencyCode: product.priceFormatStyle.currencyCode ?? "USD",
                     introOffer: introOffer,
-                    isEligibleForIntroOffer: product.subscription?.isEligibleForIntroOffer ?? false
-                )
+                    isEligibleForIntroOffer: eligible
+                ))
             }
+            return resolved
         } catch {
             Log.error("Failed to resolve prices: \(error)")
             return []

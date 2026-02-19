@@ -121,6 +121,7 @@ public class NativeBillingManager {
 
         switch result {
         case .success(let verification):
+            let signedJWS = verification.jwsRepresentation
             let transaction: Transaction
             do {
                 transaction = try checkVerified(verification)
@@ -135,7 +136,7 @@ public class NativeBillingManager {
 
             // Verify server-side
             let entitlement = try await receiptVerifier.verify(
-                signedTransaction: transaction.jwsRepresentation,
+                signedTransaction: signedJWS,
                 platform: "ios",
                 paywallId: currentPaywallId,
                 experimentId: currentExperimentId
@@ -183,8 +184,8 @@ public class NativeBillingManager {
 
         var transactions: [String] = []
         for await result in Transaction.currentEntitlements {
-            if case .verified(let transaction) = result {
-                transactions.append(transaction.jwsRepresentation)
+            if case .verified = result {
+                transactions.append(result.jwsRepresentation)
             }
         }
 
@@ -203,22 +204,27 @@ public class NativeBillingManager {
     /// Get localized product info from StoreKit.
     public func getProducts(productIds: [String]) async throws -> [ProductInfo] {
         let products = try await Product.products(for: Set(productIds))
-        return products.map { product in
-            ProductInfo(
+        var result: [ProductInfo] = []
+        for product in products {
+            var subInfo: SubscriptionInfo?
+            if let sub = product.subscription {
+                let eligible = await sub.isEligibleForIntroOffer
+                subInfo = SubscriptionInfo(
+                    period: sub.subscriptionPeriod,
+                    introOffer: sub.introductoryOffer,
+                    isEligibleForIntroOffer: eligible
+                )
+            }
+            result.append(ProductInfo(
                 id: product.id,
                 displayName: product.displayName,
                 description: product.description,
                 price: product.price,
                 displayPrice: product.displayPrice,
-                subscription: product.subscription.map {
-                    SubscriptionInfo(
-                        period: $0.subscriptionPeriod,
-                        introOffer: $0.introductoryOffer,
-                        isEligibleForIntroOffer: $0.isEligibleForIntroOffer
-                    )
-                }
-            )
+                subscription: subInfo
+            ))
         }
+        return result
     }
 
     /// Start listening for transaction updates (renewals, revocations).
@@ -226,9 +232,10 @@ public class NativeBillingManager {
         transactionListenerTask = Task {
             for await result in Transaction.updates {
                 if case .verified(let transaction) = result {
+                    let signedJWS = result.jwsRepresentation
                     do {
                         let entitlement = try await receiptVerifier.verify(
-                            signedTransaction: transaction.jwsRepresentation,
+                            signedTransaction: signedJWS,
                             platform: "ios",
                             paywallId: nil,
                             experimentId: nil
