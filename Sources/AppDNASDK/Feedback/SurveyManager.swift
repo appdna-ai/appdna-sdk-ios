@@ -18,6 +18,15 @@ final class SurveyManager {
         self.apiClient = apiClient
     }
 
+    /// Present a specific survey by ID.
+    func present(surveyId: String) {
+        guard let config = surveyConfigs[surveyId] else {
+            Log.warning("Survey config not found for id: \(surveyId)")
+            return
+        }
+        presentSurvey(surveyId: surveyId, config: config, triggerEvent: "manual")
+    }
+
     /// Called by RemoteConfigManager when Firestore config/surveys updates.
     func updateConfigs(_ configs: [String: SurveyConfig]) {
         self.surveyConfigs = configs

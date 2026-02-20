@@ -59,6 +59,10 @@ final class RemoteConfigManager {
         queue.sync { flags }
     }
 
+    func getAllConfig() -> [String: Any] {
+        getAllFlags()
+    }
+
     // MARK: - Onboarding (v0.2)
 
     /// Get an onboarding flow by ID, or the active flow if id is nil.

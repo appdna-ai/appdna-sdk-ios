@@ -24,7 +24,7 @@ public class PushNotificationHandler: NSObject, UNUserNotificationCenterDelegate
 
         // Notify delegate
         let payload = buildPayload(from: notification.request.content)
-        AppDNA.pushDelegate?.onPushReceived(notification: payload)
+        AppDNA.pushDelegate?.onPushReceived(notification: payload, inForeground: true)
 
         completionHandler([.banner, .badge, .sound])
     }
@@ -43,7 +43,7 @@ public class PushNotificationHandler: NSObject, UNUserNotificationCenterDelegate
         // Build payload and notify delegate
         let payload = buildPayload(from: response.notification.request.content)
         let tappedAction = actionIdentifier == UNNotificationDefaultActionIdentifier ? nil : actionIdentifier
-        AppDNA.pushDelegate?.onPushTapped(notification: payload, action: tappedAction)
+        AppDNA.pushDelegate?.onPushTapped(notification: payload, actionId: tappedAction)
 
         completionHandler()
     }

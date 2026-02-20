@@ -43,7 +43,7 @@ final class OnboardingFlowManager {
                     "step_index": stepIndex,
                     "step_type": flow.steps[stepIndex].type.rawValue,
                 ])
-                delegate?.onboardingStepViewed(flowId: flow.id, stepId: stepId, stepIndex: stepIndex)
+                delegate?.onOnboardingStepChanged(flowId: flow.id, stepId: stepId, stepIndex: stepIndex, totalSteps: flow.steps.count)
             },
             onStepCompleted: { [weak self] stepId, stepIndex, data in
                 self?.eventTracker.track(event: "onboarding_step_completed", properties: [
@@ -52,7 +52,7 @@ final class OnboardingFlowManager {
                     "step_index": stepIndex,
                     "selection_data": data ?? [:],
                 ])
-                delegate?.onboardingStepCompleted(flowId: flow.id, stepId: stepId, data: data)
+                // Step completion tracked via event above
             },
             onStepSkipped: { [weak self] stepId, stepIndex in
                 self?.eventTracker.track(event: "onboarding_step_skipped", properties: [
@@ -60,7 +60,7 @@ final class OnboardingFlowManager {
                     "step_id": stepId,
                     "step_index": stepIndex,
                 ])
-                delegate?.onboardingStepSkipped(flowId: flow.id, stepId: stepId)
+                // Step skip tracked via event above
             },
             onFlowCompleted: { [weak self] responses in
                 let durationMs = Int(Date().timeIntervalSince(startTime) * 1000)
@@ -70,7 +70,7 @@ final class OnboardingFlowManager {
                     "total_duration_ms": durationMs,
                     "responses": responses,
                 ])
-                delegate?.onboardingFlowCompleted(flowId: flow.id, data: responses)
+                delegate?.onOnboardingCompleted(flowId: flow.id, responses: responses)
                 viewController.dismiss(animated: true)
             },
             onFlowDismissed: { [weak self] lastStepId, lastStepIndex in
@@ -79,13 +79,13 @@ final class OnboardingFlowManager {
                     "last_step_id": lastStepId,
                     "last_step_index": lastStepIndex,
                 ])
-                delegate?.onboardingFlowDismissed(flowId: flow.id, lastStepId: lastStepId)
+                delegate?.onOnboardingDismissed(flowId: flow.id, atStep: lastStepIndex)
                 viewController.dismiss(animated: true)
             }
         )
 
         let hostingController = UIHostingController(rootView: rendererView)
-        hostingController.modalPresentationStyle = .fullScreen
+        hostingController.modalPresentationStyle = UIModalPresentationStyle.fullScreen
         viewController.present(hostingController, animated: true)
         return true
     }

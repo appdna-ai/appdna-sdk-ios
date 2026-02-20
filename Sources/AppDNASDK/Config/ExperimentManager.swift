@@ -8,8 +8,8 @@ final class ExperimentManager {
     private let identityManager: IdentityManager
     private let eventTracker: EventTracker
 
-    /// Set of experiment IDs for which exposure has been tracked this session.
-    private var exposedExperiments: Set<String> = []
+    /// Map of experiment IDs to variant IDs for which exposure has been tracked this session.
+    private var exposedExperiments: [String: String] = [:]
 
     init(
         remoteConfigManager: RemoteConfigManager,
@@ -78,6 +78,13 @@ final class ExperimentManager {
         return payload[key]?.value
     }
 
+    /// Get all active experiment exposures as (experimentId, variant) tuples.
+    func getExposures() -> [(experimentId: String, variant: String)] {
+        queue.sync {
+            exposedExperiments.map { (experimentId: $0.key, variant: $0.value) }
+        }
+    }
+
     /// Reset exposure tracking (called on identity reset or new session).
     func resetExposures() {
         queue.sync { exposedExperiments.removeAll() }
@@ -106,8 +113,8 @@ final class ExperimentManager {
 
     private func trackExposure(experimentId: String, variant: String) {
         queue.sync {
-            if !exposedExperiments.contains(experimentId) {
-                exposedExperiments.insert(experimentId)
+            if exposedExperiments[experimentId] == nil {
+                exposedExperiments[experimentId] = variant
                 eventTracker.track(event: "experiment_exposure", properties: [
                     "experiment_id": experimentId,
                     "variant": variant,

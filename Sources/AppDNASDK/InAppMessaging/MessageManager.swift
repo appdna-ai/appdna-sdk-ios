@@ -9,6 +9,9 @@ final class MessageManager {
     private let frequencyTracker = MessageFrequencyTracker()
     private var isPresenting = false
 
+    /// When true, suppresses display of in-app messages.
+    var suppressDisplay = false
+
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
@@ -23,7 +26,7 @@ final class MessageManager {
 
     /// Evaluate all active messages against an event. Called internally after every track() call.
     func onEvent(eventName: String, properties: [String: Any]?) {
-        guard !isPresenting else { return }
+        guard !isPresenting, !suppressDisplay else { return }
 
         let messages = remoteConfigManager.getActiveMessages()
         var candidates: [(id: String, config: MessageConfig)] = []

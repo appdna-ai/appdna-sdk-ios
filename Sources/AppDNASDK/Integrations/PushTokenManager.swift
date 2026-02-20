@@ -11,6 +11,11 @@ final class PushTokenManager {
 
     private static let keychainKey = "push_token"
 
+    /// The current push token string (hex-encoded), read from Keychain.
+    var currentTokenString: String? {
+        keychainStore.getString(key: Self.keychainKey)
+    }
+
     init(keychainStore: KeychainStore, eventTracker: EventTracker?, apiClient: APIClient? = nil) {
         self.keychainStore = keychainStore
         self.eventTracker = eventTracker

@@ -8,6 +8,11 @@ final class FeatureFlagManager {
         self.remoteConfigManager = remoteConfigManager
     }
 
+    /// Get the raw value of a feature flag.
+    func getValue(flag: String) -> Any? {
+        return remoteConfigManager.getConfig(key: flag)
+    }
+
     /// Returns true if the flag exists and is a truthy boolean value.
     func isEnabled(flag: String) -> Bool {
         guard let value = remoteConfigManager.getConfig(key: flag) else {

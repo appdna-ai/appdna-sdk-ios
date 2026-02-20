@@ -32,7 +32,7 @@ final class PaywallManager {
                 code: 404,
                 userInfo: [NSLocalizedDescriptionKey: "Paywall config not found"]
             )
-            delegate?.paywallDidFailPurchase(paywallId: id, productId: "", error: error)
+            delegate?.onPaywallPurchaseFailed(paywallId: id, error: error)
             return
         }
 
@@ -56,15 +56,15 @@ final class PaywallManager {
                     "dismiss_reason": reason.rawValue,
                 ])
                 viewController.dismiss(animated: true) {
-                    delegate?.paywallDidDismiss(paywallId: id, reason: reason)
+                    delegate?.onPaywallDismissed(paywallId: id)
                 }
             }
         )
 
         let hostingController = UIHostingController(rootView: paywallView)
-        hostingController.modalPresentationStyle = .fullScreen
+        hostingController.modalPresentationStyle = UIModalPresentationStyle.fullScreen
         viewController.present(hostingController, animated: true) {
-            delegate?.paywallDidAppear(paywallId: id)
+            delegate?.onPaywallPresented(paywallId: id)
         }
     }
 
@@ -76,7 +76,7 @@ final class PaywallManager {
             return
         }
 
-        delegate?.paywallDidStartPurchase(paywallId: paywallId, productId: plan.productId)
+        delegate?.onPaywallPurchaseStarted(paywallId: paywallId, productId: plan.productId)
         eventTracker.track(event: "purchase_started", properties: [
             "paywall_id": paywallId,
             "product_id": plan.productId,
@@ -93,10 +93,14 @@ final class PaywallManager {
                     "provider": result.provider,
                 ])
                 DispatchQueue.main.async {
-                    delegate?.paywallDidCompletePurchase(
+                    delegate?.onPaywallPurchaseCompleted(
                         paywallId: paywallId,
                         productId: result.productId,
-                        transactionId: result.transactionId
+                        transaction: TransactionInfo(
+                            transactionId: result.transactionId,
+                            productId: result.productId,
+                            purchaseDate: Date()
+                        )
                     )
                 }
             } catch {
@@ -106,9 +110,8 @@ final class PaywallManager {
                     "error": error.localizedDescription,
                 ])
                 DispatchQueue.main.async {
-                    delegate?.paywallDidFailPurchase(
+                    delegate?.onPaywallPurchaseFailed(
                         paywallId: paywallId,
-                        productId: plan.productId,
                         error: error
                     )
                 }
@@ -127,7 +130,8 @@ final class PaywallManager {
                     "restored_count": restored.count,
                 ])
                 DispatchQueue.main.async {
-                    delegate?.paywallDidRestorePurchases(paywallId: paywallId, restoredProductIds: restored)
+                    // Restore results are handled via the billing delegate
+                    Log.info("Restore completed for paywall \(paywallId) with \(restored.count) products")
                 }
             } catch {
                 Log.error("Restore failed: \(error.localizedDescription)")

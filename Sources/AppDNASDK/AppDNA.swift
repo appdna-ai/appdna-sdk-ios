@@ -20,8 +20,8 @@ public final class AppDNA: @unchecked Sendable {
     /// Delegate for billing/purchase events.
     public static weak var billingDelegate: AppDNABillingDelegate?
 
-    /// Public accessor for the push token manager (legacy).
-    public static var push: PushTokenManager? { shared.pushTokenManager }
+    /// Internal accessor for the push token manager (legacy).
+    static var push: PushTokenManager? { shared.pushTokenManager }
 
     // MARK: - Module Namespaces (v1.0)
 
