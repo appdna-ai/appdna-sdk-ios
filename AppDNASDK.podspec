@@ -7,9 +7,9 @@ Native iOS SDK for AppDNA providing analytics, remote configuration, feature fla
 experiments, paywalls, onboarding flows, surveys, web entitlements, and deferred deep links.
                        DESC
   s.homepage         = 'https://appdna.ai'
-  s.license          = { :type => 'MIT' }
+  s.license          = { :type => 'MIT', :file => 'LICENSE' }
   s.author           = { 'AppDNA' => 'hello@appdna.ai' }
-  s.source           = { :path => '.' }
+  s.source           = { :git => 'https://github.com/appdna-ai/appdna-sdk-ios.git', :tag => s.version.to_s }
   s.source_files     = 'Sources/AppDNASDK/**/*.swift'
   s.platform         = :ios, '15.0'
   s.swift_version    = '5.9'
