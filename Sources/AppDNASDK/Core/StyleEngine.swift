@@ -118,28 +118,56 @@ extension View {
     /// Apply ElementStyleConfig to a container view.
     func applyContainerStyle(_ style: ElementStyleConfig?) -> some View {
         guard let s = style else { return AnyView(self) }
-        let cornerRadius = CGFloat(s.corner_radius ?? 0)
+        let defaultRadius = CGFloat(s.corner_radius ?? 0)
+        let border = s.border
 
-        return AnyView(
-            self
-                .padding(edgeInsets(s.padding))
-                .background(StyleEngine.backgroundView(s.background))
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(
-                            Color(hex: s.border?.color ?? "transparent"),
-                            lineWidth: CGFloat(s.border?.width ?? 0)
-                        )
-                )
-                .shadow(
-                    color: Color(hex: s.shadow?.color ?? "transparent"),
-                    radius: CGFloat(s.shadow?.blur ?? 0) / 2,
-                    x: CGFloat(s.shadow?.x ?? 0),
-                    y: CGFloat(s.shadow?.y ?? 0)
-                )
-                .opacity(s.opacity ?? 1.0)
-        )
+        // Per-corner radius support (SPEC-084)
+        let hasPerCorner = border?.radius_top_left != nil || border?.radius_top_right != nil
+            || border?.radius_bottom_left != nil || border?.radius_bottom_right != nil
+
+        let base = self
+            .padding(edgeInsets(s.padding))
+            .background(StyleEngine.backgroundView(s.background))
+
+        if hasPerCorner {
+            let tl = CGFloat(border?.radius_top_left ?? Double(defaultRadius))
+            let tr = CGFloat(border?.radius_top_right ?? Double(defaultRadius))
+            let bl = CGFloat(border?.radius_bottom_left ?? Double(defaultRadius))
+            let br = CGFloat(border?.radius_bottom_right ?? Double(defaultRadius))
+            let path = PerCornerRadiusShape(topLeft: tl, topRight: tr, bottomLeft: bl, bottomRight: br)
+            return AnyView(
+                base
+                    .clipShape(path)
+                    .overlay(path.stroke(
+                        Color(hex: border?.color ?? "transparent"),
+                        lineWidth: CGFloat(border?.width ?? 0)
+                    ))
+                    .shadow(
+                        color: Color(hex: s.shadow?.color ?? "transparent"),
+                        radius: CGFloat(s.shadow?.blur ?? 0) / 2,
+                        x: CGFloat(s.shadow?.x ?? 0),
+                        y: CGFloat(s.shadow?.y ?? 0)
+                    )
+                    .opacity(s.opacity ?? 1.0)
+            )
+        } else {
+            let shape = RoundedRectangle(cornerRadius: defaultRadius)
+            return AnyView(
+                base
+                    .clipShape(shape)
+                    .overlay(shape.stroke(
+                        Color(hex: border?.color ?? "transparent"),
+                        lineWidth: CGFloat(border?.width ?? 0)
+                    ))
+                    .shadow(
+                        color: Color(hex: s.shadow?.color ?? "transparent"),
+                        radius: CGFloat(s.shadow?.blur ?? 0) / 2,
+                        x: CGFloat(s.shadow?.x ?? 0),
+                        y: CGFloat(s.shadow?.y ?? 0)
+                    )
+                    .opacity(s.opacity ?? 1.0)
+            )
+        }
     }
 
     private func textAlignment(_ alignment: String?) -> TextAlignment {
@@ -231,6 +259,42 @@ enum StyleEngine {
         case "contain": return .fit
         default: return .fill
         }
+    }
+}
+
+// MARK: - Per-corner radius shape (iOS 15 compatible)
+
+struct PerCornerRadiusShape: Shape {
+    let topLeft: CGFloat
+    let topRight: CGFloat
+    let bottomLeft: CGFloat
+    let bottomRight: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX + topLeft, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX - topRight, y: rect.minY))
+        path.addArc(
+            center: CGPoint(x: rect.maxX - topRight, y: rect.minY + topRight),
+            radius: topRight, startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottomRight))
+        path.addArc(
+            center: CGPoint(x: rect.maxX - bottomRight, y: rect.maxY - bottomRight),
+            radius: bottomRight, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false
+        )
+        path.addLine(to: CGPoint(x: rect.minX + bottomLeft, y: rect.maxY))
+        path.addArc(
+            center: CGPoint(x: rect.minX + bottomLeft, y: rect.maxY - bottomLeft),
+            radius: bottomLeft, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false
+        )
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + topLeft))
+        path.addArc(
+            center: CGPoint(x: rect.minX + topLeft, y: rect.minY + topLeft),
+            radius: topLeft, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false
+        )
+        path.closeSubpath()
+        return path
     }
 }
 

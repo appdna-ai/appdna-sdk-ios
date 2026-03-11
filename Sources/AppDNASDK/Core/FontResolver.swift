@@ -44,6 +44,10 @@ enum FontResolver {
             return "Baskerville"
         case "didot", "Didot":
             return "Didot"
+        case "bodoni", "Bodoni 72":
+            return "Bodoni 72"
+        case "optima", "Optima":
+            return "Optima"
         // Monospace
         case "courier-new", "Courier New":
             return "Courier New"

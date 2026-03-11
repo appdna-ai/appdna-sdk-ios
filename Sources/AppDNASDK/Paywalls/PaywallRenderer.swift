@@ -11,6 +11,11 @@ struct PaywallRenderer: View {
     @State private var showDismiss = false
     @State private var isPurchasing = false
 
+    // SPEC-084: Localization helper
+    private func loc(_ key: String, _ fallback: String) -> String {
+        LocalizationEngine.resolve(key: key, localizations: config.localizations, defaultLocale: config.default_locale, fallback: fallback)
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             backgroundView
@@ -26,7 +31,23 @@ struct PaywallRenderer: View {
 
             // Dismiss control
             if showDismiss {
-                dismissButton
+                let dismissType = config.dismiss?.type ?? "x_button"
+                switch dismissType {
+                case "text_link":
+                    VStack {
+                        Spacer()
+                        Button {
+                            onDismiss(.dismissed)
+                        } label: {
+                            Text(config.dismiss?.text ?? "No thanks")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                        .padding(.bottom, 24)
+                    }
+                default: // x_button
+                    dismissButton
+                }
             }
         }
         .entryAnimation(config.animation?.entry_animation, durationMs: config.animation?.entry_duration_ms)
@@ -110,7 +131,7 @@ struct PaywallRenderer: View {
         Group {
             switch section.type {
             case "header":
-                HeaderSection(data: section.data)
+                HeaderSection(data: section.data, loc: loc)
                     .applyContainerStyle(section.style?.container)
             case "features":
                 FeatureList(features: section.data?.features ?? [])
@@ -200,7 +221,7 @@ struct PaywallRenderer: View {
                 .font(.system(size: 40, weight: .bold))
                 .foregroundColor(.accentColor)
 
-            Text(data?.quote ?? data?.testimonial ?? "")
+            Text(loc("testimonial.quote", data?.quote ?? data?.testimonial ?? ""))
                 .italic()
                 .multilineTextAlignment(.center)
                 .foregroundColor(.white.opacity(0.9))
@@ -251,17 +272,55 @@ struct PaywallRenderer: View {
 
     // MARK: - Plans
 
+    // SPEC-084: Grid/carousel/stack plan layouts
+    @ViewBuilder
     private func plansSection(plans: [PaywallPlan]) -> some View {
+        let layoutType = config.layout.type
+
         VStack(spacing: 12) {
-            ForEach(plans) { plan in
-                PlanCard(
-                    plan: plan,
-                    isSelected: selectedPlanId == plan.id,
-                    onSelect: { selectedPlanId = plan.id }
-                )
+            switch layoutType {
+            case "grid":
+                // Side-by-side plan cards
+                let columns = [GridItem(.flexible()), GridItem(.flexible())]
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(plans) { plan in
+                        PlanCard(
+                            plan: plan,
+                            isSelected: selectedPlanId == plan.id,
+                            onSelect: { selectedPlanId = plan.id }
+                        )
+                        .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
+                    }
+                }
+
+            case "carousel":
+                // Swipeable horizontal plan cards
+                TabView {
+                    ForEach(plans) { plan in
+                        PlanCard(
+                            plan: plan,
+                            isSelected: selectedPlanId == plan.id,
+                            onSelect: { selectedPlanId = plan.id }
+                        )
+                        .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
+                        .padding(.horizontal, 8)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .always))
+                .frame(height: 140)
+
+            default: // "stack"
+                ForEach(plans) { plan in
+                    PlanCard(
+                        plan: plan,
+                        isSelected: selectedPlanId == plan.id,
+                        onSelect: { selectedPlanId = plan.id }
+                    )
+                    .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
+                }
             }
 
-            Button("Restore Purchases") {
+            Button(loc("restore.text", "Restore Purchases")) {
                 onRestore()
             }
             .font(.caption)
