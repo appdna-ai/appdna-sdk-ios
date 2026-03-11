@@ -39,39 +39,52 @@ struct BannerView: View {
     }
 
     private var bannerContent: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                if let title = content.title {
-                    Text(title)
-                        .font(.subheadline.bold())
-                        .foregroundColor(content.text_color.map { Color(hex: $0) } ?? .primary)
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    if let title = content.title {
+                        Text(title)
+                            .font(.subheadline.bold())
+                            .foregroundColor(content.text_color.map { Color(hex: $0) } ?? .primary)
+                    }
+                    if let body = content.body {
+                        Text(body)
+                            .font(.caption)
+                            .foregroundColor(content.text_color.map { Color(hex: $0).opacity(0.7) } ?? .secondary)
+                    }
                 }
-                if let body = content.body {
-                    Text(body)
+
+                Spacer()
+
+                if let ctaText = content.cta_text {
+                    Button(ctaText, action: onCTATap)
+                        .font(.caption.bold())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color(hex: content.button_color ?? "#6366F1"))
+                        .foregroundColor(.white)
+                        .cornerRadius(CGFloat(content.corner_radius ?? 8))
+                }
+
+                Button {
+                    withAnimation { isVisible = false }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onDismiss() }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption2.bold())
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            // Secondary CTA (Gap #18)
+            if let secondaryText = content.secondary_cta_text {
+                Button(action: { onDismiss() }) {
+                    Text(secondaryText)
                         .font(.caption)
-                        .foregroundColor(content.text_color.map { Color(hex: $0).opacity(0.7) } ?? .secondary)
+                        .foregroundColor(content.text_color.map { Color(hex: $0).opacity(0.6) } ?? .secondary)
                 }
-            }
-
-            Spacer()
-
-            if let ctaText = content.cta_text {
-                Button(ctaText, action: onCTATap)
-                    .font(.caption.bold())
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color(hex: content.button_color ?? "#6366F1"))
-                    .foregroundColor(.white)
-                    .cornerRadius(CGFloat(content.corner_radius ?? 8))
-            }
-
-            Button {
-                withAnimation { isVisible = false }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onDismiss() }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.caption2.bold())
-                    .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
             }
         }
         .padding(16)

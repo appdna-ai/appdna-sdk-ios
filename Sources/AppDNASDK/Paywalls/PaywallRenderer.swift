@@ -10,6 +10,8 @@ struct PaywallRenderer: View {
     @State private var selectedPlanId: String?
     @State private var showDismiss = false
     @State private var isPurchasing = false
+    @State private var isDismissing = false
+    @State private var dragOffset: CGFloat = 0
 
     // SPEC-084: Localization helper
     private func loc(_ key: String, _ fallback: String) -> String {
@@ -37,19 +39,28 @@ struct PaywallRenderer: View {
                     VStack {
                         Spacer()
                         Button {
-                            onDismiss(.dismissed)
+                            triggerDismiss()
                         } label: {
-                            Text(config.dismiss?.text ?? "No thanks")
+                            Text(loc("dismiss.text", config.dismiss?.text ?? "No thanks"))
                                 .font(.subheadline)
                                 .foregroundColor(.white.opacity(0.6))
                         }
                         .padding(.bottom, 24)
+                    }
+                case "swipe_down":
+                    VStack {
+                        Capsule()
+                            .fill(Color.white.opacity(0.5))
+                            .frame(width: 36, height: 5)
+                            .padding(.top, 8)
+                        Spacer()
                     }
                 default: // x_button
                     dismissButton
                 }
             }
         }
+        .dismissAnimation(config.animation?.dismiss_animation, isDismissing: isDismissing)
         .entryAnimation(config.animation?.entry_animation, durationMs: config.animation?.entry_duration_ms)
         .onAppear {
             // Select default plan
@@ -68,6 +79,24 @@ struct PaywallRenderer: View {
                 showDismiss = true
             }
         }
+        .gesture(
+            config.dismiss?.type == "swipe_down" ?
+            DragGesture()
+                .onChanged { value in
+                    if value.translation.height > 0 {
+                        dragOffset = value.translation.height
+                    }
+                }
+                .onEnded { value in
+                    if value.translation.height > 150 {
+                        triggerDismiss()
+                    } else {
+                        withAnimation { dragOffset = 0 }
+                    }
+                }
+            : nil
+        )
+        .offset(y: dragOffset)
     }
 
     // MARK: - Background
@@ -105,11 +134,22 @@ struct PaywallRenderer: View {
         }
     }
 
-    // MARK: - Dismiss button
+    // MARK: - Dismiss helpers
+
+    private func triggerDismiss() {
+        if config.animation?.dismiss_animation != nil {
+            isDismissing = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                onDismiss(.dismissed)
+            }
+        } else {
+            onDismiss(.dismissed)
+        }
+    }
 
     private var dismissButton: some View {
         Button {
-            onDismiss(.dismissed)
+            triggerDismiss()
         } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 16, weight: .semibold))
@@ -131,32 +171,37 @@ struct PaywallRenderer: View {
         Group {
             switch section.type {
             case "header":
-                HeaderSection(data: section.data, loc: loc)
+                HeaderSection(data: section.data, loc: loc, sectionStyle: section.style)
                     .applyContainerStyle(section.style?.container)
             case "features":
-                FeatureList(features: section.data?.features ?? [])
+                FeatureList(features: (section.data?.features ?? []).enumerated().map { i, f in loc("feature.\(i)", f) }, sectionStyle: section.style)
                     .applyContainerStyle(section.style?.container)
             case "plans":
-                plansSection(plans: section.data?.plans ?? [])
+                plansSection(plans: section.data?.plans ?? [], style: section.style)
                     .applyContainerStyle(section.style?.container)
             case "cta":
                 CTAButton(
                     cta: section.data?.cta,
                     isPurchasing: isPurchasing,
-                    onTap: handleCTATap
+                    onTap: handleCTATap,
+                    loc: loc,
+                    sectionStyle: section.style
                 )
                 .ctaAnimation(config.animation?.cta_animation)
                 .applyContainerStyle(section.style?.container)
             case "social_proof":
-                socialProofSection(data: section.data)
+                socialProofSection(data: section.data, style: section.style)
                     .applyContainerStyle(section.style?.container)
             case "guarantee":
                 if let text = section.data?.guaranteeText {
-                    Text(text)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    let ts = section.style?.elements?["text"]?.textStyle
+                    Text(loc("guarantee.text", text))
+                        .applyTextStyle(ts)
+                        .font(ts == nil ? .caption : nil)
+                        .foregroundColor(ts?.color == nil ? .secondary : nil)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
+                        .applyContainerStyle(section.style?.container)
                 }
             // SPEC-084: Missing sections
             case "image":
@@ -175,20 +220,29 @@ struct PaywallRenderer: View {
     // MARK: - SPEC-084: Social proof with sub-types
 
     @ViewBuilder
-    private func socialProofSection(data: PaywallSectionData?) -> some View {
+    private func socialProofSection(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
         switch data?.subType {
         case "countdown":
-            CountdownTimerView(seconds: data?.countdownSeconds ?? 86400)
+            CountdownTimerView(seconds: data?.countdownSeconds ?? 86400, valueTextStyle: style?.elements?["value"]?.textStyle)
         case "trial_badge":
-            Text(data?.text ?? "Free Trial")
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.accentColor.opacity(0.15))
-                .foregroundColor(.accentColor)
-                .clipShape(Capsule())
+            if let ts = style?.elements?["value"]?.textStyle {
+                Text(loc("social_proof.trial_badge", data?.text ?? "Free Trial"))
+                    .applyTextStyle(ts)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.accentColor.opacity(0.15))
+                    .clipShape(Capsule())
+            } else {
+                Text(loc("social_proof.trial_badge", data?.text ?? "Free Trial"))
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.accentColor.opacity(0.15))
+                    .foregroundColor(.accentColor)
+                    .clipShape(Capsule())
+            }
         default: // app_rating
-            SocialProof(data: data)
+            SocialProof(data: data, loc: loc, sectionStyle: style)
         }
     }
 
@@ -216,15 +270,24 @@ struct PaywallRenderer: View {
     // MARK: - SPEC-084: Testimonial section
 
     private func testimonialSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
-        VStack(spacing: 12) {
+        let quoteTextStyle = style?.elements?["quote"]?.textStyle
+        let authorNameTextStyle = style?.elements?["author_name"]?.textStyle
+        let authorRoleTextStyle = style?.elements?["author_role"]?.textStyle
+
+        return VStack(spacing: 12) {
             Text("\u{201C}")
                 .font(.system(size: 40, weight: .bold))
                 .foregroundColor(.accentColor)
 
-            Text(loc("testimonial.quote", data?.quote ?? data?.testimonial ?? ""))
-                .italic()
-                .multilineTextAlignment(.center)
-                .foregroundColor(.white.opacity(0.9))
+            if let ts = quoteTextStyle {
+                Text(loc("testimonial.quote", data?.quote ?? data?.testimonial ?? ""))
+                    .applyTextStyle(ts)
+            } else {
+                Text(loc("testimonial.quote", data?.quote ?? data?.testimonial ?? ""))
+                    .italic()
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.white.opacity(0.9))
+            }
 
             HStack(spacing: 12) {
                 if let avatarUrl = data?.avatarUrl, let url = URL(string: avatarUrl) {
@@ -248,14 +311,24 @@ struct PaywallRenderer: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     if let name = data?.authorName {
-                        Text(name)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(.white)
+                        if let ts = authorNameTextStyle {
+                            Text(name)
+                                .applyTextStyle(ts)
+                        } else {
+                            Text(name)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.white)
+                        }
                     }
                     if let role = data?.authorRole {
-                        Text(role)
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.7))
+                        if let ts = authorRoleTextStyle {
+                            Text(role)
+                                .applyTextStyle(ts)
+                        } else {
+                            Text(role)
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.7))
+                        }
                     }
                 }
             }
@@ -274,7 +347,7 @@ struct PaywallRenderer: View {
 
     // SPEC-084: Grid/carousel/stack plan layouts
     @ViewBuilder
-    private func plansSection(plans: [PaywallPlan]) -> some View {
+    private func plansSection(plans: [PaywallPlan], style: SectionStyleConfig? = nil) -> some View {
         let layoutType = config.layout.type
 
         VStack(spacing: 12) {
@@ -283,11 +356,14 @@ struct PaywallRenderer: View {
                 // Side-by-side plan cards
                 let columns = [GridItem(.flexible()), GridItem(.flexible())]
                 LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(plans) { plan in
+                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
                         PlanCard(
                             plan: plan,
                             isSelected: selectedPlanId == plan.id,
-                            onSelect: { selectedPlanId = plan.id }
+                            onSelect: { selectedPlanId = plan.id },
+                            planIndex: index,
+                            loc: loc,
+                            sectionStyle: style
                         )
                         .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
                     }
@@ -296,11 +372,14 @@ struct PaywallRenderer: View {
             case "carousel":
                 // Swipeable horizontal plan cards
                 TabView {
-                    ForEach(plans) { plan in
+                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
                         PlanCard(
                             plan: plan,
                             isSelected: selectedPlanId == plan.id,
-                            onSelect: { selectedPlanId = plan.id }
+                            onSelect: { selectedPlanId = plan.id },
+                            planIndex: index,
+                            loc: loc,
+                            sectionStyle: style
                         )
                         .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
                         .padding(.horizontal, 8)
@@ -310,11 +389,14 @@ struct PaywallRenderer: View {
                 .frame(height: 140)
 
             default: // "stack"
-                ForEach(plans) { plan in
+                ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
                     PlanCard(
                         plan: plan,
                         isSelected: selectedPlanId == plan.id,
-                        onSelect: { selectedPlanId = plan.id }
+                        onSelect: { selectedPlanId = plan.id },
+                        planIndex: index,
+                        loc: loc,
+                        sectionStyle: style
                     )
                     .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
                 }
@@ -345,10 +427,12 @@ struct PaywallRenderer: View {
 
 struct CountdownTimerView: View {
     let seconds: Int
+    var valueTextStyle: TextStyleConfig? = nil
     @State private var remaining: Int
 
-    init(seconds: Int) {
+    init(seconds: Int, valueTextStyle: TextStyleConfig? = nil) {
         self.seconds = seconds
+        self.valueTextStyle = valueTextStyle
         self._remaining = State(initialValue: seconds)
     }
 
@@ -377,9 +461,15 @@ struct CountdownTimerView: View {
 
     private func timeUnit(_ value: Int, label: String) -> some View {
         VStack(spacing: 2) {
-            Text(String(format: "%02d", value))
-                .font(.title2.monospacedDigit().bold())
-                .foregroundColor(.white)
+            if let ts = valueTextStyle {
+                Text(String(format: "%02d", value))
+                    .applyTextStyle(ts)
+                    .monospacedDigit()
+            } else {
+                Text(String(format: "%02d", value))
+                    .font(.title2.monospacedDigit().bold())
+                    .foregroundColor(.white)
+            }
             Text(label)
                 .font(.caption2)
                 .foregroundColor(.white.opacity(0.6))

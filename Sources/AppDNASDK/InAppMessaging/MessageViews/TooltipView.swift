@@ -33,49 +33,70 @@ struct TooltipView: View {
     }
 
     private var tooltipContent: some View {
-        VStack(spacing: 8) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    if let title = content.title {
-                        Text(title)
-                            .font(.subheadline.bold())
+        VStack(spacing: 0) {
+            VStack(spacing: 8) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let title = content.title {
+                            Text(title)
+                                .font(.subheadline.bold())
+                                .foregroundColor(content.text_color.map { Color(hex: $0) } ?? .primary)
+                        }
+                        if let body = content.body {
+                            Text(body)
+                                .font(.caption)
+                                .foregroundColor(content.text_color.map { Color(hex: $0).opacity(0.7) } ?? .secondary)
+                        }
                     }
-                    if let body = content.body {
-                        Text(body)
-                            .font(.caption)
+
+                    Spacer()
+
+                    Button {
+                        withAnimation { isVisible = false }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onDismiss() }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption2.bold())
                             .foregroundColor(.secondary)
                     }
                 }
 
-                Spacer()
+                if let ctaText = content.cta_text {
+                    Button(action: {
+                        onCTATap()
+                    }) {
+                        Text(ctaText)
+                            .font(.caption.bold())
+                            .foregroundColor(Color(hex: content.button_color ?? "#6366F1"))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
 
-                Button {
-                    withAnimation { isVisible = false }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onDismiss() }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption2.bold())
-                        .foregroundColor(.secondary)
+                // Secondary CTA (Gap #18)
+                if let secondaryText = content.secondary_cta_text {
+                    Button(action: { onDismiss() }) {
+                        Text(secondaryText)
+                            .font(.caption)
+                            .foregroundColor(content.text_color.map { Color(hex: $0).opacity(0.6) } ?? .secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: CGFloat(content.corner_radius ?? 12))
+                    .fill(Color(hex: content.background_color ?? "#FFFFFF"))
+                    .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+            )
 
-            if let ctaText = content.cta_text {
-                Button(action: {
-                    onCTATap()
-                }) {
-                    Text(ctaText)
-                        .font(.caption.bold())
-                        .foregroundColor(.accentColor)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
+            // Pointer arrow (Gap #17)
+            Rectangle()
                 .fill(Color(hex: content.background_color ?? "#FFFFFF"))
-                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-        )
+                .frame(width: 12, height: 12)
+                .rotationEffect(.degrees(45))
+                .offset(y: -6)
+                .shadow(color: .black.opacity(0.08), radius: 2, y: 2)
+        }
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
     }

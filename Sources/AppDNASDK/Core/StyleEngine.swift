@@ -64,7 +64,7 @@ public struct SpacingConfig: Codable {
     public let left: Double?
 }
 
-/// Full container/element style combining background, border, shadow, padding.
+/// Full container/element style combining background, border, shadow, padding, and text.
 public struct ElementStyleConfig: Codable {
     public let background: BackgroundStyleConfig?
     public let border: BorderStyleConfig?
@@ -72,6 +72,14 @@ public struct ElementStyleConfig: Codable {
     public let padding: SpacingConfig?
     public let corner_radius: Double?
     public let opacity: Double?
+    /// SPEC-084: Per-element text style for inner text elements.
+    public let textStyle: TextStyleConfig?
+
+    enum CodingKeys: String, CodingKey {
+        case background, border, shadow, padding, opacity
+        case corner_radius
+        case textStyle = "text_style"
+    }
 }
 
 /// Section-level style (container + per-element overrides).
@@ -166,6 +174,21 @@ extension View {
                         y: CGFloat(s.shadow?.y ?? 0)
                     )
                     .opacity(s.opacity ?? 1.0)
+            )
+        }
+    }
+
+    /// Apply ElementStyleConfig to an option card, or fall back to the default survey option border style.
+    /// SPEC-084: Gap #19 — used by SingleChoiceView and MultiChoiceView.
+    func applyContainerStyleOrDefault(_ style: ElementStyleConfig?, isSelected: Bool) -> some View {
+        if let s = style {
+            return AnyView(self.applyContainerStyle(s))
+        } else {
+            return AnyView(
+                self.background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(isSelected ? Color.accentColor : Color.gray.opacity(0.3), lineWidth: 1)
+                )
             )
         }
     }

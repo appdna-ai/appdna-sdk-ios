@@ -62,6 +62,20 @@ enum FontResolver {
             return "Noteworthy"
         case "snell", "Snell Roundhand":
             return "Snell Roundhand"
+        case "sf-compact", "SF Compact Text":
+            return "SF Compact Text"
+        case "cochin", "Cochin":
+            return "Cochin"
+        case "iowan", "Iowan Old Style":
+            return "Iowan Old Style"
+        case "courier", "Courier":
+            return "Courier"
+        case "papyrus", "Papyrus":
+            return "Papyrus"
+        case "marker-felt", "Marker Felt":
+            return "Marker Felt"
+        case "academy-engraved", "Academy Engraved LET":
+            return "Academy Engraved LET"
         // Google Fonts → fallback to system (not available natively)
         default:
             return ".AppleSystemUIFont"

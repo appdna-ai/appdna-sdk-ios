@@ -71,6 +71,15 @@ struct ModalView: View {
                     }
                 }
 
+                // Secondary CTA (Gap #18)
+                if let secondaryText = content.secondary_cta_text {
+                    Button(action: { onDismiss() }) {
+                        Text(secondaryText)
+                            .font(.caption)
+                            .foregroundColor(content.text_color.map { Color(hex: $0).opacity(0.6) } ?? .secondary)
+                    }
+                }
+
                 // Dismiss text
                 if let dismissText = content.dismiss_text {
                     Button(dismissText, action: onDismiss)

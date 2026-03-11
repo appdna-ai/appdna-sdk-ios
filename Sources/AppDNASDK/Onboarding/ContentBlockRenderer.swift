@@ -1,10 +1,16 @@
 import SwiftUI
 
+// MARK: - Content Block Type
+
+public enum ContentBlockType: String, Codable {
+    case heading, text, image, button, spacer, list, divider, badge, icon, toggle, video
+}
+
 // MARK: - Content Block model
 
 public struct ContentBlock: Codable, Identifiable {
     public let id: String
-    public let type: String  // heading, text, image, button, spacer, list, divider, badge, icon, toggle, video
+    public let type: ContentBlockType
     // Common
     public let text: String?
     public let style: TextStyleConfig?
@@ -18,6 +24,7 @@ public struct ContentBlock: Codable, Identifiable {
     // Button
     public let variant: String?
     public let action: String?     // next, skip, link, permission
+    public let action_value: String?  // URL for link, permission type for permission
     public let bg_color: String?
     public let text_color: String?
     public let button_corner_radius: Double?
@@ -46,17 +53,19 @@ public struct ContentBlock: Codable, Identifiable {
     // Video
     public let video_url: String?
     public let video_thumbnail_url: String?
+    public let video_height: Double?
+    public let video_corner_radius: Double?
 
     enum CodingKeys: String, CodingKey {
         case id, type, text, style, level
         case image_url, alt, corner_radius, height
-        case variant, action, bg_color, text_color, button_corner_radius
+        case variant, action, action_value, bg_color, text_color, button_corner_radius
         case spacer_height, items, list_style
         case divider_color, divider_thickness, divider_margin_y
         case badge_text, badge_bg_color, badge_text_color, badge_corner_radius
         case icon_emoji, icon_size, icon_alignment
         case toggle_label, toggle_description, toggle_default
-        case video_url, video_thumbnail_url
+        case video_url, video_thumbnail_url, video_height, video_corner_radius
     }
 }
 
@@ -64,8 +73,9 @@ public struct ContentBlock: Codable, Identifiable {
 
 struct ContentBlockRendererView: View {
     let blocks: [ContentBlock]
-    let onAction: (String) -> Void
+    let onAction: (_ action: String, _ actionValue: String?) -> Void
     @Binding var toggleValues: [String: Bool]
+    var loc: ((String, String) -> String)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -78,30 +88,28 @@ struct ContentBlockRendererView: View {
     @ViewBuilder
     private func renderBlock(_ block: ContentBlock) -> some View {
         switch block.type {
-        case "heading":
+        case .heading:
             headingBlock(block)
-        case "text":
+        case .text:
             textBlock(block)
-        case "image":
+        case .image:
             imageBlock(block)
-        case "button":
+        case .button:
             buttonBlock(block)
-        case "spacer":
+        case .spacer:
             Spacer().frame(height: CGFloat(block.spacer_height ?? 16))
-        case "list":
+        case .list:
             listBlock(block)
-        case "divider":
+        case .divider:
             dividerBlock(block)
-        case "badge":
+        case .badge:
             badgeBlock(block)
-        case "icon":
+        case .icon:
             iconBlock(block)
-        case "toggle":
+        case .toggle:
             toggleBlock(block)
-        case "video":
+        case .video:
             videoBlock(block)
-        default:
-            EmptyView()
         }
     }
 
@@ -117,7 +125,8 @@ struct ContentBlockRendererView: View {
             }
         }()
 
-        return Text(block.text ?? "")
+        let text = block.text ?? ""
+        return Text(loc?("block.\(block.id).text", text) ?? text)
             .font(.system(size: fontSize, weight: .bold))
             .applyTextStyle(block.style)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -126,7 +135,8 @@ struct ContentBlockRendererView: View {
     // MARK: - Text
 
     private func textBlock(_ block: ContentBlock) -> some View {
-        Text(block.text ?? "")
+        let text = block.text ?? ""
+        return Text(loc?("block.\(block.id).text", text) ?? text)
             .font(.body)
             .applyTextStyle(block.style)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -145,6 +155,7 @@ struct ContentBlockRendererView: View {
                             .aspectRatio(contentMode: .fill)
                             .frame(maxHeight: CGFloat(block.height ?? 200))
                             .clipShape(RoundedRectangle(cornerRadius: CGFloat(block.corner_radius ?? 0)))
+                            .accessibilityLabel(block.alt ?? "Image")
                     case .failure:
                         imagePlaceholder
                     default:
@@ -169,11 +180,12 @@ struct ContentBlockRendererView: View {
 
     private func buttonBlock(_ block: ContentBlock) -> some View {
         Button {
-            onAction(block.action ?? "next")
+            onAction(block.action ?? "next", block.action_value)
         } label: {
-            Text(block.text ?? "Continue")
+            Text(loc?("block.\(block.id).text", block.text ?? "Continue") ?? block.text ?? "Continue")
                 .font(.body.weight(.semibold))
                 .foregroundColor(Color(hex: block.text_color ?? "#FFFFFF"))
+                .applyTextStyle(block.style)  // SPEC-084 Gap #8: override with schema-driven style when present
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(Color(hex: block.bg_color ?? "#6366F1"))
@@ -188,7 +200,8 @@ struct ContentBlockRendererView: View {
             ForEach(Array((block.items ?? []).enumerated()), id: \.offset) { index, item in
                 HStack(spacing: 10) {
                     listMarker(style: block.list_style ?? "bullet", index: index)
-                    Text(item)
+                    // SPEC-084 Gap #9: localize each list item using block id + index key
+                    Text(loc?("block.\(block.id).item.\(index)", item) ?? item)
                         .applyTextStyle(block.style)
                 }
             }
@@ -225,7 +238,7 @@ struct ContentBlockRendererView: View {
     // MARK: - Badge
 
     private func badgeBlock(_ block: ContentBlock) -> some View {
-        Text(block.badge_text ?? "")
+        Text(loc?("block.\(block.id).badge", block.badge_text ?? "") ?? block.badge_text ?? "")
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
@@ -259,10 +272,10 @@ struct ContentBlockRendererView: View {
         )
 
         return VStack(alignment: .leading, spacing: 4) {
-            Toggle(block.toggle_label ?? "", isOn: binding)
+            Toggle(loc?("block.\(block.id).label", block.toggle_label ?? "") ?? block.toggle_label ?? "", isOn: binding)
                 .tint(.accentColor)
             if let desc = block.toggle_description {
-                Text(desc)
+                Text(loc?("block.\(block.id).description", desc) ?? desc)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -272,7 +285,10 @@ struct ContentBlockRendererView: View {
     // MARK: - Video (thumbnail only — full video in SPEC-085)
 
     private func videoBlock(_ block: ContentBlock) -> some View {
-        Group {
+        let effectiveHeight = CGFloat(block.video_height ?? block.height ?? 200)
+        let effectiveCornerRadius = CGFloat(block.video_corner_radius ?? block.corner_radius ?? 8)
+
+        return Group {
             if let thumbUrl = block.video_thumbnail_url ?? block.image_url,
                let url = URL(string: thumbUrl) {
                 AsyncImage(url: url) { phase in
@@ -282,8 +298,9 @@ struct ContentBlockRendererView: View {
                             image
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
-                                .frame(maxHeight: CGFloat(block.height ?? 200))
-                                .clipShape(RoundedRectangle(cornerRadius: CGFloat(block.corner_radius ?? 8)))
+                                .frame(maxHeight: effectiveHeight)
+                                .clipShape(RoundedRectangle(cornerRadius: effectiveCornerRadius))
+                                .accessibilityLabel(block.alt ?? "Video")
                             // Play icon overlay
                             Image(systemName: "play.circle.fill")
                                 .font(.system(size: 48))
@@ -291,13 +308,13 @@ struct ContentBlockRendererView: View {
                                 .shadow(radius: 4)
                         }
                     default:
-                        ProgressView().frame(height: CGFloat(block.height ?? 200))
+                        ProgressView().frame(height: effectiveHeight)
                     }
                 }
             } else {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: effectiveCornerRadius)
                     .fill(Color.gray.opacity(0.2))
-                    .frame(height: CGFloat(block.height ?? 200))
+                    .frame(height: effectiveHeight)
                     .overlay(Image(systemName: "play.circle").font(.largeTitle).foregroundColor(.gray))
             }
         }

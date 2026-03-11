@@ -3,6 +3,13 @@ import SwiftUI
 /// Star rating and review count display.
 struct SocialProof: View {
     let data: PaywallSectionData?
+    var loc: ((String, String) -> String)? = nil
+    /// SPEC-084: Per-section style with element overrides.
+    var sectionStyle: SectionStyleConfig? = nil
+
+    private var valueTextStyle: TextStyleConfig? {
+        sectionStyle?.elements?["value"]?.textStyle
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -15,15 +22,20 @@ struct SocialProof: View {
                     }
 
                     if let count = data?.reviewCount {
-                        Text("(\(formatCount(count)))")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        if let ts = valueTextStyle {
+                            Text("(\(formatCount(count)))")
+                                .applyTextStyle(ts)
+                        } else {
+                            Text("(\(formatCount(count)))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
             }
 
             if let testimonial = data?.testimonial {
-                Text("\"\(testimonial)\"")
+                Text("\"\(loc?("social_proof.testimonial", testimonial) ?? testimonial)\"")
                     .font(.callout)
                     .foregroundColor(.white.opacity(0.8))
                     .multilineTextAlignment(.center)

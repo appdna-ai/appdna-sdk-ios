@@ -164,4 +164,8 @@ extension View {
     func planSelection(_ animation: String?, isSelected: Bool) -> some View {
         modifier(PlanSelectionModifier(animation: animation ?? "none", isSelected: isSelected))
     }
+
+    func dismissAnimation(_ animation: String?, isDismissing: Bool) -> some View {
+        modifier(DismissAnimationModifier(animation: animation ?? "none", isDismissing: isDismissing))
+    }
 }

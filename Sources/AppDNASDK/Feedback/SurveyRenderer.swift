@@ -74,6 +74,12 @@ struct SurveyContainerView: View {
         Color(hex: config.appearance.theme?.button_color ?? "#6366f1")
     }
 
+    /// SPEC-084: Resolve font from theme
+    private var themeFont: Font? {
+        guard let fontFamily = config.appearance.theme?.font_family else { return nil }
+        return FontResolver.font(family: fontFamily, size: nil, weight: nil)
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             // Progress indicator
@@ -84,10 +90,11 @@ struct SurveyContainerView: View {
 
             Spacer()
 
-            // Current question — SPEC-084: apply style engine
+            // Current question — SPEC-084: apply style engine + theme font
             if currentQuestionIndex < visibleQuestions.count {
                 questionView(for: visibleQuestions[currentQuestionIndex])
                     .applyTextStyle(config.appearance.question_text_style)
+                    .font(themeFont)
                     .foregroundColor(textColor)
             }
 
@@ -158,9 +165,11 @@ struct SurveyContainerView: View {
         case "rating":
             RatingQuestionView(question: question, answer: binding)
         case "single_choice":
-            SingleChoiceView(question: question, answer: binding)
+            // SPEC-084: Gap #19 — pass option_style from appearance to option card views
+            SingleChoiceView(question: question, answer: binding, optionStyle: config.appearance.option_style)
         case "multi_choice":
-            MultiChoiceView(question: question, answer: binding)
+            // SPEC-084: Gap #19 — pass option_style from appearance to option card views
+            MultiChoiceView(question: question, answer: binding, optionStyle: config.appearance.option_style)
         case "free_text":
             FreeTextView(question: question, answer: binding)
         case "yes_no":

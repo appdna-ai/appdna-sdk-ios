@@ -4,6 +4,8 @@ import SwiftUI
 struct MultiChoiceView: View {
     let question: SurveyQuestion
     @Binding var answer: SurveyAnswer?
+    // SPEC-084: Gap #19 — option_style from SurveyAppearance applied to each option card
+    var optionStyle: ElementStyleConfig? = nil
 
     private var selectedIds: [String] {
         answer?.answer as? [String] ?? []
@@ -33,12 +35,10 @@ struct MultiChoiceView: View {
 
                         Spacer()
                     }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(selectedIds.contains(option.id) ? Color.accentColor : Color.gray.opacity(0.3), lineWidth: 1)
-                    )
+                    .padding(.vertical, optionStyle == nil ? 8 : 0)
+                    .padding(.horizontal, optionStyle == nil ? 12 : 0)
+                    // SPEC-084: Apply option_style if provided, otherwise fall back to default card border
+                    .applyContainerStyleOrDefault(optionStyle, isSelected: selectedIds.contains(option.id))
                 }
             }
         }

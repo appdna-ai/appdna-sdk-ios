@@ -564,6 +564,11 @@ struct OnboardingStepRouter: View {
 
     @State private var toggleValues: [String: Bool] = [:]
 
+    // SPEC-084: Localization helper for step text
+    private func loc(_ key: String, _ fallback: String) -> String {
+        LocalizationEngine.resolve(key: key, localizations: effectiveConfig.localizations, defaultLocale: effectiveConfig.default_locale, fallback: fallback)
+    }
+
     var body: some View {
         ZStack {
             // SPEC-084: Step-level background
@@ -602,34 +607,37 @@ struct OnboardingStepRouter: View {
                 ScrollView {
                     VStack(spacing: 12) {
                         Spacer(minLength: 200)
-                        ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues)
+                        ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc)
                             .padding(.horizontal, 20)
                     }
                 }
             }
 
         case "image_split":
-            HStack(spacing: 0) {
-                if let url = effectiveConfig.image_url {
-                    AsyncImage(url: URL(string: url)) { phase in
-                        if case .success(let image) = phase {
-                            image.resizable().aspectRatio(contentMode: .fill)
+            // 40/60 image-to-content split (SPEC-084 Gap #15)
+            GeometryReader { geometry in
+                HStack(spacing: 0) {
+                    if let url = effectiveConfig.image_url {
+                        AsyncImage(url: URL(string: url)) { phase in
+                            if case .success(let image) = phase {
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            }
                         }
+                        .frame(width: geometry.size.width * 0.4)
+                        .clipped()
                     }
-                    .frame(maxWidth: .infinity)
-                    .clipped()
+                    ScrollView {
+                        ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc)
+                            .padding(16)
+                    }
+                    .frame(width: geometry.size.width * 0.6)
                 }
-                ScrollView {
-                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues)
-                        .padding(16)
-                }
-                .frame(maxWidth: .infinity)
             }
 
         case "image_bottom":
             ScrollView {
                 VStack(spacing: 12) {
-                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues)
+                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc)
                         .padding(.horizontal, 20)
                     if let url = effectiveConfig.image_url {
                         AsyncImage(url: URL(string: url)) { phase in
@@ -652,7 +660,7 @@ struct OnboardingStepRouter: View {
                             }
                         }
                     }
-                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues)
+                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc)
                         .padding(.horizontal, 20)
                 }
                 .padding(.vertical, 20)
@@ -660,7 +668,7 @@ struct OnboardingStepRouter: View {
 
         default: // no_image
             ScrollView {
-                ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues)
+                ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 20)
             }
@@ -696,7 +704,7 @@ struct OnboardingStepRouter: View {
 
     // MARK: - Block action handler
 
-    private func handleBlockAction(_ action: String) {
+    private func handleBlockAction(_ action: String, _ actionValue: String?) {
         switch action {
         case "next":
             // Collect toggle values into response
@@ -707,8 +715,17 @@ struct OnboardingStepRouter: View {
             onNext(data.isEmpty ? nil : data)
         case "skip":
             onSkip()
+        case "link":
+            if let urlString = actionValue, let url = URL(string: urlString) {
+                UIApplication.shared.open(url)
+            }
+            onNext(nil)
+        case "permission":
+            // P1: Requires runtime permission request infrastructure.
+            // action_value will specify the permission type (e.g. "camera", "notifications").
+            // For now, advance the step as a safe fallback.
+            onNext(nil)
         default:
-            // link / permission — handle externally
             onNext(nil)
         }
     }
