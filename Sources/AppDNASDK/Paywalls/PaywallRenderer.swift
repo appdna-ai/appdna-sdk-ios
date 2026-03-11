@@ -29,6 +29,7 @@ struct PaywallRenderer: View {
                 dismissButton
             }
         }
+        .entryAnimation(config.animation?.entry_animation, durationMs: config.animation?.entry_duration_ms)
         .onAppear {
             // Select default plan
             if let sections = config.sections.first(where: { $0.type == "plans" }),
@@ -104,32 +105,148 @@ struct PaywallRenderer: View {
 
     @ViewBuilder
     private func sectionView(for section: PaywallSection) -> some View {
-        switch section.type {
-        case "header":
-            HeaderSection(data: section.data)
-        case "features":
-            FeatureList(features: section.data?.features ?? [])
-        case "plans":
-            plansSection(plans: section.data?.plans ?? [])
-        case "cta":
-            CTAButton(
-                cta: section.data?.cta,
-                isPurchasing: isPurchasing,
-                onTap: handleCTATap
-            )
-        case "social_proof":
-            SocialProof(data: section.data)
-        case "guarantee":
-            if let text = section.data?.guaranteeText {
-                Text(text)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
+        let staggerDelay = config.animation?.section_stagger_delay_ms ?? 0
+
+        Group {
+            switch section.type {
+            case "header":
+                HeaderSection(data: section.data)
+                    .applyContainerStyle(section.style?.container)
+            case "features":
+                FeatureList(features: section.data?.features ?? [])
+                    .applyContainerStyle(section.style?.container)
+            case "plans":
+                plansSection(plans: section.data?.plans ?? [])
+                    .applyContainerStyle(section.style?.container)
+            case "cta":
+                CTAButton(
+                    cta: section.data?.cta,
+                    isPurchasing: isPurchasing,
+                    onTap: handleCTATap
+                )
+                .ctaAnimation(config.animation?.cta_animation)
+                .applyContainerStyle(section.style?.container)
+            case "social_proof":
+                socialProofSection(data: section.data)
+                    .applyContainerStyle(section.style?.container)
+            case "guarantee":
+                if let text = section.data?.guaranteeText {
+                    Text(text)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+            // SPEC-084: Missing sections
+            case "image":
+                imageSectionView(data: section.data, style: section.style)
+            case "spacer":
+                Spacer().frame(height: section.data?.spacerHeight ?? 24)
+            case "testimonial":
+                testimonialSectionView(data: section.data, style: section.style)
+            default:
+                EmptyView()
             }
-        default:
-            EmptyView()
         }
+        .sectionStagger(config.animation?.section_stagger, delayMs: staggerDelay)
+    }
+
+    // MARK: - SPEC-084: Social proof with sub-types
+
+    @ViewBuilder
+    private func socialProofSection(data: PaywallSectionData?) -> some View {
+        switch data?.subType {
+        case "countdown":
+            CountdownTimerView(seconds: data?.countdownSeconds ?? 86400)
+        case "trial_badge":
+            Text(data?.text ?? "Free Trial")
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.accentColor.opacity(0.15))
+                .foregroundColor(.accentColor)
+                .clipShape(Capsule())
+        default: // app_rating
+            SocialProof(data: data)
+        }
+    }
+
+    // MARK: - SPEC-084: Image section
+
+    @ViewBuilder
+    private func imageSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        if let urlString = data?.imageUrl, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxHeight: data?.height ?? 240)
+                        .clipShape(RoundedRectangle(cornerRadius: data?.cornerRadius ?? 12))
+                default:
+                    ProgressView().frame(height: data?.height ?? 240)
+                }
+            }
+            .applyContainerStyle(style?.container)
+        }
+    }
+
+    // MARK: - SPEC-084: Testimonial section
+
+    private func testimonialSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        VStack(spacing: 12) {
+            Text("\u{201C}")
+                .font(.system(size: 40, weight: .bold))
+                .foregroundColor(.accentColor)
+
+            Text(data?.quote ?? data?.testimonial ?? "")
+                .italic()
+                .multilineTextAlignment(.center)
+                .foregroundColor(.white.opacity(0.9))
+
+            HStack(spacing: 12) {
+                if let avatarUrl = data?.avatarUrl, let url = URL(string: avatarUrl) {
+                    AsyncImage(url: url) { phase in
+                        if case .success(let image) = phase {
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        }
+                    }
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+                } else if let name = data?.authorName {
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.2))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text(initials(name))
+                                .font(.caption.bold())
+                                .foregroundColor(.accentColor)
+                        )
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    if let name = data?.authorName {
+                        Text(name)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white)
+                    }
+                    if let role = data?.authorRole {
+                        Text(role)
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                }
+            }
+        }
+        .applyContainerStyle(style?.container)
+    }
+
+    private func initials(_ name: String) -> String {
+        let parts = name.split(separator: " ")
+        let first = parts.first.map { String($0.prefix(1)) } ?? ""
+        let last = parts.count > 1 ? String(parts.last!.prefix(1)) : ""
+        return (first + last).uppercased()
     }
 
     // MARK: - Plans
@@ -162,6 +279,56 @@ struct PaywallRenderer: View {
         }
         isPurchasing = true
         onPlanSelected(plan)
+    }
+}
+
+// MARK: - Countdown timer (SPEC-084 social proof sub-type)
+
+struct CountdownTimerView: View {
+    let seconds: Int
+    @State private var remaining: Int
+
+    init(seconds: Int) {
+        self.seconds = seconds
+        self._remaining = State(initialValue: seconds)
+    }
+
+    var body: some View {
+        let hours = remaining / 3600
+        let minutes = (remaining % 3600) / 60
+        let secs = remaining % 60
+
+        HStack(spacing: 4) {
+            timeUnit(hours, label: "h")
+            Text(":").foregroundColor(.white.opacity(0.6))
+            timeUnit(minutes, label: "m")
+            Text(":").foregroundColor(.white.opacity(0.6))
+            timeUnit(secs, label: "s")
+        }
+        .onAppear {
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
+                if remaining > 0 {
+                    remaining -= 1
+                } else {
+                    timer.invalidate()
+                }
+            }
+        }
+    }
+
+    private func timeUnit(_ value: Int, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(String(format: "%02d", value))
+                .font(.title2.monospacedDigit().bold())
+                .foregroundColor(.white)
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(.white.opacity(0.6))
+        }
+        .frame(minWidth: 40)
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.1))
+        .cornerRadius(8)
     }
 }
 

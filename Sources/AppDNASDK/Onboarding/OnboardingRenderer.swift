@@ -207,7 +207,15 @@ struct OnboardingFlowHost: View {
             layout: config.layout,
             fields: config.fields,
             validation_mode: config.validation_mode,
-            field_defaults: fieldDefaults
+            field_defaults: fieldDefaults,
+            content_blocks: config.content_blocks,
+            layout_variant: config.layout_variant,
+            background: config.background,
+            text_style: config.text_style,
+            element_style: config.element_style,
+            animation: config.animation,
+            localizations: config.localizations,
+            default_locale: config.default_locale
         )
     }
 
@@ -554,7 +562,115 @@ struct OnboardingStepRouter: View {
     let onNext: ([String: Any]?) -> Void
     let onSkip: () -> Void
 
+    @State private var toggleValues: [String: Bool] = [:]
+
     var body: some View {
+        ZStack {
+            // SPEC-084: Step-level background
+            if let bg = effectiveConfig.background {
+                StyleEngine.backgroundView(bg).ignoresSafeArea()
+            }
+
+            // SPEC-084: Block-based vs legacy rendering
+            if let blocks = effectiveConfig.content_blocks, !blocks.isEmpty {
+                blockBasedStepView(blocks: blocks)
+            } else {
+                legacyStepView
+            }
+        }
+        .entryAnimation(effectiveConfig.animation?.entry_animation, durationMs: effectiveConfig.animation?.entry_duration_ms)
+    }
+
+    // MARK: - Block-based step view (SPEC-084)
+
+    @ViewBuilder
+    private func blockBasedStepView(blocks: [ContentBlock]) -> some View {
+        let variant = effectiveConfig.layout_variant ?? "no_image"
+
+        switch variant {
+        case "image_fullscreen":
+            ZStack {
+                if let url = effectiveConfig.image_url {
+                    AsyncImage(url: URL(string: url)) { phase in
+                        if case .success(let image) = phase {
+                            image.resizable().aspectRatio(contentMode: .fill).ignoresSafeArea()
+                        }
+                    }
+                    LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .center, endPoint: .bottom)
+                        .ignoresSafeArea()
+                }
+                ScrollView {
+                    VStack(spacing: 12) {
+                        Spacer(minLength: 200)
+                        ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues)
+                            .padding(.horizontal, 20)
+                    }
+                }
+            }
+
+        case "image_split":
+            HStack(spacing: 0) {
+                if let url = effectiveConfig.image_url {
+                    AsyncImage(url: URL(string: url)) { phase in
+                        if case .success(let image) = phase {
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+                }
+                ScrollView {
+                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues)
+                        .padding(16)
+                }
+                .frame(maxWidth: .infinity)
+            }
+
+        case "image_bottom":
+            ScrollView {
+                VStack(spacing: 12) {
+                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues)
+                        .padding(.horizontal, 20)
+                    if let url = effectiveConfig.image_url {
+                        AsyncImage(url: URL(string: url)) { phase in
+                            if case .success(let image) = phase {
+                                image.resizable().aspectRatio(contentMode: .fit).frame(maxHeight: 240)
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 20)
+            }
+
+        case "image_top":
+            ScrollView {
+                VStack(spacing: 12) {
+                    if let url = effectiveConfig.image_url {
+                        AsyncImage(url: URL(string: url)) { phase in
+                            if case .success(let image) = phase {
+                                image.resizable().aspectRatio(contentMode: .fit).frame(maxHeight: 240)
+                            }
+                        }
+                    }
+                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues)
+                        .padding(.horizontal, 20)
+                }
+                .padding(.vertical, 20)
+            }
+
+        default: // no_image
+            ScrollView {
+                ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 20)
+            }
+        }
+    }
+
+    // MARK: - Legacy step view (backward compat)
+
+    @ViewBuilder
+    private var legacyStepView: some View {
         VStack {
             switch step.type {
             case .welcome:
@@ -575,6 +691,25 @@ struct OnboardingStepRouter: View {
                     .foregroundColor(.secondary)
                     .padding(.bottom, 16)
             }
+        }
+    }
+
+    // MARK: - Block action handler
+
+    private func handleBlockAction(_ action: String) {
+        switch action {
+        case "next":
+            // Collect toggle values into response
+            var data: [String: Any] = [:]
+            for (key, value) in toggleValues {
+                data["toggle_\(key)"] = value
+            }
+            onNext(data.isEmpty ? nil : data)
+        case "skip":
+            onSkip()
+        default:
+            // link / permission — handle externally
+            onNext(nil)
         }
     }
 }

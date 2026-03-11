@@ -92,6 +92,21 @@ public struct SurveyAppearance: Codable {
     public let theme: SurveyTheme?
     public let dismiss_allowed: Bool
     public let show_progress: Bool
+    // SPEC-084: Style engine integration
+    public let question_text_style: TextStyleConfig?
+    public let option_style: ElementStyleConfig?
+    public let corner_radius: Int?
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        presentation = try container.decode(String.self, forKey: .presentation)
+        theme = try container.decodeIfPresent(SurveyTheme.self, forKey: .theme)
+        dismiss_allowed = try container.decodeIfPresent(Bool.self, forKey: .dismiss_allowed) ?? true
+        show_progress = try container.decodeIfPresent(Bool.self, forKey: .show_progress) ?? false
+        question_text_style = try container.decodeIfPresent(TextStyleConfig.self, forKey: .question_text_style)
+        option_style = try container.decodeIfPresent(ElementStyleConfig.self, forKey: .option_style)
+        corner_radius = try container.decodeIfPresent(Int.self, forKey: .corner_radius)
+    }
 }
 
 public struct SurveyTheme: Codable {
@@ -99,6 +114,7 @@ public struct SurveyTheme: Codable {
     public let text_color: String?
     public let accent_color: String?
     public let button_color: String?
+    public let font_family: String?
 }
 
 /// Follow-up actions based on survey sentiment.

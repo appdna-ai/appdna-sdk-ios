@@ -91,10 +91,23 @@ public struct StepConfig: Codable {
     // SPEC-083: Populated by applyOverrides from StepConfigOverride.fieldDefaults
     public let field_defaults: [String: AnyCodable]?
 
+    // SPEC-084: Content blocks (block-based step rendering)
+    public let content_blocks: [ContentBlock]?
+    public let layout_variant: String?   // image_top, image_bottom, image_fullscreen, image_split, no_image
+    public let background: BackgroundStyleConfig?
+    public let text_style: TextStyleConfig?
+    public let element_style: ElementStyleConfig?
+    public let animation: AnimationConfig?
+    public let localizations: [String: [String: String]]?
+    public let default_locale: String?
+
     private enum CodingKeys: String, CodingKey {
         case title, subtitle, image_url, cta_text, skip_enabled
         case options, selection_mode, items, layout
         case fields, validation_mode, field_defaults
+        case content_blocks, layout_variant, background
+        case text_style, element_style, animation
+        case localizations, default_locale
     }
 
     public init(from decoder: Decoder) throws {
@@ -111,6 +124,14 @@ public struct StepConfig: Codable {
         fields = try c.decodeIfPresent([FormField].self, forKey: .fields)
         validation_mode = try c.decodeIfPresent(String.self, forKey: .validation_mode)
         field_defaults = nil  // Never from JSON; only set via applyOverrides
+        content_blocks = try c.decodeIfPresent([ContentBlock].self, forKey: .content_blocks)
+        layout_variant = try c.decodeIfPresent(String.self, forKey: .layout_variant)
+        background = try c.decodeIfPresent(BackgroundStyleConfig.self, forKey: .background)
+        text_style = try c.decodeIfPresent(TextStyleConfig.self, forKey: .text_style)
+        element_style = try c.decodeIfPresent(ElementStyleConfig.self, forKey: .element_style)
+        animation = try c.decodeIfPresent(AnimationConfig.self, forKey: .animation)
+        localizations = try c.decodeIfPresent([String: [String: String]].self, forKey: .localizations)
+        default_locale = try c.decodeIfPresent(String.self, forKey: .default_locale)
     }
 
     // Internal memberwise init used by applyOverrides
@@ -120,7 +141,11 @@ public struct StepConfig: Codable {
         options: [QuestionOption]? = nil, selection_mode: SelectionMode? = nil,
         items: [ValuePropItem]? = nil, layout: [String: AnyCodable]? = nil,
         fields: [FormField]? = nil, validation_mode: String? = nil,
-        field_defaults: [String: AnyCodable]? = nil
+        field_defaults: [String: AnyCodable]? = nil,
+        content_blocks: [ContentBlock]? = nil, layout_variant: String? = nil,
+        background: BackgroundStyleConfig? = nil, text_style: TextStyleConfig? = nil,
+        element_style: ElementStyleConfig? = nil, animation: AnimationConfig? = nil,
+        localizations: [String: [String: String]]? = nil, default_locale: String? = nil
     ) {
         self.title = title; self.subtitle = subtitle; self.image_url = image_url
         self.cta_text = cta_text; self.skip_enabled = skip_enabled
@@ -128,6 +153,10 @@ public struct StepConfig: Codable {
         self.items = items; self.layout = layout
         self.fields = fields; self.validation_mode = validation_mode
         self.field_defaults = field_defaults
+        self.content_blocks = content_blocks; self.layout_variant = layout_variant
+        self.background = background; self.text_style = text_style
+        self.element_style = element_style; self.animation = animation
+        self.localizations = localizations; self.default_locale = default_locale
     }
 }
 

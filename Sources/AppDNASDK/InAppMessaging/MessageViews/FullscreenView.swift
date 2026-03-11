@@ -26,26 +26,27 @@ struct FullscreenView: View {
                     }
                 }
 
-                // Title
+                // Title — SPEC-084: apply text_color
                 if let title = content.title {
                     Text(title)
                         .font(.largeTitle.bold())
+                        .foregroundColor(content.text_color.map { Color(hex: $0) } ?? .primary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                 }
 
-                // Body
+                // Body — SPEC-084: apply text_color
                 if let body = content.body {
                     Text(body)
                         .font(.body)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(content.text_color.map { Color(hex: $0).opacity(0.7) } ?? .secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                 }
 
                 Spacer()
 
-                // CTA
+                // CTA — SPEC-084: apply button_color, corner_radius
                 if let ctaText = content.cta_text {
                     Button(action: onCTATap) {
                         Text(ctaText)
@@ -53,8 +54,8 @@ struct FullscreenView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 54)
-                            .background(Color.accentColor)
-                            .cornerRadius(14)
+                            .background(Color(hex: content.button_color ?? "#6366F1"))
+                            .cornerRadius(CGFloat(content.corner_radius ?? 14))
                     }
                     .padding(.horizontal, 24)
                 }

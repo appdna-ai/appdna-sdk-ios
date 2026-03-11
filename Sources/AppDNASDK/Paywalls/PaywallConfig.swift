@@ -8,17 +8,23 @@ struct PaywallConfig: Codable {
     let sections: [PaywallSection]
     let dismiss: PaywallDismiss?
     let background: PaywallBackground?
+    // SPEC-084: Design tokens
+    let animation: AnimationConfig?
+    let localizations: [String: [String: String]]?
+    let default_locale: String?
 }
 
 struct PaywallLayout: Codable {
-    let type: String // "stack" or "grid"
+    let type: String // "stack", "grid", "carousel"
     let spacing: CGFloat?
     let padding: CGFloat?
 }
 
 struct PaywallSection: Codable {
-    let type: String // "header", "features", "plans", "cta", "social_proof", "guarantee"
+    let type: String // "header", "features", "plans", "cta", "social_proof", "guarantee", "image", "spacer", "testimonial"
     let data: PaywallSectionData?
+    // SPEC-084: Per-section styling
+    let style: SectionStyleConfig?
 }
 
 struct PaywallSectionData: Codable {
@@ -40,15 +46,38 @@ struct PaywallSectionData: Codable {
     let rating: Double?
     let reviewCount: Int?
     let testimonial: String?
+    let subType: String?       // "app_rating", "countdown", "trial_badge"
+    let countdownSeconds: Int?
+    let text: String?
 
     // Guarantee
     let guaranteeText: String?
 
+    // Image section
+    let height: CGFloat?
+    let cornerRadius: CGFloat?
+
+    // Spacer section
+    let spacerHeight: CGFloat?
+
+    // Testimonial section
+    let quote: String?
+    let authorName: String?
+    let authorRole: String?
+    let avatarUrl: String?
+
     enum CodingKeys: String, CodingKey {
-        case title, subtitle, features, plans, cta, rating, testimonial
+        case title, subtitle, features, plans, cta, rating, testimonial, text, quote, height
         case imageUrl = "image_url"
         case reviewCount = "review_count"
         case guaranteeText = "guarantee_text"
+        case subType = "sub_type"
+        case countdownSeconds = "countdown_seconds"
+        case cornerRadius = "corner_radius"
+        case spacerHeight = "spacer_height"
+        case authorName = "author_name"
+        case authorRole = "author_role"
+        case avatarUrl = "avatar_url"
     }
 }
 

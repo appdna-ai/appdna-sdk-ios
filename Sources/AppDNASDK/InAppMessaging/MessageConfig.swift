@@ -37,6 +37,11 @@ public struct MessageContent: Codable {
     public let background_color: String?
     public let banner_position: BannerPosition?
     public let auto_dismiss_seconds: Int?
+    // SPEC-084: Styling fields
+    public let text_color: String?
+    public let button_color: String?
+    public let corner_radius: Int?
+    public let secondary_cta_text: String?
 }
 
 public struct CTAAction: Codable {

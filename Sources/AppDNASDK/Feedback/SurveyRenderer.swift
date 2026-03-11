@@ -84,9 +84,10 @@ struct SurveyContainerView: View {
 
             Spacer()
 
-            // Current question
+            // Current question — SPEC-084: apply style engine
             if currentQuestionIndex < visibleQuestions.count {
                 questionView(for: visibleQuestions[currentQuestionIndex])
+                    .applyTextStyle(config.appearance.question_text_style)
                     .foregroundColor(textColor)
             }
 

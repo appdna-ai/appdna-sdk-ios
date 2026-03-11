@@ -42,22 +42,23 @@ struct ModalView: View {
                     }
                 }
 
-                // Title
+                // Title — SPEC-084: apply text_color
                 if let title = content.title {
                     Text(title)
                         .font(.title3.bold())
+                        .foregroundColor(content.text_color.map { Color(hex: $0) } ?? .primary)
                         .multilineTextAlignment(.center)
                 }
 
-                // Body
+                // Body — SPEC-084: apply text_color
                 if let body = content.body {
                     Text(body)
                         .font(.body)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(content.text_color.map { Color(hex: $0).opacity(0.7) } ?? .secondary)
                         .multilineTextAlignment(.center)
                 }
 
-                // CTA button
+                // CTA button — SPEC-084: apply button_color, corner_radius
                 if let ctaText = content.cta_text {
                     Button(action: onCTATap) {
                         Text(ctaText)
@@ -65,8 +66,8 @@ struct ModalView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 48)
-                            .background(Color.accentColor)
-                            .cornerRadius(12)
+                            .background(Color(hex: content.button_color ?? "#6366F1"))
+                            .cornerRadius(CGFloat(content.corner_radius ?? 12))
                     }
                 }
 
@@ -79,7 +80,7 @@ struct ModalView: View {
             }
             .padding(24)
             .background(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: CGFloat(content.corner_radius ?? 20))
                     .fill(Color(hex: content.background_color ?? "#FFFFFF"))
             )
             .padding(.horizontal, 32)

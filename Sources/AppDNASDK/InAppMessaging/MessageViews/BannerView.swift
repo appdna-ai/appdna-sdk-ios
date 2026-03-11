@@ -44,11 +44,12 @@ struct BannerView: View {
                 if let title = content.title {
                     Text(title)
                         .font(.subheadline.bold())
+                        .foregroundColor(content.text_color.map { Color(hex: $0) } ?? .primary)
                 }
                 if let body = content.body {
                     Text(body)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(content.text_color.map { Color(hex: $0).opacity(0.7) } ?? .secondary)
                 }
             }
 
@@ -59,9 +60,9 @@ struct BannerView: View {
                     .font(.caption.bold())
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.accentColor)
+                    .background(Color(hex: content.button_color ?? "#6366F1"))
                     .foregroundColor(.white)
-                    .cornerRadius(8)
+                    .cornerRadius(CGFloat(content.corner_radius ?? 8))
             }
 
             Button {
@@ -75,7 +76,7 @@ struct BannerView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: CGFloat(content.corner_radius ?? 12))
                 .fill(Color(hex: content.background_color ?? "#FFFFFF"))
                 .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
         )
