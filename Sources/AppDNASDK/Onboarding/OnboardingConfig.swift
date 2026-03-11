@@ -73,6 +73,48 @@ public struct StepConfig: Codable {
     // form (SPEC-082)
     public let fields: [FormField]?
     public let validation_mode: String?  // "on_submit" or "realtime"
+
+    // SPEC-083: Populated by applyOverrides from StepConfigOverride.fieldDefaults
+    public let field_defaults: [String: AnyCodable]?
+
+    private enum CodingKeys: String, CodingKey {
+        case title, subtitle, image_url, cta_text, skip_enabled
+        case options, selection_mode, items, layout
+        case fields, validation_mode, field_defaults
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle)
+        image_url = try c.decodeIfPresent(String.self, forKey: .image_url)
+        cta_text = try c.decodeIfPresent(String.self, forKey: .cta_text)
+        skip_enabled = try c.decodeIfPresent(Bool.self, forKey: .skip_enabled)
+        options = try c.decodeIfPresent([QuestionOption].self, forKey: .options)
+        selection_mode = try c.decodeIfPresent(SelectionMode.self, forKey: .selection_mode)
+        items = try c.decodeIfPresent([ValuePropItem].self, forKey: .items)
+        layout = try c.decodeIfPresent([String: AnyCodable].self, forKey: .layout)
+        fields = try c.decodeIfPresent([FormField].self, forKey: .fields)
+        validation_mode = try c.decodeIfPresent(String.self, forKey: .validation_mode)
+        field_defaults = nil  // Never from JSON; only set via applyOverrides
+    }
+
+    // Internal memberwise init used by applyOverrides
+    init(
+        title: String? = nil, subtitle: String? = nil, image_url: String? = nil,
+        cta_text: String? = nil, skip_enabled: Bool? = nil,
+        options: [QuestionOption]? = nil, selection_mode: SelectionMode? = nil,
+        items: [ValuePropItem]? = nil, layout: [String: AnyCodable]? = nil,
+        fields: [FormField]? = nil, validation_mode: String? = nil,
+        field_defaults: [String: AnyCodable]? = nil
+    ) {
+        self.title = title; self.subtitle = subtitle; self.image_url = image_url
+        self.cta_text = cta_text; self.skip_enabled = skip_enabled
+        self.options = options; self.selection_mode = selection_mode
+        self.items = items; self.layout = layout
+        self.fields = fields; self.validation_mode = validation_mode
+        self.field_defaults = field_defaults
+    }
 }
 
 public struct QuestionOption: Codable, Identifiable {

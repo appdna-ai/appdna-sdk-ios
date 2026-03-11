@@ -124,6 +124,15 @@ struct FormStepView: View {
     // MARK: - Default values
 
     private func initializeDefaults() {
+        // SPEC-083: Apply fieldDefaults from StepConfigOverride first
+        if let fieldDefaults = config.field_defaults {
+            for (fieldId, val) in fieldDefaults {
+                if values[fieldId] == nil {
+                    values[fieldId] = val.value
+                }
+            }
+        }
+        // Then apply per-field default_value (doesn't override hook-injected defaults)
         for field in fields {
             if let defaultVal = field.config?.default_value?.value {
                 if values[field.id] == nil {

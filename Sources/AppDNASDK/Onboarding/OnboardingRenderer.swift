@@ -192,6 +192,7 @@ struct OnboardingFlowHost: View {
 
     private func applyOverrides(to config: StepConfig, stepId: String) -> StepConfig {
         guard let override = configOverrides[stepId] else { return config }
+        let fieldDefaults = override.fieldDefaults?.mapValues { AnyCodable($0) }
         return StepConfig(
             title: override.title ?? config.title,
             subtitle: override.subtitle ?? config.subtitle,
@@ -203,7 +204,8 @@ struct OnboardingFlowHost: View {
             items: config.items,
             layout: config.layout,
             fields: config.fields,
-            validation_mode: config.validation_mode
+            validation_mode: config.validation_mode,
+            field_defaults: fieldDefaults
         )
     }
 
