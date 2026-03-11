@@ -85,7 +85,7 @@ struct FormStepView: View {
             guard let dep = field.depends_on else { return true }
             let depValue = values[dep.field_id]
             switch dep.operator_type {
-            case "not_empty":
+            case "not_empty", "is_set":
                 return depValue != nil && "\(depValue!)" != ""
             case "empty":
                 return depValue == nil || "\(depValue!)" == ""
