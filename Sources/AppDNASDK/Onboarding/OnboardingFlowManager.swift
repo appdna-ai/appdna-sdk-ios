@@ -36,6 +36,7 @@ final class OnboardingFlowManager {
         // Build the SwiftUI view with state
         let rendererView = OnboardingFlowHost(
             flow: flow,
+            delegate: delegate,
             onStepViewed: { [weak self] stepId, stepIndex in
                 self?.eventTracker.track(event: "onboarding_step_viewed", properties: [
                     "flow_id": flow.id,

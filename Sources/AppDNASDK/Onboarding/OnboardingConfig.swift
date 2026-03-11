@@ -161,14 +161,86 @@ public struct FormField: Codable, Identifiable {
     public let depends_on: FormFieldDependency?
 }
 
+// MARK: - Async Step Hook Types (SPEC-083)
+
+/// Result of the async step hook called before advancing.
+public enum StepAdvanceResult {
+    /// Continue to next step normally.
+    case proceed
+
+    /// Continue to next step, merging additional data into responses.
+    case proceedWithData([String: Any])
+
+    /// Block advancement. Stay on current step and display error message.
+    case block(message: String)
+
+    /// Skip to a specific step by ID (override next_step_rules).
+    case skipTo(stepId: String)
+
+    /// Skip to a specific step, merging data.
+    case skipToWithData(stepId: String, data: [String: Any])
+}
+
+/// Optional config override for dynamic step content.
+public struct StepConfigOverride {
+    /// Override field values (for form steps — pre-fill fields).
+    public var fieldDefaults: [String: Any]?
+
+    /// Override title text.
+    public var title: String?
+
+    /// Override subtitle text.
+    public var subtitle: String?
+
+    /// Override CTA text.
+    public var ctaText: String?
+
+    /// Additional layout overrides (merged into step config).
+    public var layoutOverrides: [String: Any]?
+
+    public init(
+        fieldDefaults: [String: Any]? = nil,
+        title: String? = nil,
+        subtitle: String? = nil,
+        ctaText: String? = nil,
+        layoutOverrides: [String: Any]? = nil
+    ) {
+        self.fieldDefaults = fieldDefaults
+        self.title = title
+        self.subtitle = subtitle
+        self.ctaText = ctaText
+        self.layoutOverrides = layoutOverrides
+    }
+}
+
 // MARK: - Delegate protocol
 
 /// Delegate for receiving onboarding flow lifecycle events.
 public protocol AppDNAOnboardingDelegate: AnyObject {
+    // Observe-only callbacks (unchanged)
     func onOnboardingStarted(flowId: String)
     func onOnboardingStepChanged(flowId: String, stepId: String, stepIndex: Int, totalSteps: Int)
     func onOnboardingCompleted(flowId: String, responses: [String: Any])
     func onOnboardingDismissed(flowId: String, atStep: Int)
+
+    // SPEC-083: Async hook called BEFORE advancing from a step.
+    func onBeforeStepAdvance(
+        flowId: String,
+        fromStepId: String,
+        stepIndex: Int,
+        stepType: String,
+        responses: [String: Any],
+        stepData: [String: Any]?
+    ) async -> StepAdvanceResult
+
+    // SPEC-083: Optional hook to modify step config before rendering.
+    func onBeforeStepRender(
+        flowId: String,
+        stepId: String,
+        stepIndex: Int,
+        stepType: String,
+        responses: [String: Any]
+    ) async -> StepConfigOverride?
 }
 
 /// Default empty implementations so delegates can be partial.
@@ -177,4 +249,25 @@ public extension AppDNAOnboardingDelegate {
     func onOnboardingStepChanged(flowId: String, stepId: String, stepIndex: Int, totalSteps: Int) {}
     func onOnboardingCompleted(flowId: String, responses: [String: Any]) {}
     func onOnboardingDismissed(flowId: String, atStep: Int) {}
+
+    func onBeforeStepAdvance(
+        flowId: String,
+        fromStepId: String,
+        stepIndex: Int,
+        stepType: String,
+        responses: [String: Any],
+        stepData: [String: Any]?
+    ) async -> StepAdvanceResult {
+        return .proceed
+    }
+
+    func onBeforeStepRender(
+        flowId: String,
+        stepId: String,
+        stepIndex: Int,
+        stepType: String,
+        responses: [String: Any]
+    ) async -> StepConfigOverride? {
+        return nil
+    }
 }
