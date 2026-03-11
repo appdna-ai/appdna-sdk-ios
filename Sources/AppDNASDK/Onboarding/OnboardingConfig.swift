@@ -41,6 +41,13 @@ public struct OnboardingStep: Codable, Identifiable {
         case question
         case value_prop
         case custom
+        case form
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            let rawValue = try container.decode(String.self)
+            self = StepType(rawValue: rawValue) ?? .custom
+        }
     }
 }
 
@@ -62,6 +69,10 @@ public struct StepConfig: Codable {
 
     // custom
     public let layout: [String: AnyCodable]?
+
+    // form (SPEC-082)
+    public let fields: [FormField]?
+    public let validation_mode: String?  // "on_submit" or "realtime"
 }
 
 public struct QuestionOption: Codable, Identifiable {
@@ -81,6 +92,73 @@ public struct ValuePropItem: Codable, Identifiable {
     public let subtitle: String
 
     public var id: String { title }
+}
+
+// MARK: - Form Field Types (SPEC-082)
+
+public enum FormFieldType: String, Codable {
+    case text, textarea, number, email, phone
+    case date, time, datetime
+    case select, slider, toggle, stepper, segmented
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        self = FormFieldType(rawValue: rawValue) ?? .text
+    }
+}
+
+public struct FormFieldOption: Codable, Identifiable {
+    public let id: String
+    public let label: String
+    public let icon: String?
+    public let value: AnyCodable?
+}
+
+public struct FormFieldValidation: Codable {
+    public let pattern: String?
+    public let pattern_message: String?
+}
+
+public struct FormFieldDependency: Codable {
+    public let field_id: String
+    public let operator_type: String  // equals, not_equals, contains, not_empty, empty
+    public let value: AnyCodable?
+
+    private enum CodingKeys: String, CodingKey {
+        case field_id
+        case operator_type = "operator"
+        case value
+    }
+}
+
+public struct FormFieldConfig: Codable {
+    public let max_length: Int?
+    public let keyboard_type: String?
+    public let autocapitalize: String?
+    public let min_value: Double?
+    public let max_value: Double?
+    public let step: Double?
+    public let unit: String?
+    public let decimal_places: Int?
+    public let min_date: String?
+    public let max_date: String?
+    public let picker_style: String?
+    public let search_enabled: Bool?
+    public let multi_select: Bool?
+    public let default_value: AnyCodable?
+}
+
+public struct FormField: Codable, Identifiable {
+    public let id: String
+    public let type: FormFieldType
+    public let label: String
+    public let placeholder: String?
+    public let required: Bool
+    public let validation: FormFieldValidation?
+    public let options: [FormFieldOption]?
+    public let config: FormFieldConfig?
+    public let depends_on: FormFieldDependency?
 }
 
 // MARK: - Delegate protocol

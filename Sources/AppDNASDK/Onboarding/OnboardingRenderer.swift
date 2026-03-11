@@ -149,6 +149,8 @@ struct OnboardingStepRouter: View {
                 ValuePropStepView(config: step.config, onNext: { onNext(nil) })
             case .custom:
                 CustomStepView(config: step.config, onNext: { onNext(nil) })
+            case .form:
+                FormStepView(config: step.config, onNext: onNext)
             }
 
             if step.config.skip_enabled == true {
