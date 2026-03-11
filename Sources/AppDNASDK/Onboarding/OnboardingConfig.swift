@@ -122,7 +122,7 @@ public struct FormFieldValidation: Codable {
 
 public struct FormFieldDependency: Codable {
     public let field_id: String
-    public let operator_type: String  // equals, not_equals, contains, not_empty, empty
+    public let operator_type: String  // equals, not_equals, contains, not_empty, empty, gt, lt
     public let value: AnyCodable?
 
     private enum CodingKeys: String, CodingKey {

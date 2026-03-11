@@ -98,6 +98,14 @@ struct FormStepView: View {
             case "contains":
                 guard let expected = dep.value?.value else { return false }
                 return "\(depValue ?? "")".contains("\(expected)")
+            case "gt":
+                guard let expected = dep.value?.value as? Double,
+                      let actual = depValue as? Double else { return false }
+                return actual > expected
+            case "lt":
+                guard let expected = dep.value?.value as? Double,
+                      let actual = depValue as? Double else { return false }
+                return actual < expected
             default:
                 return true
             }
