@@ -12,6 +12,9 @@ struct PaywallConfig: Codable {
     let animation: AnimationConfig?
     let localizations: [String: [String: String]]?
     let default_locale: String?
+    // SPEC-085: Rich media
+    let haptic: HapticConfig?
+    let particle_effect: ParticleEffect?
 }
 
 struct PaywallLayout: Codable {
@@ -66,6 +69,17 @@ struct PaywallSectionData: Codable {
     let authorRole: String?
     let avatarUrl: String?
 
+    // SPEC-085: Rich media in paywall sections
+    let lottieUrl: String?
+    let lottieLoop: Bool?
+    let lottieSpeed: Double?
+    let lottieHeight: CGFloat?
+    let videoUrl: String?
+    let videoThumbnailUrl: String?
+    let videoHeight: CGFloat?
+    let riveUrl: String?
+    let riveStateMachine: String?
+
     enum CodingKeys: String, CodingKey {
         case title, subtitle, features, plans, cta, rating, testimonial, text, quote, height
         case imageUrl = "image_url"
@@ -78,6 +92,15 @@ struct PaywallSectionData: Codable {
         case authorName = "author_name"
         case authorRole = "author_role"
         case avatarUrl = "avatar_url"
+        case lottieUrl = "lottie_url"
+        case lottieLoop = "lottie_loop"
+        case lottieSpeed = "lottie_speed"
+        case lottieHeight = "lottie_height"
+        case videoUrl = "video_url"
+        case videoThumbnailUrl = "video_thumbnail_url"
+        case videoHeight = "video_height"
+        case riveUrl = "rive_url"
+        case riveStateMachine = "rive_state_machine"
     }
 }
 
@@ -116,9 +139,12 @@ struct PaywallDismiss: Codable {
 }
 
 struct PaywallBackground: Codable {
-    let type: String // "color", "gradient", "image"
-    let value: String? // hex color, gradient def, or image URL
+    let type: String // "color", "gradient", "image", "video"
+    let value: String? // hex color, gradient def, image URL, or video URL
     let colors: [String]?
+    // SPEC-085: Video background
+    let video_url: String?
+    let video_poster_url: String?
 }
 
 // MARK: - Public types

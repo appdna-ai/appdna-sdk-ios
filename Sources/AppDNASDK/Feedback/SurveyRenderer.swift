@@ -57,6 +57,10 @@ struct SurveyContainerView: View {
     @State private var answers: [String: SurveyAnswer] = [:] // keyed by question_id
     @State private var visibleQuestions: [SurveyQuestion] = []
     @SwiftUI.Environment(\.dismiss) private var dismiss
+    // SPEC-085: Rich media state
+    @State private var showIntro = true
+    @State private var showThankYou = false
+    @State private var showConfetti = false
 
     private var backgroundColor: Color {
         Color(hex: config.appearance.theme?.background_color ?? "#FFFFFF")
@@ -81,74 +85,132 @@ struct SurveyContainerView: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
-            // Progress indicator
-            if config.appearance.show_progress && !visibleQuestions.isEmpty {
-                ProgressView(value: Double(currentQuestionIndex + 1), total: Double(visibleQuestions.count))
-                    .tint(accentColor)
-            }
-
-            Spacer()
-
-            // Current question — SPEC-084: apply style engine + theme font
-            if currentQuestionIndex < visibleQuestions.count {
-                questionView(for: visibleQuestions[currentQuestionIndex])
-                    .applyTextStyle(config.appearance.question_text_style)
-                    .font(themeFont)
-                    .foregroundColor(textColor)
-            }
-
-            Spacer()
-
-            // Navigation buttons
-            HStack {
-                if currentQuestionIndex > 0 {
-                    Button("Back") {
-                        currentQuestionIndex -= 1
+        ZStack {
+            VStack(spacing: 16) {
+                // SPEC-085: Intro Lottie animation
+                if showIntro, let introUrl = config.appearance.theme?.intro_lottie_url {
+                    LottieBlockView(block: LottieBlock(
+                        lottie_url: introUrl, lottie_json: nil,
+                        autoplay: true, loop: false, speed: 1.0,
+                        width: nil, height: 120, alignment: "center",
+                        play_on_scroll: nil, play_on_tap: nil, color_overrides: nil
+                    ))
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            withAnimation { showIntro = false }
+                        }
                     }
-                    .foregroundColor(accentColor)
                 }
 
-                Spacer()
+                // SPEC-085: Thank-you screen with Lottie + confetti
+                if showThankYou {
+                    VStack(spacing: 16) {
+                        if let thankUrl = config.appearance.theme?.thankyou_lottie_url {
+                            LottieBlockView(block: LottieBlock(
+                                lottie_url: thankUrl, lottie_json: nil,
+                                autoplay: true, loop: false, speed: 1.0,
+                                width: nil, height: 140, alignment: "center",
+                                play_on_scroll: nil, play_on_tap: nil, color_overrides: nil
+                            ))
+                        }
+                        Text("Thank you!")
+                            .font(.title2.bold())
+                            .foregroundColor(textColor)
+                    }
+                } else if !showIntro || config.appearance.theme?.intro_lottie_url == nil {
+                    // Progress indicator
+                    if config.appearance.show_progress && !visibleQuestions.isEmpty {
+                        ProgressView(value: Double(currentQuestionIndex + 1), total: Double(visibleQuestions.count))
+                            .tint(accentColor)
+                    }
 
-                if currentQuestionIndex < visibleQuestions.count - 1 {
-                    Button("Next") {
-                        advanceQuestion()
+                    Spacer()
+
+                    // SPEC-085: Question-level image
+                    if currentQuestionIndex < visibleQuestions.count,
+                       let imageUrl = visibleQuestions[currentQuestionIndex].image_url {
+                        MediaImageView(url: imageUrl, maxHeight: 140, cornerRadius: 8)
+                            .padding(.horizontal)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
-                    .background(canAdvance ? buttonColor : Color.gray.opacity(0.3))
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
-                    .disabled(!canAdvance)
-                } else {
-                    Button("Submit") {
-                        submitSurvey()
+
+                    // Current question — SPEC-084: apply style engine + theme font
+                    if currentQuestionIndex < visibleQuestions.count {
+                        questionView(for: visibleQuestions[currentQuestionIndex])
+                            .applyTextStyle(config.appearance.question_text_style)
+                            .font(themeFont)
+                            .foregroundColor(textColor)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
-                    .background(canAdvance ? buttonColor : Color.gray.opacity(0.3))
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
-                    .disabled(!canAdvance)
+
+                    Spacer()
+
+                    // Navigation buttons
+                    HStack {
+                        if currentQuestionIndex > 0 {
+                            Button("Back") {
+                                currentQuestionIndex -= 1
+                            }
+                            .foregroundColor(accentColor)
+                        }
+
+                        Spacer()
+
+                        if currentQuestionIndex < visibleQuestions.count - 1 {
+                            Button("Next") {
+                                advanceQuestion()
+                                // SPEC-085: Haptic on step advance
+                                HapticEngine.triggerIfEnabled(
+                                    config.appearance.theme?.haptic?.triggers.on_step_advance,
+                                    config: config.appearance.theme?.haptic
+                                )
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 10)
+                            .background(canAdvance ? buttonColor : Color.gray.opacity(0.3))
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                            .disabled(!canAdvance)
+                        } else {
+                            Button("Submit") {
+                                submitSurvey()
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 10)
+                            .background(canAdvance ? buttonColor : Color.gray.opacity(0.3))
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                            .disabled(!canAdvance)
+                        }
+                    }
+
+                    // Dismiss button
+                    if config.appearance.dismiss_allowed {
+                        Button("Not now") {
+                            let answered = answers.count
+                            dismiss()
+                            completion(.dismissed(answeredCount: answered))
+                        }
+                        .foregroundColor(.secondary)
+                        .font(.footnote)
+                    }
+                }
+            }
+            .padding()
+            .background(backgroundColor)
+            .applyBlurBackdrop(config.appearance.theme?.blur_backdrop)
+            .accentColor(accentColor)
+            .onAppear {
+                computeVisibleQuestions()
+                // Skip intro if no lottie URL
+                if config.appearance.theme?.intro_lottie_url == nil {
+                    showIntro = false
                 }
             }
 
-            // Dismiss button
-            if config.appearance.dismiss_allowed {
-                Button("Not now") {
-                    let answered = answers.count
-                    dismiss()
-                    completion(.dismissed(answeredCount: answered))
-                }
-                .foregroundColor(.secondary)
-                .font(.footnote)
+            // SPEC-085: Confetti overlay on completion
+            if showConfetti, let effect = config.appearance.theme?.thankyou_particle_effect {
+                ConfettiOverlay(effect: effect)
             }
         }
-        .padding()
-        .background(backgroundColor)
-        .accentColor(accentColor)
-        .onAppear { computeVisibleQuestions() }
     }
 
     // MARK: - Question routing
@@ -200,9 +262,30 @@ struct SurveyContainerView: View {
     }
 
     private func submitSurvey() {
+        // SPEC-085: Haptic on submit
+        HapticEngine.triggerIfEnabled(
+            config.appearance.theme?.haptic?.triggers.on_form_submit,
+            config: config.appearance.theme?.haptic
+        )
+
         let allAnswers = visibleQuestions.compactMap { answers[$0.id] }
-        dismiss()
-        completion(.completed(answers: allAnswers))
+
+        // SPEC-085: Show thank-you animation + confetti if configured
+        if config.appearance.theme?.thankyou_lottie_url != nil || config.appearance.theme?.thankyou_particle_effect != nil {
+            withAnimation { showThankYou = true }
+            if config.appearance.theme?.thankyou_particle_effect != nil {
+                showConfetti = true
+                HapticEngine.triggerIfEnabled(.success, config: config.appearance.theme?.haptic)
+            }
+            // Dismiss after thank-you animation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                dismiss()
+                completion(.completed(answers: allAnswers))
+            }
+        } else {
+            dismiss()
+            completion(.completed(answers: allAnswers))
+        }
     }
 
     func computeVisibleQuestions() {

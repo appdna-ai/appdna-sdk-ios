@@ -61,6 +61,26 @@ public class PushNotificationHandler: NSObject, UNUserNotificationCenterDelegate
                   let label = actionData["label"] as? String else { return nil }
             let foreground = actionData["foreground"] as? Bool ?? false
             let options: UNNotificationActionOptions = foreground ? [.foreground] : []
+
+            // SPEC-085: Action button icon support (iOS 15+)
+            if #available(iOS 15.0, *) {
+                if let iconData = actionData["icon"] as? [String: Any],
+                   let iconLib = iconData["library"] as? String,
+                   let iconName = iconData["name"] as? String {
+                    let sfSymbolName: String
+                    if iconLib == "sf-symbols" {
+                        sfSymbolName = iconName
+                    } else if iconLib == "lucide", let mapped = IconMapping.lucideToSFSymbol[iconName] {
+                        sfSymbolName = mapped
+                    } else if iconLib == "material", let mapped = IconMapping.materialToSFSymbol[iconName] {
+                        sfSymbolName = mapped
+                    } else {
+                        sfSymbolName = iconName
+                    }
+                    let icon = UNNotificationActionIcon(systemImageName: sfSymbolName)
+                    return UNNotificationAction(identifier: id, title: label, options: options, icon: icon)
+                }
+            }
             return UNNotificationAction(identifier: id, title: label, options: options)
         }
 

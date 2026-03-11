@@ -19,6 +19,8 @@ struct TooltipView: View {
         }
         .background(Color.black.opacity(0.01))
         .onAppear {
+            // SPEC-085: Haptic on appear
+            HapticEngine.triggerIfEnabled(content.haptic?.triggers.on_button_tap, config: content.haptic)
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 isVisible = true
             }
@@ -63,11 +65,18 @@ struct TooltipView: View {
 
                 if let ctaText = content.cta_text {
                     Button(action: {
+                        HapticEngine.triggerIfEnabled(content.haptic?.triggers.on_button_tap, config: content.haptic)
                         onCTATap()
                     }) {
-                        Text(ctaText)
-                            .font(.caption.bold())
-                            .foregroundColor(Color(hex: content.button_color ?? "#6366F1"))
+                        HStack(spacing: 4) {
+                            // SPEC-085: CTA icon
+                            if let icon = content.cta_icon {
+                                IconView(ref: icon, size: 12)
+                            }
+                            Text(ctaText)
+                        }
+                        .font(.caption.bold())
+                        .foregroundColor(Color(hex: content.button_color ?? "#6366F1"))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }

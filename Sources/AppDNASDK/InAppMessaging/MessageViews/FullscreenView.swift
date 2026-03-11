@@ -6,6 +6,8 @@ struct FullscreenView: View {
     let onCTATap: () -> Void
     let onDismiss: () -> Void
 
+    @State private var showConfetti = false
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             Color(hex: content.background_color ?? "#FFFFFF")
@@ -14,8 +16,38 @@ struct FullscreenView: View {
             VStack(spacing: 24) {
                 Spacer()
 
+                // SPEC-085: Lottie hero (takes priority over image)
+                if let lottieUrl = content.lottie_url {
+                    LottieBlockView(block: LottieBlock(
+                        lottie_url: lottieUrl, lottie_json: nil,
+                        autoplay: true, loop: true, speed: 1.0,
+                        width: nil, height: 240, alignment: "center",
+                        play_on_scroll: nil, play_on_tap: nil, color_overrides: nil
+                    ))
+                }
+                // SPEC-085: Rive hero
+                else if let riveUrl = content.rive_url {
+                    RiveBlockView(block: RiveBlock(
+                        rive_url: riveUrl, artboard: nil,
+                        state_machine: content.rive_state_machine,
+                        autoplay: true, height: 240, alignment: "center",
+                        inputs: nil, trigger_on_step_complete: nil
+                    ))
+                }
+                // SPEC-085: Video hero
+                else if let videoUrl = content.video_url {
+                    VideoBlockView(block: VideoBlock(
+                        video_url: videoUrl,
+                        video_thumbnail_url: content.video_thumbnail_url ?? content.image_url,
+                        video_height: 240,
+                        video_corner_radius: 12,
+                        autoplay: true, loop: true, muted: true,
+                        controls: false, inline_playback: true
+                    ))
+                    .padding(.horizontal, 24)
+                }
                 // Optional image
-                if let urlString = content.image_url, let url = URL(string: urlString) {
+                else if let urlString = content.image_url, let url = URL(string: urlString) {
                     AsyncImage(url: url) { phase in
                         if case .success(let image) = phase {
                             image
@@ -48,14 +80,23 @@ struct FullscreenView: View {
 
                 // CTA — SPEC-084: apply button_color, corner_radius
                 if let ctaText = content.cta_text {
-                    Button(action: onCTATap) {
-                        Text(ctaText)
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 54)
-                            .background(Color(hex: content.button_color ?? "#6366F1"))
-                            .cornerRadius(CGFloat(content.corner_radius ?? 14))
+                    Button {
+                        HapticEngine.triggerIfEnabled(content.haptic?.triggers.on_button_tap, config: content.haptic)
+                        onCTATap()
+                    } label: {
+                        HStack(spacing: 6) {
+                            // SPEC-085: CTA icon
+                            if let icon = content.cta_icon {
+                                IconView(ref: icon, size: 18)
+                            }
+                            Text(ctaText)
+                        }
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                        .background(Color(hex: content.button_color ?? "#6366F1"))
+                        .cornerRadius(CGFloat(content.corner_radius ?? 14))
                     }
                     .padding(.horizontal, 24)
                 }
@@ -63,9 +104,14 @@ struct FullscreenView: View {
                 // Secondary CTA (Gap #18)
                 if let secondaryText = content.secondary_cta_text {
                     Button(action: { onDismiss() }) {
-                        Text(secondaryText)
-                            .font(.caption)
-                            .foregroundColor(content.text_color.map { Color(hex: $0).opacity(0.6) } ?? .secondary)
+                        HStack(spacing: 4) {
+                            if let icon = content.secondary_cta_icon {
+                                IconView(ref: icon, size: 12)
+                            }
+                            Text(secondaryText)
+                        }
+                        .font(.caption)
+                        .foregroundColor(content.text_color.map { Color(hex: $0).opacity(0.6) } ?? .secondary)
                     }
                 }
 
@@ -89,6 +135,19 @@ struct FullscreenView: View {
                     .clipShape(Circle())
             }
             .padding(16)
+
+            // SPEC-085: Confetti overlay
+            if showConfetti, let effect = content.particle_effect {
+                ConfettiOverlay(effect: effect)
+            }
+        }
+        .onAppear {
+            // SPEC-085: Haptic on appear
+            HapticEngine.triggerIfEnabled(content.haptic?.triggers.on_button_tap, config: content.haptic)
+            // SPEC-085: Particle effect on appear
+            if let effect = content.particle_effect, effect.trigger == "on_appear" {
+                showConfetti = true
+            }
         }
     }
 }

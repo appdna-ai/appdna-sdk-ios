@@ -12,6 +12,8 @@ struct PaywallRenderer: View {
     @State private var isPurchasing = false
     @State private var isDismissing = false
     @State private var dragOffset: CGFloat = 0
+    // SPEC-085: Particle effect state
+    @State private var showConfetti = false
 
     // SPEC-084: Localization helper
     private func loc(_ key: String, _ fallback: String) -> String {
@@ -29,6 +31,11 @@ struct PaywallRenderer: View {
                     }
                 }
                 .padding(config.layout.padding ?? 20)
+            }
+
+            // SPEC-085: Confetti/particle overlay
+            if showConfetti, let effect = config.particle_effect {
+                ConfettiOverlay(effect: effect)
             }
 
             // Dismiss control
@@ -126,6 +133,16 @@ struct PaywallRenderer: View {
             } else {
                 Color.black.ignoresSafeArea()
             }
+        case "video":
+            // SPEC-085: Video background
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if let videoUrlStr = config.background?.video_url ?? config.background?.value,
+                   let videoUrl = URL(string: videoUrlStr) {
+                    VideoBackgroundView(url: videoUrl)
+                        .ignoresSafeArea()
+                }
+            }
         case "color":
             Color(hex: config.background?.value ?? "#000000")
                 .ignoresSafeArea()
@@ -210,6 +227,13 @@ struct PaywallRenderer: View {
                 Spacer().frame(height: section.data?.spacerHeight ?? 24)
             case "testimonial":
                 testimonialSectionView(data: section.data, style: section.style)
+            // SPEC-085: Rich media sections
+            case "lottie":
+                lottieSectionView(data: section.data, style: section.style)
+            case "video":
+                videoSectionView(data: section.data, style: section.style)
+            case "rive":
+                riveSectionView(data: section.data, style: section.style)
             default:
                 EmptyView()
             }
@@ -343,6 +367,70 @@ struct PaywallRenderer: View {
         return (first + last).uppercased()
     }
 
+    // MARK: - SPEC-085: Lottie section
+
+    @ViewBuilder
+    private func lottieSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        if let lottieUrl = data?.lottieUrl {
+            let block = LottieBlock(
+                lottie_url: lottieUrl,
+                lottie_json: nil,
+                autoplay: true,
+                loop: data?.lottieLoop ?? true,
+                speed: data?.lottieSpeed ?? 1.0,
+                width: nil,
+                height: Double(data?.lottieHeight ?? data?.height ?? 180),
+                alignment: "center",
+                play_on_scroll: nil,
+                play_on_tap: nil,
+                color_overrides: nil
+            )
+            LottieBlockView(block: block)
+                .applyContainerStyle(style?.container)
+        }
+    }
+
+    // MARK: - SPEC-085: Video section
+
+    @ViewBuilder
+    private func videoSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        if let videoUrl = data?.videoUrl {
+            let block = VideoBlock(
+                video_url: videoUrl,
+                video_thumbnail_url: data?.videoThumbnailUrl ?? data?.imageUrl,
+                video_height: Double(data?.videoHeight ?? data?.height ?? 200),
+                video_corner_radius: Double(data?.cornerRadius ?? 12),
+                autoplay: false,
+                loop: false,
+                muted: true,
+                controls: true,
+                inline_playback: true
+            )
+            VideoBlockView(block: block)
+                .applyContainerStyle(style?.container)
+        }
+    }
+
+    // MARK: - SPEC-085: Rive section
+
+    @ViewBuilder
+    private func riveSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        if let riveUrl = data?.riveUrl {
+            let block = RiveBlock(
+                rive_url: riveUrl,
+                artboard: nil,
+                state_machine: data?.riveStateMachine,
+                autoplay: true,
+                height: Double(data?.height ?? 180),
+                alignment: "center",
+                inputs: nil,
+                trigger_on_step_complete: nil
+            )
+            RiveBlockView(block: block)
+                .applyContainerStyle(style?.container)
+        }
+    }
+
     // MARK: - Plans
 
     // SPEC-084: Grid/carousel/stack plan layouts
@@ -360,7 +448,7 @@ struct PaywallRenderer: View {
                         PlanCard(
                             plan: plan,
                             isSelected: selectedPlanId == plan.id,
-                            onSelect: { selectedPlanId = plan.id },
+                            onSelect: { selectedPlanId = plan.id; HapticEngine.triggerIfEnabled(config.haptic?.triggers.on_plan_select, config: config.haptic) },
                             planIndex: index,
                             loc: loc,
                             sectionStyle: style
@@ -376,7 +464,7 @@ struct PaywallRenderer: View {
                         PlanCard(
                             plan: plan,
                             isSelected: selectedPlanId == plan.id,
-                            onSelect: { selectedPlanId = plan.id },
+                            onSelect: { selectedPlanId = plan.id; HapticEngine.triggerIfEnabled(config.haptic?.triggers.on_plan_select, config: config.haptic) },
                             planIndex: index,
                             loc: loc,
                             sectionStyle: style
@@ -393,7 +481,7 @@ struct PaywallRenderer: View {
                     PlanCard(
                         plan: plan,
                         isSelected: selectedPlanId == plan.id,
-                        onSelect: { selectedPlanId = plan.id },
+                        onSelect: { selectedPlanId = plan.id; HapticEngine.triggerIfEnabled(config.haptic?.triggers.on_plan_select, config: config.haptic) },
                         planIndex: index,
                         loc: loc,
                         sectionStyle: style
@@ -417,6 +505,12 @@ struct PaywallRenderer: View {
               let section = config.sections.first(where: { $0.type == "plans" }),
               let plan = section.data?.plans?.first(where: { $0.id == planId }) else {
             return
+        }
+        // SPEC-085: Haptic on CTA tap
+        HapticEngine.triggerIfEnabled(config.haptic?.triggers.on_button_tap, config: config.haptic)
+        // SPEC-085: Trigger particle effect on purchase
+        if let effect = config.particle_effect, effect.trigger == "on_purchase" {
+            showConfetti = true
         }
         isPurchasing = true
         onPlanSelected(plan)
@@ -504,5 +598,41 @@ extension Color {
             blue: Double(b) / 255,
             opacity: Double(a) / 255
         )
+    }
+}
+
+// MARK: - SPEC-085: Video background view
+
+import AVKit
+
+struct VideoBackgroundView: View {
+    let url: URL
+    @State private var player: AVPlayer?
+
+    var body: some View {
+        Group {
+            if let player = player {
+                VideoPlayer(player: player)
+                    .disabled(true)  // No controls for background
+                    .onAppear {
+                        player.isMuted = true
+                        player.play()
+                        // Loop the video
+                        NotificationCenter.default.addObserver(
+                            forName: .AVPlayerItemDidPlayToEndTime,
+                            object: player.currentItem,
+                            queue: .main
+                        ) { _ in
+                            player.seek(to: .zero)
+                            player.play()
+                        }
+                    }
+            } else {
+                Color.black
+            }
+        }
+        .onAppear {
+            player = AVPlayer(url: url)
+        }
     }
 }

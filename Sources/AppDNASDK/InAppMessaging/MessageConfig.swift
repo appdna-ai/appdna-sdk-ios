@@ -42,6 +42,17 @@ public struct MessageContent: Codable {
     public let button_color: String?
     public let corner_radius: Int?
     public let secondary_cta_text: String?
+    // SPEC-085: Rich media fields
+    public let lottie_url: String?
+    public let rive_url: String?
+    public let rive_state_machine: String?
+    public let video_url: String?
+    public let video_thumbnail_url: String?
+    public let cta_icon: IconReference?
+    public let secondary_cta_icon: IconReference?
+    public let haptic: HapticConfig?
+    public let particle_effect: ParticleEffect?
+    public let blur_backdrop: BlurConfig?
 }
 
 public struct CTAAction: Codable {

@@ -4,6 +4,8 @@ import SwiftUI
 
 public enum ContentBlockType: String, Codable {
     case heading, text, image, button, spacer, list, divider, badge, icon, toggle, video
+    // SPEC-085: Rich media block types
+    case lottie, rive
 }
 
 // MARK: - Content Block model
@@ -55,6 +57,25 @@ public struct ContentBlock: Codable, Identifiable {
     public let video_thumbnail_url: String?
     public let video_height: Double?
     public let video_corner_radius: Double?
+    // SPEC-085: Video playback options
+    public let autoplay: Bool?
+    public let loop: Bool?
+    public let muted: Bool?
+    public let controls: Bool?
+    // SPEC-085: Lottie
+    public let lottie_url: String?
+    public let lottie_speed: Double?
+    public let lottie_width: Double?
+    public let lottie_height: Double?
+    public let play_on_scroll: Bool?
+    public let play_on_tap: Bool?
+    // SPEC-085: Rive
+    public let rive_url: String?
+    public let artboard: String?
+    public let state_machine: String?
+    public let trigger_on_step_complete: String?
+    // SPEC-085: Icon reference (structured icon)
+    public let icon_ref: IconReference?
 
     enum CodingKeys: String, CodingKey {
         case id, type, text, style, level
@@ -66,6 +87,11 @@ public struct ContentBlock: Codable, Identifiable {
         case icon_emoji, icon_size, icon_alignment
         case toggle_label, toggle_description, toggle_default
         case video_url, video_thumbnail_url, video_height, video_corner_radius
+        case autoplay, loop, muted, controls
+        case lottie_url, lottie_speed, lottie_width, lottie_height
+        case play_on_scroll, play_on_tap
+        case rive_url, artboard, state_machine, trigger_on_step_complete
+        case icon_ref
     }
 }
 
@@ -110,6 +136,11 @@ struct ContentBlockRendererView: View {
             toggleBlock(block)
         case .video:
             videoBlock(block)
+        // SPEC-085: Rich media block types
+        case .lottie:
+            lottieBlock(block)
+        case .rive:
+            riveBlock(block)
         }
     }
 
@@ -258,9 +289,16 @@ struct ContentBlockRendererView: View {
             }
         }()
 
-        return Text(block.icon_emoji ?? "")
-            .font(.system(size: CGFloat(block.icon_size ?? 32)))
-            .frame(maxWidth: .infinity, alignment: alignment)
+        return Group {
+            // SPEC-085: Support IconReference (structured icon) or plain emoji string
+            if let iconRef = block.icon_ref {
+                IconView(ref: iconRef, size: CGFloat(block.icon_size ?? 32))
+            } else {
+                Text(block.icon_emoji ?? "")
+                    .font(.system(size: CGFloat(block.icon_size ?? 32)))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: alignment)
     }
 
     // MARK: - Toggle
@@ -282,15 +320,30 @@ struct ContentBlockRendererView: View {
         }
     }
 
-    // MARK: - Video (thumbnail only — full video in SPEC-085)
+    // MARK: - Video (SPEC-085: Full VideoBlockView with playback)
 
     private func videoBlock(_ block: ContentBlock) -> some View {
         let effectiveHeight = CGFloat(block.video_height ?? block.height ?? 200)
         let effectiveCornerRadius = CGFloat(block.video_corner_radius ?? block.corner_radius ?? 8)
 
         return Group {
-            if let thumbUrl = block.video_thumbnail_url ?? block.image_url,
-               let url = URL(string: thumbUrl) {
+            // SPEC-085: Use VideoBlockView for full playback when video_url is present
+            if let videoUrl = block.video_url {
+                let videoBlock = VideoBlock(
+                    video_url: videoUrl,
+                    video_thumbnail_url: block.video_thumbnail_url ?? block.image_url,
+                    video_height: Double(effectiveHeight),
+                    video_corner_radius: Double(effectiveCornerRadius),
+                    autoplay: block.autoplay,
+                    loop: block.loop,
+                    muted: block.muted,
+                    controls: block.controls,
+                    inline_playback: true
+                )
+                VideoBlockView(block: videoBlock)
+            } else if let thumbUrl = block.video_thumbnail_url ?? block.image_url,
+                      let url = URL(string: thumbUrl) {
+                // Fallback: thumbnail-only display when no video_url
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -301,7 +354,6 @@ struct ContentBlockRendererView: View {
                                 .frame(maxHeight: effectiveHeight)
                                 .clipShape(RoundedRectangle(cornerRadius: effectiveCornerRadius))
                                 .accessibilityLabel(block.alt ?? "Video")
-                            // Play icon overlay
                             Image(systemName: "play.circle.fill")
                                 .font(.system(size: 48))
                                 .foregroundColor(.white.opacity(0.9))
@@ -319,5 +371,52 @@ struct ContentBlockRendererView: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Lottie (SPEC-085)
+
+    private func lottieBlock(_ block: ContentBlock) -> some View {
+        Group {
+            if let lottieUrl = block.lottie_url {
+                let lottieData = LottieBlock(
+                    lottie_url: lottieUrl,
+                    lottie_json: nil,
+                    autoplay: block.autoplay ?? true,
+                    loop: block.loop ?? true,
+                    speed: block.lottie_speed ?? 1.0,
+                    width: block.lottie_width,
+                    height: block.lottie_height ?? block.height ?? 160,
+                    alignment: block.icon_alignment ?? "center",
+                    play_on_scroll: block.play_on_scroll,
+                    play_on_tap: block.play_on_tap,
+                    color_overrides: nil
+                )
+                LottieBlockView(block: lottieData)
+            } else {
+                EmptyView()
+            }
+        }
+    }
+
+    // MARK: - Rive (SPEC-085)
+
+    private func riveBlock(_ block: ContentBlock) -> some View {
+        Group {
+            if let riveUrl = block.rive_url {
+                let riveData = RiveBlock(
+                    rive_url: riveUrl,
+                    artboard: block.artboard,
+                    state_machine: block.state_machine,
+                    autoplay: block.autoplay ?? true,
+                    height: block.height ?? 160,
+                    alignment: block.icon_alignment ?? "center",
+                    inputs: nil,
+                    trigger_on_step_complete: block.trigger_on_step_complete
+                )
+                RiveBlockView(block: riveData)
+            } else {
+                EmptyView()
+            }
+        }
     }
 }

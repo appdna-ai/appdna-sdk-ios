@@ -33,6 +33,8 @@ public struct SurveyQuestion: Codable {
     public let options: [SurveyQuestionOption]?
     public let emoji_config: EmojiConfig?
     public let free_text_config: FreeTextConfig?
+    // SPEC-085: Question-level image
+    public let image_url: String?
 }
 
 public struct ShowIfCondition: Codable {
@@ -115,6 +117,12 @@ public struct SurveyTheme: Codable {
     public let accent_color: String?
     public let button_color: String?
     public let font_family: String?
+    // SPEC-085: Rich media in surveys
+    public let intro_lottie_url: String?
+    public let thankyou_lottie_url: String?
+    public let thankyou_particle_effect: ParticleEffect?
+    public let blur_backdrop: BlurConfig?
+    public let haptic: HapticConfig?
 }
 
 /// Follow-up actions based on survey sentiment.

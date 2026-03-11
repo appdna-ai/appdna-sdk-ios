@@ -45,15 +45,27 @@ open class NotificationService: UNNotificationServiceExtension {
                 return
             }
 
-            // Determine file extension from response or URL
-            let ext = url.pathExtension.isEmpty ? "jpg" : url.pathExtension
+            // SPEC-085: Determine file extension from MIME type or URL
+            let ext: String
+            if let mimeType = (response as? HTTPURLResponse)?.mimeType {
+                switch mimeType {
+                case "image/jpeg": ext = "jpg"
+                case "image/png": ext = "png"
+                case "image/gif": ext = "gif"
+                case "video/mp4": ext = "mp4"
+                default: ext = url.pathExtension.isEmpty ? "jpg" : url.pathExtension
+                }
+            } else {
+                ext = url.pathExtension.isEmpty ? "jpg" : url.pathExtension
+            }
+
             let tempDir = FileManager.default.temporaryDirectory
             let tempFile = tempDir.appendingPathComponent(UUID().uuidString).appendingPathExtension(ext)
 
             do {
                 try FileManager.default.moveItem(at: localURL, to: tempFile)
                 let attachment = try UNNotificationAttachment(
-                    identifier: "image",
+                    identifier: "appdna-media",
                     url: tempFile,
                     options: nil
                 )
