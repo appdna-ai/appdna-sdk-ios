@@ -35,6 +35,7 @@ public struct OnboardingStep: Codable, Identifiable {
     public let id: String
     public let type: StepType
     public let config: StepConfig
+    public let hook: StepHookConfig?
 
     public enum StepType: String, Codable {
         case welcome
@@ -49,6 +50,19 @@ public struct OnboardingStep: Codable, Identifiable {
             self = StepType(rawValue: rawValue) ?? .custom
         }
     }
+}
+
+// MARK: - Step Hook Config (SPEC-083 P1)
+
+/// Server-side webhook configuration for a step.
+public struct StepHookConfig: Codable {
+    public let enabled: Bool
+    public let webhook_url: String
+    public let timeout_ms: Int
+    public let loading_text: String?
+    public let error_text: String?
+    public let retry_count: Int?
+    public let headers: [String: String]?
 }
 
 /// Step configuration — varies by step type.

@@ -161,6 +161,23 @@ public final class AppDNA: @unchecked Sendable {
         shared.featureFlagManager?.isEnabled(flag: flag) ?? false
     }
 
+    // MARK: - Internal accessors for SDK modules (SPEC-083)
+
+    /// Current user ID (or anonymous ID).
+    static var currentUserId: String? {
+        shared.identityManager?.currentIdentity.userId ?? shared.identityManager?.currentIdentity.anonId
+    }
+
+    /// Current app ID from bootstrap.
+    static var currentAppId: String? {
+        shared.bootstrapData?.appId
+    }
+
+    /// Resolve a remote config flag value as a string (for webhook header interpolation).
+    static func getRemoteConfigFlag(_ key: String) -> String? {
+        shared.remoteConfigManager?.getConfig(key: key) as? String
+    }
+
     // MARK: - Public API: Experiments
 
     /// Get the variant assignment for an experiment.

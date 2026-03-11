@@ -37,6 +37,7 @@ final class OnboardingFlowManager {
         let rendererView = OnboardingFlowHost(
             flow: flow,
             delegate: delegate,
+            eventTracker: eventTracker,
             onStepViewed: { [weak self] stepId, stepIndex in
                 self?.eventTracker.track(event: "onboarding_step_viewed", properties: [
                     "flow_id": flow.id,

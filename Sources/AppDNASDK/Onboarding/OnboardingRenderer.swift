@@ -4,6 +4,7 @@ import SwiftUI
 struct OnboardingFlowHost: View {
     let flow: OnboardingFlowConfig
     weak var delegate: AppDNAOnboardingDelegate?
+    let eventTracker: EventTracker?
     let onStepViewed: (_ stepId: String, _ stepIndex: Int) -> Void
     let onStepCompleted: (_ stepId: String, _ stepIndex: Int, _ data: [String: Any]?) -> Void
     let onStepSkipped: (_ stepId: String, _ stepIndex: Int) -> Void
@@ -15,6 +16,7 @@ struct OnboardingFlowHost: View {
 
     // SPEC-083: Hook state
     @State private var isProcessing = false
+    @State private var loadingText: String = "Processing..."
     @State private var errorMessage: String?
     @State private var showError = false
     @State private var configOverrides: [String: StepConfigOverride] = [:]
@@ -145,7 +147,7 @@ struct OnboardingFlowHost: View {
                     .scaleEffect(1.2)
                     .tint(.white)
 
-                Text("Processing...")
+                Text(loadingText)
                     .font(.subheadline)
                     .foregroundColor(.white)
             }
@@ -236,8 +238,28 @@ struct OnboardingFlowHost: View {
         }
         onStepCompleted(step.id, currentIndex, data)
 
-        // SPEC-083: Call async hook before advancing
+        // SPEC-083: Determine hook type — client delegate takes priority over server hook
+        if delegate != nil {
+            // Client-side hook
+            executeClientHook(step: step, data: data)
+        } else if let hook = step.hook, hook.enabled {
+            // Server-side hook (P1)
+            executeServerHook(step: step, data: data, hookConfig: hook)
+        } else {
+            // No hook — advance immediately
+            advanceOrComplete()
+        }
+    }
+
+    // MARK: - Client-side hook execution
+
+    private func executeClientHook(step: OnboardingStep, data: [String: Any]?) {
+        loadingText = step.hook?.loading_text ?? "Processing..."
         isProcessing = true
+
+        let startTime = Date()
+        trackHookEvent("onboarding_hook_started", step: step, extra: ["hook_type": "client"])
+
         Task {
             let result = await delegate?.onBeforeStepAdvance(
                 flowId: flow.id,
@@ -248,31 +270,249 @@ struct OnboardingFlowHost: View {
                 stepData: data
             ) ?? .proceed
 
+            let durationMs = Int(Date().timeIntervalSince(startTime) * 1000)
+
             await MainActor.run {
                 isProcessing = false
-
-                switch result {
-                case .proceed:
-                    advanceOrComplete()
-
-                case .proceedWithData(let extraData):
-                    mergeData(extraData, forStepId: step.id)
-                    advanceOrComplete()
-
-                case .block(let message):
-                    errorMessage = message
-                    withAnimation { showError = true }
-
-                case .skipTo(let targetStepId):
-                    skipToStep(targetStepId)
-
-                case .skipToWithData(let targetStepId, let extraData):
-                    mergeData(extraData, forStepId: step.id)
-                    skipToStep(targetStepId)
-                }
+                trackHookEvent("onboarding_hook_completed", step: step, extra: [
+                    "hook_type": "client",
+                    "result": resultName(result),
+                    "duration_ms": durationMs,
+                ])
+                handleHookResult(result, step: step)
             }
         }
     }
+
+    // MARK: - Server-side hook execution (P1)
+
+    private func executeServerHook(step: OnboardingStep, data: [String: Any]?, hookConfig: StepHookConfig) {
+        loadingText = hookConfig.loading_text ?? "Processing..."
+        isProcessing = true
+
+        trackHookEvent("onboarding_hook_started", step: step, extra: [
+            "hook_type": "server",
+            "webhook_url": hookConfig.webhook_url,
+        ])
+
+        let startTime = Date()
+
+        Task {
+            let result = await executeWebhook(
+                step: step,
+                data: data,
+                hookConfig: hookConfig,
+                attempt: 0
+            )
+
+            let durationMs = Int(Date().timeIntervalSince(startTime) * 1000)
+
+            await MainActor.run {
+                isProcessing = false
+                trackHookEvent("onboarding_hook_completed", step: step, extra: [
+                    "hook_type": "server",
+                    "result": resultName(result),
+                    "duration_ms": durationMs,
+                ])
+                handleHookResult(result, step: step)
+            }
+        }
+    }
+
+    private func executeWebhook(
+        step: OnboardingStep,
+        data: [String: Any]?,
+        hookConfig: StepHookConfig,
+        attempt: Int
+    ) async -> StepAdvanceResult {
+        guard let url = URL(string: hookConfig.webhook_url) else {
+            return .block(message: hookConfig.error_text ?? "Invalid webhook URL.")
+        }
+
+        // Build request body
+        let body: [String: Any] = [
+            "flow_id": flow.id,
+            "step_id": step.id,
+            "step_index": currentIndex,
+            "step_type": step.type.rawValue,
+            "step_data": data ?? [:],
+            "responses": responses,
+            "user_id": AppDNA.currentUserId ?? "",
+            "app_id": AppDNA.currentAppId ?? "",
+        ]
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = TimeInterval(hookConfig.timeout_ms) / 1000.0
+
+        // Apply custom headers with variable interpolation
+        if let headers = hookConfig.headers {
+            for (key, value) in headers {
+                let resolved = interpolateVariables(value)
+                request.setValue(resolved, forHTTPHeaderField: key)
+            }
+        }
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+            let config = URLSessionConfiguration.default
+            config.timeoutIntervalForRequest = TimeInterval(hookConfig.timeout_ms) / 1000.0
+            let session = URLSession(configuration: config)
+
+            let (responseData, response) = try await session.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else {
+                throw APIError.httpError(
+                    statusCode: (response as? HTTPURLResponse)?.statusCode ?? 0,
+                    data: nil
+                )
+            }
+
+            return parseWebhookResponse(responseData, hookConfig: hookConfig)
+
+        } catch let error as URLError where error.code == .timedOut {
+            // Timeout — retry or block
+            let maxRetries = min(hookConfig.retry_count ?? 0, 3)
+            if attempt < maxRetries {
+                trackHookEvent("onboarding_hook_retry", step: step, extra: [
+                    "attempt_number": attempt + 1,
+                ])
+                let delay = pow(2.0, Double(attempt)) // 1s, 2s, 4s
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                return await executeWebhook(step: step, data: data, hookConfig: hookConfig, attempt: attempt + 1)
+            }
+            trackHookEvent("onboarding_hook_error", step: step, extra: [
+                "hook_type": "server",
+                "error_type": "timeout",
+                "error_message": "Request timed out",
+            ])
+            return .block(message: hookConfig.error_text ?? "Request timed out. Please try again.")
+
+        } catch {
+            // Network error — retry or block
+            let maxRetries = min(hookConfig.retry_count ?? 0, 3)
+            if attempt < maxRetries {
+                trackHookEvent("onboarding_hook_retry", step: step, extra: [
+                    "attempt_number": attempt + 1,
+                ])
+                let delay = pow(2.0, Double(attempt))
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                return await executeWebhook(step: step, data: data, hookConfig: hookConfig, attempt: attempt + 1)
+            }
+            trackHookEvent("onboarding_hook_error", step: step, extra: [
+                "hook_type": "server",
+                "error_type": "network",
+                "error_message": error.localizedDescription,
+            ])
+            return .block(message: hookConfig.error_text ?? "Network error. Please check your connection.")
+        }
+    }
+
+    private func parseWebhookResponse(_ data: Data, hookConfig: StepHookConfig) -> StepAdvanceResult {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let action = json["action"] as? String else {
+            return .block(message: hookConfig.error_text ?? "Invalid server response.")
+        }
+
+        let responseData = json["data"] as? [String: Any]
+        let message = json["message"] as? String
+        let targetStepId = json["target_step_id"] as? String
+
+        switch action {
+        case "proceed":
+            if let responseData {
+                return .proceedWithData(responseData)
+            }
+            return .proceed
+
+        case "proceed_with_data":
+            return .proceedWithData(responseData ?? [:])
+
+        case "block":
+            return .block(message: message ?? hookConfig.error_text ?? "Request blocked by server.")
+
+        case "skip_to":
+            guard let targetStepId else {
+                return .proceed
+            }
+            if let responseData {
+                return .skipToWithData(stepId: targetStepId, data: responseData)
+            }
+            return .skipTo(stepId: targetStepId)
+
+        default:
+            return .proceed
+        }
+    }
+
+    // MARK: - Variable interpolation (SPEC-083 §6.5)
+
+    private func interpolateVariables(_ value: String) -> String {
+        var result = value
+        let pattern = "\\{\\{([^}]+)\\}\\}"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return value }
+        let matches = regex.matches(in: value, range: NSRange(value.startIndex..., in: value))
+
+        for match in matches.reversed() {
+            guard let varRange = Range(match.range(at: 1), in: value),
+                  let fullRange = Range(match.range, in: value) else { continue }
+            let varName = String(value[varRange])
+            // Resolve from remote config flags
+            let resolved = AppDNA.getRemoteConfigFlag(varName) ?? ""
+            result = result.replacingCharacters(in: fullRange, with: resolved)
+        }
+        return result
+    }
+
+    // MARK: - Hook result handling
+
+    private func handleHookResult(_ result: StepAdvanceResult, step: OnboardingStep) {
+        switch result {
+        case .proceed:
+            advanceOrComplete()
+
+        case .proceedWithData(let extraData):
+            mergeData(extraData, forStepId: step.id)
+            advanceOrComplete()
+
+        case .block(let message):
+            errorMessage = message
+            withAnimation { showError = true }
+
+        case .skipTo(let targetStepId):
+            skipToStep(targetStepId)
+
+        case .skipToWithData(let targetStepId, let extraData):
+            mergeData(extraData, forStepId: step.id)
+            skipToStep(targetStepId)
+        }
+    }
+
+    // MARK: - Hook event tracking
+
+    private func trackHookEvent(_ event: String, step: OnboardingStep, extra: [String: Any] = [:]) {
+        var props: [String: Any] = [
+            "flow_id": flow.id,
+            "step_id": step.id,
+        ]
+        props.merge(extra) { _, new in new }
+        eventTracker?.track(event: event, properties: props)
+    }
+
+    private func resultName(_ result: StepAdvanceResult) -> String {
+        switch result {
+        case .proceed: return "proceed"
+        case .proceedWithData: return "proceed_with_data"
+        case .block: return "block"
+        case .skipTo: return "skip_to"
+        case .skipToWithData: return "skip_to"
+        }
+    }
+
+    // MARK: - Navigation helpers
 
     private func handleStepSkipped(step: OnboardingStep) {
         onStepSkipped(step.id, currentIndex)
