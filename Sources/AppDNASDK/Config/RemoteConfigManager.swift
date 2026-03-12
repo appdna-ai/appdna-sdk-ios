@@ -95,6 +95,15 @@ final class RemoteConfigManager {
         self.surveyUpdateHandler = handler
     }
 
+    // MARK: - SPEC-067: Force Refresh
+
+    /// Force an immediate config refresh, bypassing the cache TTL.
+    /// Use this when you need configs to update immediately (e.g., after a user action).
+    func forceRefresh() {
+        Log.info("Force refreshing remote config (bypassing TTL)")
+        fetchConfigs()
+    }
+
     // MARK: - Fetch from Firestore
 
     func fetchConfigs() {

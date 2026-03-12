@@ -33,7 +33,7 @@ public struct AppDNAOptions: Sendable {
     public let flushInterval: TimeInterval
     /// Number of events per flush batch. Default: 20.
     public let batchSize: Int
-    /// Remote config cache TTL in seconds. Default: 300 (5 min).
+    /// Remote config cache TTL in seconds. Default: 3600 (1 hour). SPEC-067.
     public let configTTL: TimeInterval
     /// Log verbosity. Default: .warning.
     public let logLevel: LogLevel
@@ -43,7 +43,8 @@ public struct AppDNAOptions: Sendable {
     public init(
         flushInterval: TimeInterval = 30,
         batchSize: Int = 20,
-        configTTL: TimeInterval = 300,
+        /// SPEC-067: Default TTL increased from 300s to 3600s (1 hour) to reduce Firestore reads.
+        configTTL: TimeInterval = 3600,
         logLevel: LogLevel = .warning,
         billingProvider: BillingProvider = .storeKit2
     ) {

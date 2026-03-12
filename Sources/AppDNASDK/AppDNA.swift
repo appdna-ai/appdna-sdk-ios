@@ -156,6 +156,11 @@ public final class AppDNA: @unchecked Sendable {
         shared.remoteConfigManager?.getConfig(key: key)
     }
 
+    /// SPEC-067: Force an immediate config refresh, bypassing the cache TTL.
+    public static func forceRefreshConfig() {
+        shared.remoteConfigManager?.forceRefresh()
+    }
+
     /// Check if a feature flag is enabled.
     public static func isFeatureEnabled(flag: String) -> Bool {
         shared.featureFlagManager?.isEnabled(flag: flag) ?? false
@@ -420,6 +425,11 @@ public final class AppDNA: @unchecked Sendable {
         )
         self.eventQueue = eq
         tracker.setEventQueue(eq)
+
+        // SPEC-067: Initialize background uploader
+        let bgUploader = BackgroundUploader(apiClient: client, eventStore: eventStore)
+        bgUploader.registerBackgroundTask()
+        BackgroundUploader.shared = bgUploader
 
         // 3. Initialize session manager (tracks lifecycle events)
         let sessionMgr = SessionManager(eventTracker: tracker)

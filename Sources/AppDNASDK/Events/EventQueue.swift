@@ -2,11 +2,12 @@ import Foundation
 import UIKit
 
 /// Manages in-memory + disk event queue with automatic flushing.
+/// SPEC-067: Adaptive batch sizing based on network conditions.
 final class EventQueue {
     private let queue = DispatchQueue(label: "ai.appdna.sdk.eventqueue")
     private let apiClient: APIClient
     private let eventStore: EventStore
-    private let batchSize: Int
+    private let baseBatchSize: Int
     private let flushInterval: TimeInterval
     private let maxRetries = 3
     private let retryDelays: [TimeInterval] = [1, 2, 4]
@@ -14,6 +15,11 @@ final class EventQueue {
     private var pendingEvents: [SDKEvent] = []
     private var flushTimer: Timer?
     private var retryCount = 0
+
+    /// SPEC-067: Returns the current effective batch size based on network conditions.
+    private var effectiveBatchSize: Int {
+        NetworkMonitor.shared.adaptiveBatchSize
+    }
 
     init(
         apiClient: APIClient,
@@ -24,7 +30,7 @@ final class EventQueue {
     ) {
         self.apiClient = apiClient
         self.eventStore = eventStore
-        self.batchSize = batchSize
+        self.baseBatchSize = batchSize
         self.flushInterval = flushInterval
 
         // Load persisted events from disk
@@ -39,7 +45,7 @@ final class EventQueue {
             self?.startFlushTimer()
         }
 
-        // Observe app backgrounding for flush
+        // Observe app backgrounding for flush + background upload
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(appDidEnterBackground),
@@ -53,7 +59,7 @@ final class EventQueue {
         NotificationCenter.default.removeObserver(self)
     }
 
-    /// Add an event to the queue. Triggers threshold flush if batchSize reached.
+    /// Add an event to the queue. Triggers threshold flush if adaptive batch size reached.
     func enqueue(_ event: SDKEvent) {
         queue.async { [weak self] in
             guard let self else { return }
@@ -62,8 +68,9 @@ final class EventQueue {
             // Persist to disk immediately
             self.eventStore.save(events: [event])
 
-            // Check threshold
-            if self.pendingEvents.count >= self.batchSize {
+            // SPEC-067: Check adaptive threshold
+            let currentBatchSize = self.effectiveBatchSize
+            if currentBatchSize > 0 && self.pendingEvents.count >= currentBatchSize {
                 self.performFlush()
             }
         }
@@ -87,13 +94,22 @@ final class EventQueue {
 
     @objc private func appDidEnterBackground() {
         flush()
+        // SPEC-067: Schedule background upload for remaining events
+        BackgroundUploader.shared?.scheduleUploadIfNeeded()
     }
 
     private func performFlush() {
         // Already on queue
         guard !pendingEvents.isEmpty else { return }
 
-        let batch = Array(pendingEvents.prefix(batchSize > 0 ? batchSize : pendingEvents.count))
+        // SPEC-067: Skip flush if no network
+        let currentBatchSize = effectiveBatchSize
+        guard currentBatchSize > 0 else {
+            Log.debug("No network — skipping flush, \(pendingEvents.count) events queued")
+            return
+        }
+
+        let batch = Array(pendingEvents.prefix(currentBatchSize > 0 ? currentBatchSize : pendingEvents.count))
         let eventIds = Set(batch.map(\.event_id))
 
         Log.debug("Flushing \(batch.count) events")
