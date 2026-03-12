@@ -14,7 +14,7 @@ struct QuestionStepView: View {
     var body: some View {
         VStack(spacing: 24) {
             if let title = config.title {
-                Text(title)
+                Text(title.interpolated())
                     .font(.title2.bold())
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
@@ -44,7 +44,7 @@ struct QuestionStepView: View {
                 ]
                 onNext(data)
             } label: {
-                Text(config.cta_text ?? "Continue")
+                Text((config.cta_text ?? "Continue").interpolated())
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -80,7 +80,7 @@ struct QuestionStepView: View {
                         .font(.system(size: 32))
                 }
 
-                Text(option.label)
+                Text(option.label.interpolated())
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(.primary)
                     .multilineTextAlignment(.center)

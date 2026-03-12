@@ -28,12 +28,12 @@ struct FormStepView: View {
                     }
 
                     if let title = config.title {
-                        Text(title)
+                        Text(title.interpolated())
                             .font(.title2.bold())
                     }
 
                     if let subtitle = config.subtitle {
-                        Text(subtitle)
+                        Text(subtitle.interpolated())
                             .font(.body)
                             .foregroundColor(.secondary)
                     }
@@ -61,7 +61,7 @@ struct FormStepView: View {
 
             // CTA
             Button(action: handleSubmit) {
-                Text(config.cta_text ?? "Continue")
+                Text((config.cta_text ?? "Continue").interpolated())
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -146,7 +146,7 @@ struct FormStepView: View {
 
     private func fieldLabel(_ field: FormField) -> some View {
         HStack(spacing: 2) {
-            Text(field.label)
+            Text(field.label.interpolated())
                 .font(.subheadline.weight(.medium))
             if field.required {
                 Text("*")
@@ -192,7 +192,7 @@ struct FormStepView: View {
             get: { values[field.id] as? String ?? "" },
             set: { values[field.id] = $0; errors[field.id] = nil }
         )
-        return TextField(field.placeholder ?? "", text: binding)
+        return TextField((field.placeholder ?? "").interpolated(), text: binding)
             .textFieldStyle(.roundedBorder)
             .keyboardType(keyboardType(for: field))
             .autocapitalization(autocap(for: field))
@@ -226,7 +226,7 @@ struct FormStepView: View {
             }
         )
         return HStack {
-            TextField(field.placeholder ?? "0", text: binding)
+            TextField((field.placeholder ?? "0").interpolated(), text: binding)
                 .textFieldStyle(.roundedBorder)
                 .keyboardType(.decimalPad)
             if let unit = field.config?.unit {
@@ -289,10 +289,10 @@ struct FormStepView: View {
             get: { values[field.id] as? String ?? "" },
             set: { values[field.id] = $0; errors[field.id] = nil }
         )
-        return Picker(field.placeholder ?? "Select", selection: binding) {
-            Text(field.placeholder ?? "Select...").tag("")
+        return Picker((field.placeholder ?? "Select").interpolated(), selection: binding) {
+            Text((field.placeholder ?? "Select...").interpolated()).tag("")
             ForEach(options) { opt in
-                Text(opt.label).tag(opt.id)
+                Text(opt.label.interpolated()).tag(opt.id)
             }
         }
         .pickerStyle(.menu)
@@ -337,7 +337,7 @@ struct FormStepView: View {
             get: { values[field.id] as? Bool ?? false },
             set: { values[field.id] = $0 }
         )
-        return Toggle(field.label, isOn: binding)
+        return Toggle(field.label.interpolated(), isOn: binding)
     }
 
     // MARK: - Stepper
@@ -375,7 +375,7 @@ struct FormStepView: View {
         )
         return Picker("", selection: binding) {
             ForEach(options) { opt in
-                Text(opt.label).tag(opt.id)
+                Text(opt.label.interpolated()).tag(opt.id)
             }
         }
         .pickerStyle(.segmented)

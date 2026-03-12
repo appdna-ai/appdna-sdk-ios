@@ -244,6 +244,8 @@ struct OnboardingFlowHost: View {
         if let data {
             responses[step.id] = data
         }
+        // SPEC-087: Persist responses incrementally so TemplateEngine has fresh data for next step
+        SessionDataStore.shared.setOnboardingResponses(responses)
         onStepCompleted(step.id, currentIndex, data)
 
         // SPEC-083: Determine hook type — client delegate takes priority over server hook
@@ -545,6 +547,17 @@ struct OnboardingFlowHost: View {
     }
 }
 
+// MARK: - SPEC-087: Template interpolation helper
+
+/// Interpolates `{{variable}}` patterns in onboarding text fields via shared TemplateEngine.
+extension String {
+    func interpolated() -> String {
+        guard self.contains("{{") else { return self }
+        let ctx = TemplateEngine.shared.buildContext()
+        return TemplateEngine.shared.interpolate(self, context: ctx)
+    }
+}
+
 // MARK: - Step router
 
 /// Routes to the appropriate step view based on step type.
@@ -557,8 +570,11 @@ struct OnboardingStepRouter: View {
     @State private var toggleValues: [String: Bool] = [:]
 
     // SPEC-084: Localization helper for step text
+    // SPEC-087: Also interpolates {{variables}} after localization
     private func loc(_ key: String, _ fallback: String) -> String {
-        LocalizationEngine.resolve(key: key, localizations: effectiveConfig.localizations, defaultLocale: effectiveConfig.default_locale, fallback: fallback)
+        let localized = LocalizationEngine.resolve(key: key, localizations: effectiveConfig.localizations, defaultLocale: effectiveConfig.default_locale, fallback: fallback)
+        let ctx = TemplateEngine.shared.buildContext()
+        return TemplateEngine.shared.interpolate(localized, context: ctx)
     }
 
     var body: some View {

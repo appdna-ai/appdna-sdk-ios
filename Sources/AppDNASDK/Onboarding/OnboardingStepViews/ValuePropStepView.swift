@@ -8,7 +8,7 @@ struct ValuePropStepView: View {
     var body: some View {
         VStack(spacing: 24) {
             if let title = config.title {
-                Text(title)
+                Text(title.interpolated())
                     .font(.title2.bold())
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
@@ -25,10 +25,10 @@ struct ValuePropStepView: View {
                                 .frame(width: 48, height: 48)
 
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(item.title)
+                                Text(item.title.interpolated())
                                     .font(.headline)
 
-                                Text(item.subtitle)
+                                Text(item.subtitle.interpolated())
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
@@ -43,7 +43,7 @@ struct ValuePropStepView: View {
             Spacer()
 
             Button(action: onNext) {
-                Text(config.cta_text ?? "Continue")
+                Text((config.cta_text ?? "Continue").interpolated())
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)

@@ -84,7 +84,7 @@ final class TemplateEngine {
             guard parts.count >= 2 else { return nil }
             return context.remoteConfig(parts[1])
 
-        case "onboarding":
+        case "onboarding", "responses":
             // onboarding.stepId.fieldId
             guard parts.count >= 3 else {
                 // onboarding.stepId — return step dict description

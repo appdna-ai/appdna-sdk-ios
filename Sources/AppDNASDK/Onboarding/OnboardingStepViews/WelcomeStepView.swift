@@ -30,13 +30,13 @@ struct WelcomeStepView: View {
 
             VStack(spacing: 12) {
                 if let title = config.title {
-                    Text(title)
+                    Text(title.interpolated())
                         .font(.largeTitle.bold())
                         .multilineTextAlignment(.center)
                 }
 
                 if let subtitle = config.subtitle {
-                    Text(subtitle)
+                    Text(subtitle.interpolated())
                         .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -47,7 +47,7 @@ struct WelcomeStepView: View {
             Spacer()
 
             Button(action: onNext) {
-                Text(config.cta_text ?? "Get Started")
+                Text((config.cta_text ?? "Get Started").interpolated())
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)

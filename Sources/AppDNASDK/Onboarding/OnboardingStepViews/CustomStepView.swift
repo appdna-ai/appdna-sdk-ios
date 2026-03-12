@@ -12,14 +12,14 @@ struct CustomStepView: View {
 
             // Render from layout config or fall back to basic title/CTA
             if let title = config.title {
-                Text(title)
+                Text(title.interpolated())
                     .font(.title2.bold())
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
             }
 
             if let subtitle = config.subtitle {
-                Text(subtitle)
+                Text(subtitle.interpolated())
                     .font(.body)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -43,7 +43,7 @@ struct CustomStepView: View {
             Spacer()
 
             Button(action: onNext) {
-                Text(config.cta_text ?? "Continue")
+                Text((config.cta_text ?? "Continue").interpolated())
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
