@@ -15,9 +15,15 @@ struct PaywallRenderer: View {
     // SPEC-085: Particle effect state
     @State private var showConfetti = false
 
-    // SPEC-084: Localization helper
+    // SPEC-084: Localization helper + SPEC-088: Template variable interpolation
     private func loc(_ key: String, _ fallback: String) -> String {
-        LocalizationEngine.resolve(key: key, localizations: config.localizations, defaultLocale: config.default_locale, fallback: fallback)
+        let localized = LocalizationEngine.resolve(key: key, localizations: config.localizations, defaultLocale: config.default_locale, fallback: fallback)
+        return TemplateEngine.shared.interpolate(localized, context: templateContext)
+    }
+
+    // SPEC-088: Cached template context (built once per render cycle)
+    private var templateContext: TemplateContext {
+        TemplateEngine.shared.buildContext()
     }
 
     var body: some View {
@@ -335,21 +341,23 @@ struct PaywallRenderer: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     if let name = data?.authorName {
+                        let interpolatedName = loc("testimonial.author_name", name)
                         if let ts = authorNameTextStyle {
-                            Text(name)
+                            Text(interpolatedName)
                                 .applyTextStyle(ts)
                         } else {
-                            Text(name)
+                            Text(interpolatedName)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundColor(.white)
                         }
                     }
                     if let role = data?.authorRole {
+                        let interpolatedRole = loc("testimonial.author_role", role)
                         if let ts = authorRoleTextStyle {
-                            Text(role)
+                            Text(interpolatedRole)
                                 .applyTextStyle(ts)
                         } else {
-                            Text(role)
+                            Text(interpolatedRole)
                                 .font(.caption)
                                 .foregroundColor(.white.opacity(0.7))
                         }

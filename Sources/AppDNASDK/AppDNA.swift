@@ -161,7 +161,7 @@ public final class AppDNA: @unchecked Sendable {
         shared.featureFlagManager?.isEnabled(flag: flag) ?? false
     }
 
-    // MARK: - Internal accessors for SDK modules (SPEC-083)
+    // MARK: - Internal accessors for SDK modules (SPEC-083, SPEC-088)
 
     /// Current user ID (or anonymous ID).
     static var currentUserId: String? {
@@ -176,6 +176,11 @@ public final class AppDNA: @unchecked Sendable {
     /// Resolve a remote config flag value as a string (for webhook header interpolation).
     static func getRemoteConfigFlag(_ key: String) -> String? {
         shared.remoteConfigManager?.getConfig(key: key) as? String
+    }
+
+    /// Internal reference to identity manager for TemplateEngine (SPEC-088).
+    static var identityManagerRef: IdentityManager? {
+        shared.identityManager
     }
 
     // MARK: - Public API: Experiments
@@ -333,6 +338,24 @@ public final class AppDNA: @unchecked Sendable {
     public static func setLogLevel(_ level: LogLevel) {
         Log.level = level
         Log.info("Log level changed to \(level)")
+    }
+
+    // MARK: - Public API: Session Data (SPEC-088)
+
+    /// Store a key-value pair in the cross-module session data store.
+    /// Available to all modules via `{{session.key}}` template variables.
+    public static func setSessionData(key: String, value: Any) {
+        SessionDataStore.shared.setSessionData(key: key, value: value)
+    }
+
+    /// Retrieve a session data value by key.
+    public static func getSessionData(key: String) -> Any? {
+        SessionDataStore.shared.getSessionData(key: key)
+    }
+
+    /// Clear all app-defined session data.
+    public static func clearSessionData() {
+        SessionDataStore.shared.clearSessionData()
     }
 
     // MARK: - Public API: Privacy

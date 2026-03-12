@@ -113,7 +113,11 @@ struct SurveyContainerView: View {
                                 play_on_scroll: nil, play_on_tap: nil, color_overrides: nil
                             ))
                         }
-                        Text("Thank you!")
+                        // SPEC-088: Interpolate thank-you text
+                        Text(TemplateEngine.shared.interpolate(
+                            config.appearance.theme?.thank_you_text ?? "Thank you!",
+                            context: TemplateEngine.shared.buildContext()
+                        ))
                             .font(.title2.bold())
                             .foregroundColor(textColor)
                     }
@@ -218,29 +222,62 @@ struct SurveyContainerView: View {
     @ViewBuilder
     func questionView(for question: SurveyQuestion) -> some View {
         let binding = answerBinding(for: question)
+        // SPEC-088: Interpolate question text, option text, and NPS labels
+        let q = interpolatedQuestion(question)
 
-        switch question.type {
+        switch q.type {
         case "nps":
-            NPSQuestionView(question: question, answer: binding)
+            NPSQuestionView(question: q, answer: binding)
         case "csat":
-            CSATQuestionView(question: question, answer: binding)
+            CSATQuestionView(question: q, answer: binding)
         case "rating":
-            RatingQuestionView(question: question, answer: binding)
+            RatingQuestionView(question: q, answer: binding)
         case "single_choice":
             // SPEC-084: Gap #19 — pass option_style from appearance to option card views
-            SingleChoiceView(question: question, answer: binding, optionStyle: config.appearance.option_style)
+            SingleChoiceView(question: q, answer: binding, optionStyle: config.appearance.option_style)
         case "multi_choice":
             // SPEC-084: Gap #19 — pass option_style from appearance to option card views
-            MultiChoiceView(question: question, answer: binding, optionStyle: config.appearance.option_style)
+            MultiChoiceView(question: q, answer: binding, optionStyle: config.appearance.option_style)
         case "free_text":
-            FreeTextView(question: question, answer: binding)
+            FreeTextView(question: q, answer: binding)
         case "yes_no":
-            YesNoView(question: question, answer: binding)
+            YesNoView(question: q, answer: binding)
         case "emoji_scale":
-            EmojiScaleView(question: question, answer: binding)
+            EmojiScaleView(question: q, answer: binding)
         default:
             EmptyView()
         }
+    }
+
+    /// SPEC-088: Create an interpolated copy of a survey question.
+    private func interpolatedQuestion(_ question: SurveyQuestion) -> SurveyQuestion {
+        let ctx = TemplateEngine.shared.buildContext()
+        let e = TemplateEngine.shared
+        return SurveyQuestion(
+            id: question.id,
+            type: question.type,
+            text: e.interpolate(question.text, context: ctx),
+            required: question.required,
+            show_if: question.show_if,
+            nps_config: question.nps_config.map { nps in
+                NPSConfig(
+                    low_label: nps.low_label.map { e.interpolate($0, context: ctx) },
+                    high_label: nps.high_label.map { e.interpolate($0, context: ctx) }
+                )
+            },
+            csat_config: question.csat_config,
+            rating_config: question.rating_config,
+            options: question.options?.map { opt in
+                SurveyQuestionOption(
+                    id: opt.id,
+                    text: e.interpolate(opt.text, context: ctx),
+                    icon: opt.icon
+                )
+            },
+            emoji_config: question.emoji_config,
+            free_text_config: question.free_text_config,
+            image_url: question.image_url
+        )
     }
 
     // MARK: - Logic

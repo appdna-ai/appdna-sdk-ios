@@ -72,6 +72,8 @@ final class OnboardingFlowManager {
                     "total_duration_ms": durationMs,
                     "responses": responses,
                 ])
+                // SPEC-088: Persist onboarding responses for cross-module access
+                SessionDataStore.shared.setOnboardingResponses(responses)
                 delegate?.onOnboardingCompleted(flowId: flow.id, responses: responses)
                 viewController.dismiss(animated: true)
             },

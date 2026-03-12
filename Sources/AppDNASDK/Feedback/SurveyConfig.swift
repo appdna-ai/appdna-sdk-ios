@@ -123,6 +123,8 @@ public struct SurveyTheme: Codable {
     public let thankyou_particle_effect: ParticleEffect?
     public let blur_backdrop: BlurConfig?
     public let haptic: HapticConfig?
+    // SPEC-088: Configurable thank-you text for interpolation
+    public let thank_you_text: String?
 }
 
 /// Follow-up actions based on survey sentiment.

@@ -456,23 +456,11 @@ struct OnboardingFlowHost: View {
         }
     }
 
-    // MARK: - Variable interpolation (SPEC-083 §6.5)
+    // MARK: - Variable interpolation (SPEC-083 §6.5, SPEC-088: delegates to shared TemplateEngine)
 
     private func interpolateVariables(_ value: String) -> String {
-        var result = value
-        let pattern = "\\{\\{([^}]+)\\}\\}"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return value }
-        let matches = regex.matches(in: value, range: NSRange(value.startIndex..., in: value))
-
-        for match in matches.reversed() {
-            guard let varRange = Range(match.range(at: 1), in: value),
-                  let fullRange = Range(match.range, in: value) else { continue }
-            let varName = String(value[varRange])
-            // Resolve from remote config flags
-            let resolved = AppDNA.getRemoteConfigFlag(varName) ?? ""
-            result = result.replacingCharacters(in: fullRange, with: resolved)
-        }
-        return result
+        let ctx = TemplateEngine.shared.buildContext()
+        return TemplateEngine.shared.interpolate(value, context: ctx)
     }
 
     // MARK: - Hook result handling
@@ -484,6 +472,8 @@ struct OnboardingFlowHost: View {
 
         case .proceedWithData(let extraData):
             mergeData(extraData, forStepId: step.id)
+            // SPEC-088: Persist computed data for cross-module access
+            SessionDataStore.shared.mergeComputedData(extraData)
             advanceOrComplete()
 
         case .block(let message):
@@ -495,6 +485,8 @@ struct OnboardingFlowHost: View {
 
         case .skipToWithData(let targetStepId, let extraData):
             mergeData(extraData, forStepId: step.id)
+            // SPEC-088: Persist computed data for cross-module access
+            SessionDataStore.shared.mergeComputedData(extraData)
             skipToStep(targetStepId)
         }
     }

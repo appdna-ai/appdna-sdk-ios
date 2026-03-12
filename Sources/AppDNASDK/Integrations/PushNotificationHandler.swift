@@ -56,9 +56,12 @@ public class PushNotificationHandler: NSObject, UNUserNotificationCenterDelegate
         guard let actionsData = userInfo["actions"] as? [[String: Any]], !actionsData.isEmpty else { return }
         let categoryId = userInfo["category"] as? String ?? "appdna_default"
 
+        // SPEC-088: Interpolate action button labels
+        let pushCtx = TemplateEngine.shared.buildContext()
         let actions: [UNNotificationAction] = actionsData.compactMap { actionData in
             guard let id = actionData["id"] as? String,
-                  let label = actionData["label"] as? String else { return nil }
+                  let rawLabel = actionData["label"] as? String else { return nil }
+            let label = TemplateEngine.shared.interpolate(rawLabel, context: pushCtx)
             let foreground = actionData["foreground"] as? Bool ?? false
             let options: UNNotificationActionOptions = foreground ? [.foreground] : []
 
@@ -110,10 +113,15 @@ public class PushNotificationHandler: NSObject, UNUserNotificationCenterDelegate
             action = PushAction(type: type, value: value)
         }
 
+        // SPEC-088: Interpolate push title and body via TemplateEngine
+        let ctx = TemplateEngine.shared.buildContext()
+        let interpolatedTitle = TemplateEngine.shared.interpolate(content.title, context: ctx)
+        let interpolatedBody = TemplateEngine.shared.interpolate(content.body, context: ctx)
+
         return PushPayload(
             pushId: pushId,
-            title: content.title,
-            body: content.body,
+            title: interpolatedTitle,
+            body: interpolatedBody,
             imageUrl: imageUrl,
             data: data,
             action: action
