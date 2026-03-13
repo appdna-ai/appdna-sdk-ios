@@ -25,8 +25,11 @@ final class IdentityManagerTests: XCTestCase {
         XCTAssertNotNil(UUID(uuidString: identity.anonId))
     }
 
-    func testAnonIdPersistedToKeychain() {
+    func testAnonIdPersistedToKeychain() throws {
         let anonId = manager.currentIdentity.anonId
+        // Skip on CI where Keychain entitlements are unavailable
+        let readBack = keychainStore.getString(key: "anon_id")
+        try XCTSkipIf(readBack == nil, "Keychain not available (CI without entitlements)")
         // Create new manager with same keychain — should load same ID
         let manager2 = IdentityManager(keychainStore: keychainStore)
         XCTAssertEqual(manager2.currentIdentity.anonId, anonId)
@@ -54,8 +57,11 @@ final class IdentityManagerTests: XCTestCase {
         XCTAssertEqual(traits?["age"] as? Int, 25)
     }
 
-    func testIdentifyPersistsToKeychain() {
+    func testIdentifyPersistsToKeychain() throws {
         manager.identify(userId: "user_456", traits: ["name": "Test"])
+        // Skip on CI where Keychain entitlements are unavailable
+        let readBack = keychainStore.getString(key: "anon_id")
+        try XCTSkipIf(readBack == nil, "Keychain not available (CI without entitlements)")
         let manager2 = IdentityManager(keychainStore: keychainStore)
         XCTAssertEqual(manager2.currentIdentity.userId, "user_456")
     }

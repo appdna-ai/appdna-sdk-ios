@@ -71,7 +71,7 @@ final class EventQueueTests: XCTestCase {
         XCTAssertEqual(decoded.event_name, "serialization_test")
         XCTAssertEqual(decoded.schema_version, 1)
         XCTAssertEqual(decoded.device.platform, "ios")
-        XCTAssertEqual(decoded.device.sdk_version, "0.1.0")
+        XCTAssertEqual(decoded.device.sdk_version, AppDNA.sdkVersion)
         XCTAssertEqual(decoded.privacy.consent.analytics, true)
     }
 
