@@ -144,9 +144,9 @@ final class TemplateEngine {
         var info: [String: String] = [
             "platform": "ios",
             "os_version": Self.osVersionString,
-            "locale": Locale.current.language.languageCode?.identifier ?? "en",
+            "locale": Locale.current.languageCode ?? "en",
         ]
-        if let country = Locale.current.region?.identifier {
+        if let country = (Locale.current as NSLocale).countryCode {
             info["country"] = country
         }
         return info

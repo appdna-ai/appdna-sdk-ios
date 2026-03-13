@@ -325,7 +325,7 @@ struct PerCornerRadiusShape: Shape {
 
 enum LocalizationEngine {
     static func resolve(key: String, localizations: [String: [String: String]]?, defaultLocale: String?, fallback: String) -> String {
-        let deviceLocale = Locale.current.language.languageCode?.identifier ?? "en"
+        let deviceLocale = Locale.current.languageCode ?? "en"
         if let value = localizations?[deviceLocale]?[key] {
             return value
         }

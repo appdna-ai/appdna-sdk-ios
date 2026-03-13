@@ -57,7 +57,7 @@ struct FormStepView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 24)
             }
-            .scrollDismissesKeyboard(.interactively)
+            .scrollDismissesKeyboardCompat()
 
             // CTA
             Button(action: handleSubmit) {
@@ -446,6 +446,19 @@ struct FormStepView: View {
         case "characters": return .allCharacters
         default:
             return field.type == .email ? .none : .sentences
+        }
+    }
+}
+
+// MARK: - iOS 15 compatibility
+
+private extension View {
+    @ViewBuilder
+    func scrollDismissesKeyboardCompat() -> some View {
+        if #available(iOS 16.0, *) {
+            self.scrollDismissesKeyboard(.interactively)
+        } else {
+            self
         }
     }
 }

@@ -114,10 +114,11 @@ final class PushTokenManager {
     private func registerTokenWithBackend(_ tokenString: String) {
         Task {
             do {
+                let deviceId = await MainActor.run { UIDevice.current.identifierForVendor?.uuidString ?? "" }
                 let body: [String: Any] = [
                     "token": tokenString,
                     "platform": "ios",
-                    "device_id": await UIDevice.current.identifierForVendor?.uuidString ?? "",
+                    "device_id": deviceId,
                     "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
                     "sdk_version": AppDNA.sdkVersion,
                     "os_version": Self.osVersionString,

@@ -27,7 +27,6 @@ final class DeferredDeepLinkManager {
 
     private static let firstLaunchKey = "ai.appdna.sdk.first_launch_completed"
     private static let expiryHours: TimeInterval = 72
-
     init(orgId: String, appId: String, eventTracker: EventTracker?) {
         self.orgId = orgId
         self.appId = appId
