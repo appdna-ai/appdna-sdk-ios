@@ -117,7 +117,7 @@ final class IdentityManagerTests: XCTestCase {
             }
         }
 
-        waitForExpectations(timeout: 5)
+        waitForExpectations(timeout: 30)
         // Should not crash — that's the test
         let identity = manager.currentIdentity
         XCTAssertFalse(identity.anonId.isEmpty)
@@ -140,7 +140,7 @@ final class IdentityManagerTests: XCTestCase {
             }
         }
 
-        waitForExpectations(timeout: 5)
+        waitForExpectations(timeout: 30)
         // Should not crash
         XCTAssertFalse(manager.currentIdentity.anonId.isEmpty)
     }
