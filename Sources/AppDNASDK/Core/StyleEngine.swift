@@ -112,15 +112,17 @@ extension View {
     func applyTextStyle(_ style: TextStyleConfig?) -> some View {
         guard let s = style else { return AnyView(self) }
         let font = FontResolver.font(family: s.font_family, size: s.font_size, weight: s.font_weight)
-        return AnyView(
-            self
-                .font(font)
-                .foregroundColor(s.color.map { Color(hex: $0) } ?? .primary)
-                .multilineTextAlignment(textAlignment(s.alignment))
-                .lineSpacing(lineSpacing(s.line_height, s.font_size))
-                .kerning(CGFloat(s.letter_spacing ?? 0))
-                .opacity(s.opacity ?? 1.0)
-        )
+        let base = self
+            .font(font)
+            .foregroundColor(s.color.map { Color(hex: $0) } ?? .primary)
+            .multilineTextAlignment(textAlignment(s.alignment))
+            .lineSpacing(lineSpacing(s.line_height, s.font_size))
+            .opacity(s.opacity ?? 1.0)
+
+        if #available(iOS 16.0, *), let spacing = s.letter_spacing, spacing != 0 {
+            return AnyView(base.kerning(CGFloat(spacing)))
+        }
+        return AnyView(base)
     }
 
     /// Apply ElementStyleConfig to a container view.
