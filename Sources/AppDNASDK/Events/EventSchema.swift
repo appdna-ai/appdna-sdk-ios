@@ -104,6 +104,11 @@ public struct AnyCodable: Codable {
 // MARK: - Event builder
 
 enum EventEnvelopeBuilder {
+    private static let osVersionString: String = {
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        return "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
+    }()
+
     static func build(
         event: String,
         properties: [String: Any]?,
@@ -115,7 +120,7 @@ enum EventEnvelopeBuilder {
         let bundleVer = AppDNA.currentBundleVersion > 0 ? AppDNA.currentBundleVersion : nil
         let device = EventDevice(
             platform: "ios",
-            os: UIDevice.current.systemVersion,
+            os: Self.osVersionString,
             app_version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0",
             sdk_version: AppDNA.sdkVersion,
             bundle_version: bundleVer,

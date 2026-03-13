@@ -16,6 +16,11 @@ final class TemplateEngine {
 
     static let shared = TemplateEngine()
 
+    private static let osVersionString: String = {
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        return "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
+    }()
+
     // Compiled regex — reused across calls
     private let regex: NSRegularExpression? = {
         try? NSRegularExpression(pattern: "\\{\\{([^}|]+)(?:\\|([^}]*))?\\}\\}")
@@ -138,7 +143,7 @@ final class TemplateEngine {
     private static func deviceInfo() -> [String: String] {
         var info: [String: String] = [
             "platform": "ios",
-            "os_version": UIKit.UIDevice.current.systemVersion,
+            "os_version": Self.osVersionString,
             "locale": Locale.current.language.languageCode?.identifier ?? "en",
         ]
         if let country = Locale.current.region?.identifier {

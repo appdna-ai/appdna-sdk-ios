@@ -11,6 +11,11 @@ final class PushTokenManager {
 
     private static let keychainKey = "push_token"
 
+    private static let osVersionString: String = {
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        return "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
+    }()
+
     /// The current push token string (hex-encoded), read from Keychain.
     var currentTokenString: String? {
         keychainStore.getString(key: Self.keychainKey)
@@ -112,10 +117,10 @@ final class PushTokenManager {
                 let body: [String: Any] = [
                     "token": tokenString,
                     "platform": "ios",
-                    "device_id": UIDevice.current.identifierForVendor?.uuidString ?? "",
+                    "device_id": await UIDevice.current.identifierForVendor?.uuidString ?? "",
                     "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
-                    "sdk_version": "0.3.0",
-                    "os_version": UIDevice.current.systemVersion,
+                    "sdk_version": AppDNA.sdkVersion,
+                    "os_version": Self.osVersionString,
                 ]
                 let _: EmptyResponse = try await apiClient?.request(.registerPushToken(body: body)) ?? EmptyResponse()
                 Log.info("Push token registered with backend")
