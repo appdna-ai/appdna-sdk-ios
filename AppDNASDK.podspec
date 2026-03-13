@@ -11,11 +11,11 @@ experiments, paywalls, onboarding flows, surveys, web entitlements, and deferred
   s.author           = { 'AppDNA' => 'hello@appdna.ai' }
   s.source           = { :git => 'https://github.com/appdna-ai/appdna-sdk-ios.git', :tag => "v#{s.version}" }
   s.source_files     = 'Sources/AppDNASDK/**/*.swift'
-  s.platform         = :ios, '15.0'
+  s.platform         = :ios, '16.0'
   s.swift_version    = '5.9'
 
   s.dependency 'KeychainAccess', '~> 4.2'
-  s.dependency 'FirebaseFirestore', '~> 10.0'
+  s.dependency 'FirebaseFirestore', '~> 11.0'
 
   s.frameworks = 'UIKit', 'StoreKit', 'Foundation'
 end
