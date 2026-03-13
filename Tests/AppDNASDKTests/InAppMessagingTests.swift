@@ -14,9 +14,9 @@ final class InAppMessagingTests: XCTestCase {
 
     func testMessageFrequencyEnum() {
         XCTAssertEqual(MessageFrequency.once.rawValue, "once")
-        XCTAssertEqual(MessageFrequency.oncePerSession.rawValue, "once_per_session")
-        XCTAssertEqual(MessageFrequency.everyTime.rawValue, "every_time")
-        XCTAssertEqual(MessageFrequency.maxTimes.rawValue, "max_times")
+        XCTAssertEqual(MessageFrequency.once_per_session.rawValue, "once_per_session")
+        XCTAssertEqual(MessageFrequency.every_time.rawValue, "every_time")
+        XCTAssertEqual(MessageFrequency.max_times.rawValue, "max_times")
     }
 
     func testCTAActionTypes() {
@@ -121,7 +121,21 @@ final class InAppMessagingTests: XCTestCase {
                 dismiss_text: "Later",
                 background_color: "#FFFFFF",
                 banner_position: nil,
-                auto_dismiss_seconds: nil
+                auto_dismiss_seconds: nil,
+                text_color: nil,
+                button_color: nil,
+                corner_radius: nil,
+                secondary_cta_text: nil,
+                lottie_url: nil,
+                rive_url: nil,
+                rive_state_machine: nil,
+                video_url: nil,
+                video_thumbnail_url: nil,
+                cta_icon: nil,
+                secondary_cta_icon: nil,
+                haptic: nil,
+                particle_effect: nil,
+                blur_backdrop: nil
             ),
             trigger_rules: TriggerRules(
                 event: "session_start",

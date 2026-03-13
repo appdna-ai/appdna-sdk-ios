@@ -19,7 +19,8 @@ final class OnboardingConfigTests: XCTestCase {
                 selection_mode: nil,
                 items: nil,
                 layout: nil
-            )
+            ),
+            hook: nil
         )
         XCTAssertEqual(step.type, .welcome)
         XCTAssertEqual(step.config.title, "Welcome to FitLife")
@@ -43,7 +44,8 @@ final class OnboardingConfigTests: XCTestCase {
                 selection_mode: .single,
                 items: nil,
                 layout: nil
-            )
+            ),
+            hook: nil
         )
         XCTAssertEqual(step.type, .question)
         XCTAssertEqual(step.config.options?.count, 2)
@@ -66,7 +68,8 @@ final class OnboardingConfigTests: XCTestCase {
                     ValuePropItem(icon: "📊", title: "Personalized Plans", subtitle: "Tailored to your goals"),
                 ],
                 layout: nil
-            )
+            ),
+            hook: nil
         )
         XCTAssertEqual(step.type, .value_prop)
         XCTAssertEqual(step.config.items?.count, 1)
@@ -87,7 +90,8 @@ final class OnboardingConfigTests: XCTestCase {
                 selection_mode: nil,
                 items: nil,
                 layout: ["type": AnyCodable("stack")]
-            )
+            ),
+            hook: nil
         )
         XCTAssertEqual(step.type, .custom)
         XCTAssertNotNil(step.config.layout)
