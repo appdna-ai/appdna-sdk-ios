@@ -1,4 +1,5 @@
 import Foundation
+import Compression
 import UIKit
 
 /// URL request errors.

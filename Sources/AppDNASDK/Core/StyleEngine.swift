@@ -118,7 +118,7 @@ extension View {
                 .foregroundColor(s.color.map { Color(hex: $0) } ?? .primary)
                 .multilineTextAlignment(textAlignment(s.alignment))
                 .lineSpacing(lineSpacing(s.line_height, s.font_size))
-                .tracking(CGFloat(s.letter_spacing ?? 0))
+                .kerning(CGFloat(s.letter_spacing ?? 0))
                 .opacity(s.opacity ?? 1.0)
         )
     }
