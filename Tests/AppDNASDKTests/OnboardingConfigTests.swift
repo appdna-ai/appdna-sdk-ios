@@ -136,11 +136,10 @@ final class OnboardingConfigTests: XCTestCase {
         // Verify that the protocol has default implementations (compiles without error)
         class TestDelegate: AppDNAOnboardingDelegate {}
         let delegate = TestDelegate()
-        delegate.onboardingStepViewed(flowId: "f", stepId: "s", stepIndex: 0)
-        delegate.onboardingStepCompleted(flowId: "f", stepId: "s", data: nil)
-        delegate.onboardingStepSkipped(flowId: "f", stepId: "s")
-        delegate.onboardingFlowCompleted(flowId: "f", data: [:])
-        delegate.onboardingFlowDismissed(flowId: "f", lastStepId: "s")
+        delegate.onOnboardingStarted(flowId: "f")
+        delegate.onOnboardingStepChanged(flowId: "f", stepId: "s", stepIndex: 0, totalSteps: 3)
+        delegate.onOnboardingCompleted(flowId: "f", responses: [:])
+        delegate.onOnboardingDismissed(flowId: "f", atStep: 0)
         // No assertions needed — just verifies defaults exist and don't crash
     }
 }

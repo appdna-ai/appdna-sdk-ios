@@ -4,30 +4,30 @@ import XCTest
 /// SPEC-067: Tests for SDK Scale Layer 1 optimizations.
 final class ScaleLayer1Tests: XCTestCase {
 
-    // MARK: - Gzip Compression
+    // MARK: - Deflate Compression
 
-    func testGzipCompressAndDecompress() {
-        let original = "Hello, this is a test string for gzip compression"
+    func testDeflateCompressAndDecompress() {
+        let original = "Hello, this is a test string for deflate compression"
         let originalData = Data(original.utf8)
 
-        guard let compressed = APIClient.gzipCompress(originalData) else {
-            XCTFail("Gzip compression returned nil")
+        guard let compressed = APIClient.deflateCompress(originalData) else {
+            XCTFail("Deflate compression returned nil")
             return
         }
 
         // Compressed data should be non-empty
         XCTAssertFalse(compressed.isEmpty)
-        // For short strings, compression may not be smaller, but it should be valid gzip
+        // For short strings, compression may not be smaller, but it should be valid deflate
         XCTAssertTrue(compressed.count > 0)
     }
 
-    func testGzipCompressEmptyData() {
+    func testDeflateCompressEmptyData() {
         let emptyData = Data()
-        let result = APIClient.gzipCompress(emptyData)
+        let result = APIClient.deflateCompress(emptyData)
         XCTAssertNil(result, "Compressing empty data should return nil")
     }
 
-    func testGzipCompressionRatioOnEventBatch() {
+    func testDeflateCompressionRatioOnEventBatch() {
         // Simulate a batch of 50 events as JSON
         var events: [[String: Any]] = []
         for i in 0..<50 {
@@ -52,7 +52,7 @@ final class ScaleLayer1Tests: XCTestCase {
         }
         let payload: [String: Any] = ["batch": events]
         guard let jsonData = try? JSONSerialization.data(withJSONObject: payload),
-              let compressed = APIClient.gzipCompress(jsonData) else {
+              let compressed = APIClient.deflateCompress(jsonData) else {
             XCTFail("Failed to serialize or compress event batch")
             return
         }
