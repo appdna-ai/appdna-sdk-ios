@@ -71,7 +71,7 @@ public struct ConfettiOverlay: View {
         }
     }
 
-    private mutating func startAnimation() {
+    private func startAnimation() {
         isActive = true
         particles = (0..<particleCount).map { _ in
             ConfettiParticle(
@@ -103,7 +103,7 @@ public struct ConfettiOverlay: View {
         }
     }
 
-    public mutating func triggerEffect() {
+    public func triggerEffect() {
         startAnimation()
     }
 }
