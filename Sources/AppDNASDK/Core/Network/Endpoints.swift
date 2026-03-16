@@ -15,6 +15,8 @@ enum Endpoint {
     case deactivatePushToken(body: [String: Any])
     case pushDelivered(body: [String: Any])
     case pushTapped(body: [String: Any])
+    // Geocoding (SPEC-089)
+    case geocodeAutocomplete
 
     var path: String {
         switch self {
@@ -29,6 +31,7 @@ enum Endpoint {
         case .deactivatePushToken:  return "/api/v1/push/token"
         case .pushDelivered:        return "/api/v1/push/delivered"
         case .pushTapped:           return "/api/v1/push/tapped"
+        case .geocodeAutocomplete:  return "/api/v1/sdk/geocode/autocomplete"
         }
     }
 
@@ -45,6 +48,7 @@ enum Endpoint {
         case .deactivatePushToken:  return "DELETE"
         case .pushDelivered:        return "POST"
         case .pushTapped:           return "POST"
+        case .geocodeAutocomplete:  return "POST"
         }
     }
 

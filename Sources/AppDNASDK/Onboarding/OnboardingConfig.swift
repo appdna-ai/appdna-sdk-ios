@@ -185,6 +185,7 @@ public enum FormFieldType: String, Codable {
     case text, textarea, number, email, phone
     case date, time, datetime
     case select, slider, toggle, stepper, segmented
+    case location
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
