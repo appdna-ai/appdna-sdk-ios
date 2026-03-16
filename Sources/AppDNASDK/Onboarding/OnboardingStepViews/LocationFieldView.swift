@@ -203,7 +203,7 @@ struct LocationFieldView: View {
             "longitude": suggestion.longitude,
             "timezone": suggestion.timezone,
             "timezone_offset": suggestion.timezone_offset,
-            "postal_code": suggestion.postal_code as Any,
+            "postal_code": suggestion.postal_code ?? NSNull(),
             "raw_query": suggestion.raw_query,
         ] as [String: Any]
         suggestions = []
