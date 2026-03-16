@@ -58,7 +58,7 @@ struct LocationFieldView: View {
                 TextField(placeholder, text: $query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 15))
-                    .onChange(of: query) { _, newValue in
+                    .onChange(of: query) { newValue in
                         onQueryChanged(newValue)
                     }
 
