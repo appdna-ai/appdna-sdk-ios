@@ -151,30 +151,33 @@ struct LocationFieldView: View {
         defer { isLoading = false }
 
         do {
-            let locationType = field.config?.location_type as? String
-            let biasCountry = field.config?.location_bias_country as? String
-            let language = field.config?.location_language as? String
+            var body: [String: Any] = ["query": query, "limit": 5]
+            if let t = field.config?.location_type { body["type"] = t }
+            if let c = field.config?.location_bias_country { body["bias_country"] = c }
+            if let l = field.config?.location_language { body["language"] = l }
 
-            let body: [String: Any] = [
-                "query": query,
-                "type": locationType as Any,
-                "bias_country": biasCountry as Any,
-                "language": language as Any,
-                "limit": 5,
-            ].compactMapValues { $0 is NSNull ? nil : $0 }
+            let jsonData = try JSONSerialization.data(withJSONObject: body)
 
-            let data = try await client.post(endpoint: .geocodeAutocomplete, body: body)
-            if let response = data as? [String: Any],
-               let dataObj = response["data"] as? [String: Any],
-               let suggestionsArr = dataObj["suggestions"] as? [[String: Any]] {
-                let decoded = suggestionsArr.compactMap { dict -> LocationData? in
-                    guard let jsonData = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
-                    return try? JSONDecoder().decode(LocationData.self, from: jsonData)
-                }
-                await MainActor.run {
-                    suggestions = decoded
-                    isExpanded = !decoded.isEmpty
-                }
+            let endpoint = Endpoint.geocodeAutocomplete
+            guard let url = endpoint.url(environment: client.environment) else { return }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.httpBody = jsonData
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(client.apiKey, forHTTPHeaderField: "x-api-key")
+
+            let (data, _) = try await URLSession.shared.data(for: request)
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let dataObj = json?["data"] as? [String: Any]
+            let suggestionsArr = dataObj?["suggestions"] as? [[String: Any]] ?? []
+
+            let decoded = suggestionsArr.compactMap { dict -> LocationData? in
+                guard let itemData = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+                return try? JSONDecoder().decode(LocationData.self, from: itemData)
+            }
+            await MainActor.run {
+                suggestions = decoded
+                isExpanded = !decoded.isEmpty
             }
         } catch {
             print("[AppDNA] Location autocomplete failed: \(error)")

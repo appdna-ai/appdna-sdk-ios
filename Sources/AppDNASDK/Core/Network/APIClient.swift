@@ -13,8 +13,8 @@ enum APIError: Error {
 
 /// URLSession-based HTTP client with retry and auth headers.
 final class APIClient {
-    private let apiKey: String
-    private let environment: Environment
+    let apiKey: String
+    let environment: Environment
     private let session: URLSession
     private let maxRetries = 3
     private let retryDelays: [TimeInterval] = [1, 2, 4]
