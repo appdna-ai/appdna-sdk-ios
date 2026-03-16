@@ -7,7 +7,7 @@ import UserNotifications
 public final class AppDNA: @unchecked Sendable {
 
     /// SDK version string.
-    public static let sdkVersion = "1.0.0"
+    public static let sdkVersion = "1.1.0"
 
     /// Notification posted when remote config is refreshed.
     public static let configUpdated = Notification.Name("AppDNA.configUpdated")
