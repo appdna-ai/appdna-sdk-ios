@@ -363,6 +363,20 @@ public final class AppDNA: @unchecked Sendable {
         SessionDataStore.shared.clearSessionData()
     }
 
+    /// Get structured location data from an onboarding location field (SPEC-089).
+    /// Returns nil if the field wasn't filled or wasn't a location type.
+    public static func getLocationData(fieldId: String) -> LocationData? {
+        let responses = SessionDataStore.shared.onboardingResponses
+        for (_, stepData) in responses {
+            if let locationDict = (stepData as? [String: Any])?[fieldId],
+               let jsonData = try? JSONSerialization.data(withJSONObject: locationDict),
+               let location = try? JSONDecoder().decode(LocationData.self, from: jsonData) {
+                return location
+            }
+        }
+        return nil
+    }
+
     // MARK: - Public API: Privacy
 
     /// Set analytics consent. When false, events are silently dropped.

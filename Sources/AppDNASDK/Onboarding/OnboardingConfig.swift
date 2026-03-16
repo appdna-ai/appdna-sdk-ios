@@ -233,6 +233,12 @@ public struct FormFieldConfig: Codable {
     public let search_enabled: Bool?
     public let multi_select: Bool?
     public let default_value: AnyCodable?
+    // Location (SPEC-089)
+    public let location_type: String?
+    public let location_bias_country: String?
+    public let location_language: String?
+    public let location_placeholder: String?
+    public let location_min_chars: Int?
 }
 
 public struct FormField: Codable, Identifiable {

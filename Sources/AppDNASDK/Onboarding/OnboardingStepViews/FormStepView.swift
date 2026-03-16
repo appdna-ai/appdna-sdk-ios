@@ -182,6 +182,8 @@ struct FormStepView: View {
             stepperField(field)
         case .segmented:
             segmentedField(field)
+        case .location:
+            LocationFieldView(field: field, value: binding(for: field), apiClient: nil)
         }
     }
 
