@@ -32,7 +32,11 @@ struct LocationFieldView: View {
     @State private var debounceTask: Task<Void, Never>?
 
     private var selectedLocation: LocationData? {
-        value as? LocationData
+        if let loc = value as? LocationData { return loc }
+        guard let dict = value as? [String: Any],
+              let jsonData = try? JSONSerialization.data(withJSONObject: dict),
+              let loc = try? JSONDecoder().decode(LocationData.self, from: jsonData) else { return nil }
+        return loc
     }
 
     private var minChars: Int {
@@ -186,7 +190,22 @@ struct LocationFieldView: View {
 
     private func selectSuggestion(_ suggestion: LocationData) {
         query = suggestion.formatted_address
-        value = suggestion
+        // Store as dictionary for JSON serialization compatibility
+        // (Swift structs can't be serialized by JSONSerialization)
+        value = [
+            "formatted_address": suggestion.formatted_address,
+            "city": suggestion.city,
+            "state": suggestion.state,
+            "state_code": suggestion.state_code,
+            "country": suggestion.country,
+            "country_code": suggestion.country_code,
+            "latitude": suggestion.latitude,
+            "longitude": suggestion.longitude,
+            "timezone": suggestion.timezone,
+            "timezone_offset": suggestion.timezone_offset,
+            "postal_code": suggestion.postal_code as Any,
+            "raw_query": suggestion.raw_query,
+        ] as [String: Any]
         suggestions = []
         isExpanded = false
     }

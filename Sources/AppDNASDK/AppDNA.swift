@@ -62,7 +62,7 @@ public final class AppDNA: @unchecked Sendable {
     private var environment: Environment = .production
     private var options: AppDNAOptions = AppDNAOptions()
 
-    private var apiClient: APIClient?
+    internal var apiClient: APIClient?
     private var identityManager: IdentityManager?
     private var sessionManager: SessionManager?
     private var eventTracker: EventTracker?
