@@ -4,6 +4,7 @@ import SwiftUI
 struct FormStepView: View {
     let config: StepConfig
     let onNext: ([String: Any]?) -> Void
+    var apiClient: APIClient?
 
     @State private var values: [String: Any] = [:]
     @State private var errors: [String: String] = [:]
@@ -183,7 +184,14 @@ struct FormStepView: View {
         case .segmented:
             segmentedField(field)
         case .location:
-            LocationFieldView(field: field, value: binding(for: field), apiClient: nil)
+            LocationFieldView(
+                field: field,
+                value: Binding(
+                    get: { values[field.id] },
+                    set: { values[field.id] = $0; errors[field.id] = nil }
+                ),
+                apiClient: apiClient
+            )
         }
     }
 
