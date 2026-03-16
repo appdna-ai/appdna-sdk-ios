@@ -698,7 +698,7 @@ struct OnboardingStepRouter: View {
             case .custom:
                 CustomStepView(config: effectiveConfig, onNext: { onNext(nil) })
             case .form:
-                FormStepView(config: effectiveConfig, onNext: onNext, apiClient: AppDNA.shared.apiClient)
+                FormStepView(config: effectiveConfig, onNext: onNext, apiClient: AppDNA.geocodeClient)
             }
 
             if step.config.skip_enabled == true {

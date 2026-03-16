@@ -22,6 +22,7 @@ public final class AppDNA: @unchecked Sendable {
 
     /// Internal accessor for the push token manager (legacy).
     static var push: PushTokenManager? { shared.pushTokenManager }
+    static var geocodeClient: APIClient? { shared.apiClient }
 
     // MARK: - Module Namespaces (v1.0)
 
