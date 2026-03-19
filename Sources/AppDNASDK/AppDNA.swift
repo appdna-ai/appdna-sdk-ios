@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import UserNotifications
+import FirebaseCore
 
 /// Main entry point for the AppDNA SDK.
 /// All public methods are thread-safe.
@@ -415,6 +416,11 @@ public final class AppDNA: @unchecked Sendable {
         Log.level = options.logLevel
 
         Log.info("Configuring AppDNA SDK v\(AppDNA.sdkVersion) (\(environment.rawValue))")
+
+        // Validate Firebase is configured (required for remote config via Firestore)
+        if FirebaseApp.app() == nil {
+            Log.error("⚠️ Firebase not configured. Call FirebaseApp.configure() before AppDNA.configure(). Remote config (paywalls, experiments, flags) will not work. See docs: https://docs.appdna.ai/sdks/ios/installation")
+        }
 
         // 1. Initialize core managers
         let keychainStore = KeychainStore()
