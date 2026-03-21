@@ -6,6 +6,209 @@ public enum ContentBlockType: String, Codable {
     case heading, text, image, button, spacer, list, divider, badge, icon, toggle, video
     // SPEC-085: Rich media block types
     case lottie, rive
+    // SPEC-089d Phase A: New onboarding block types
+    case page_indicator, wheel_picker, pulsing_avatar, social_login
+    case timeline, animated_loading, star_background, countdown_timer
+    case rating, rich_text, progress_bar
+    // SPEC-089d Phase F: Container & advanced block types
+    case stack, custom_view, date_wheel_picker, circular_gauge, row
+    // SPEC-089d Nurrai
+    case pricing_card
+    // Catch-all for future/unknown block types — prevents decoding failures
+    case unknown
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        self = ContentBlockType(rawValue: rawValue) ?? .unknown
+    }
+}
+
+// MARK: - Block Style Design Tokens (SPEC-089d §6.1)
+
+/// Per-block styling: background, border, shadow, padding, margin, opacity.
+public struct BlockStyle: Codable {
+    public var background_color: String?
+    public var background_gradient: BlockGradientStyle?
+    public var border_color: String?
+    public var border_width: Double?
+    public var border_style: String?   // solid, dashed, dotted
+    public var border_radius: Double?
+    public var shadow: BlockShadowStyle?
+    public var padding_top: Double?
+    public var padding_right: Double?
+    public var padding_bottom: Double?
+    public var padding_left: Double?
+    public var margin_top: Double?
+    public var margin_bottom: Double?
+    public var opacity: Double?
+}
+
+/// Shadow definition for block_style.
+public struct BlockShadowStyle: Codable {
+    public var x: Double
+    public var y: Double
+    public var blur: Double
+    public var spread: Double
+    public var color: String
+}
+
+/// Gradient definition for block_style background.
+public struct BlockGradientStyle: Codable {
+    public var angle: Double
+    public var start: String
+    public var end: String
+}
+
+// MARK: - Block Style ViewModifier (SPEC-089d §6.1)
+
+/// Applies `block_style` design tokens to any content block view.
+struct BlockStyleModifier: ViewModifier {
+    let style: BlockStyle?
+
+    func body(content: Content) -> some View {
+        if let s = style {
+            content
+                // Inner padding
+                .padding(.top, CGFloat(s.padding_top ?? 0))
+                .padding(.trailing, CGFloat(s.padding_right ?? 0))
+                .padding(.bottom, CGFloat(s.padding_bottom ?? 0))
+                .padding(.leading, CGFloat(s.padding_left ?? 0))
+                // Background
+                .background(backgroundView(s))
+                // Border
+                .clipShape(RoundedRectangle(cornerRadius: CGFloat(s.border_radius ?? 0)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: CGFloat(s.border_radius ?? 0))
+                        .stroke(
+                            Color(hex: s.border_color ?? "transparent"),
+                            style: borderStrokeStyle(s)
+                        )
+                )
+                // Shadow
+                .shadow(
+                    color: Color(hex: s.shadow?.color ?? "transparent"),
+                    radius: CGFloat(s.shadow?.blur ?? 0) / 2,
+                    x: CGFloat(s.shadow?.x ?? 0),
+                    y: CGFloat(s.shadow?.y ?? 0)
+                )
+                // Opacity
+                .opacity(s.opacity ?? 1.0)
+                // Outer margin
+                .padding(.top, CGFloat(s.margin_top ?? 0))
+                .padding(.bottom, CGFloat(s.margin_bottom ?? 0))
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private func backgroundView(_ s: BlockStyle) -> some View {
+        if let gradient = s.background_gradient {
+            LinearGradient(
+                colors: [Color(hex: gradient.start), Color(hex: gradient.end)],
+                startPoint: gradientStartPoint(angle: gradient.angle),
+                endPoint: gradientEndPoint(angle: gradient.angle)
+            )
+        } else if let bgColor = s.background_color {
+            Color(hex: bgColor)
+        } else {
+            Color.clear
+        }
+    }
+
+    private func borderStrokeStyle(_ s: BlockStyle) -> StrokeStyle {
+        let lineWidth = CGFloat(s.border_width ?? 0)
+        switch s.border_style {
+        case "dashed":
+            return StrokeStyle(lineWidth: lineWidth, dash: [8, 4])
+        case "dotted":
+            return StrokeStyle(lineWidth: lineWidth, lineCap: .round, dash: [2, 4])
+        default: // solid
+            return StrokeStyle(lineWidth: lineWidth)
+        }
+    }
+
+    private func gradientStartPoint(angle: Double) -> UnitPoint {
+        let rads = angle * .pi / 180
+        return UnitPoint(x: 0.5 - sin(rads) / 2, y: 0.5 + cos(rads) / 2)
+    }
+
+    private func gradientEndPoint(angle: Double) -> UnitPoint {
+        let rads = angle * .pi / 180
+        return UnitPoint(x: 0.5 + sin(rads) / 2, y: 0.5 - cos(rads) / 2)
+    }
+}
+
+extension View {
+    /// Apply block_style design tokens (SPEC-089d §6.1).
+    func applyBlockStyle(_ style: BlockStyle?) -> some View {
+        modifier(BlockStyleModifier(style: style))
+    }
+}
+
+// MARK: - 2D Positioning Modifier (SPEC-089d §6.2)
+
+/// Applies vertical/horizontal alignment + offset positioning to a content block.
+struct BlockPositionModifier: ViewModifier {
+    let verticalAlign: String?
+    let horizontalAlign: String?
+    let verticalOffset: Double?
+    let horizontalOffset: Double?
+
+    func body(content: Content) -> some View {
+        let hasPositioning = verticalAlign != nil || horizontalAlign != nil
+            || verticalOffset != nil || horizontalOffset != nil
+
+        if hasPositioning {
+            content
+                .frame(
+                    maxWidth: .infinity,
+                    alignment: mapAlignment(horizontal: horizontalAlign, vertical: verticalAlign)
+                )
+                .offset(
+                    x: CGFloat(horizontalOffset ?? 0),
+                    y: CGFloat(verticalOffset ?? 0)
+                )
+        } else {
+            content
+        }
+    }
+
+    private func mapAlignment(horizontal: String?, vertical: String?) -> Alignment {
+        let h: HorizontalAlignment = {
+            switch horizontal {
+            case "left": return .leading
+            case "right": return .trailing
+            default: return .center
+            }
+        }()
+        let v: VerticalAlignment = {
+            switch vertical {
+            case "top": return .top
+            case "bottom": return .bottom
+            default: return .center
+            }
+        }()
+        return Alignment(horizontal: h, vertical: v)
+    }
+}
+
+extension View {
+    /// Apply 2D positioning (SPEC-089d §6.2).
+    func applyBlockPosition(
+        verticalAlign: String?,
+        horizontalAlign: String?,
+        verticalOffset: Double?,
+        horizontalOffset: Double?
+    ) -> some View {
+        modifier(BlockPositionModifier(
+            verticalAlign: verticalAlign,
+            horizontalAlign: horizontalAlign,
+            verticalOffset: verticalOffset,
+            horizontalOffset: horizontalOffset
+        ))
+    }
 }
 
 // MARK: - Content Block model
@@ -77,6 +280,15 @@ public struct ContentBlock: Codable, Identifiable {
     // SPEC-085: Icon reference (structured icon)
     public let icon_ref: IconReference?
 
+    // SPEC-089d §6.1: Per-block style design tokens
+    public let block_style: BlockStyle?
+
+    // SPEC-089d §6.2: 2D positioning
+    public let vertical_align: String?
+    public let horizontal_align: String?
+    public let vertical_offset: Double?
+    public let horizontal_offset: Double?
+
     enum CodingKeys: String, CodingKey {
         case id, type, text, style, level
         case image_url, alt, corner_radius, height
@@ -92,6 +304,8 @@ public struct ContentBlock: Codable, Identifiable {
         case play_on_scroll, play_on_tap
         case rive_url, artboard, state_machine, trigger_on_step_complete
         case icon_ref
+        case block_style
+        case vertical_align, horizontal_align, vertical_offset, horizontal_offset
     }
 }
 
@@ -113,6 +327,18 @@ struct ContentBlockRendererView: View {
 
     @ViewBuilder
     private func renderBlock(_ block: ContentBlock) -> some View {
+        renderBlockContent(block)
+            .applyBlockStyle(block.block_style)
+            .applyBlockPosition(
+                verticalAlign: block.vertical_align,
+                horizontalAlign: block.horizontal_align,
+                verticalOffset: block.vertical_offset,
+                horizontalOffset: block.horizontal_offset
+            )
+    }
+
+    @ViewBuilder
+    private func renderBlockContent(_ block: ContentBlock) -> some View {
         switch block.type {
         case .heading:
             headingBlock(block)
@@ -141,7 +367,64 @@ struct ContentBlockRendererView: View {
             lottieBlock(block)
         case .rive:
             riveBlock(block)
+        // SPEC-089d Phase A: New onboarding block stubs
+        case .page_indicator:
+            stubBlockPlaceholder("page_indicator")
+        case .wheel_picker:
+            stubBlockPlaceholder("wheel_picker")
+        case .pulsing_avatar:
+            stubBlockPlaceholder("pulsing_avatar")
+        case .social_login:
+            stubBlockPlaceholder("social_login")
+        case .timeline:
+            stubBlockPlaceholder("timeline")
+        case .animated_loading:
+            stubBlockPlaceholder("animated_loading")
+        case .star_background:
+            stubBlockPlaceholder("star_background")
+        case .countdown_timer:
+            stubBlockPlaceholder("countdown_timer")
+        case .rating:
+            stubBlockPlaceholder("rating")
+        case .rich_text:
+            stubBlockPlaceholder("rich_text")
+        case .progress_bar:
+            stubBlockPlaceholder("progress_bar")
+        // SPEC-089d Phase F: Container & advanced block stubs
+        case .stack:
+            stubBlockPlaceholder("stack")
+        case .custom_view:
+            stubBlockPlaceholder("custom_view")
+        case .date_wheel_picker:
+            stubBlockPlaceholder("date_wheel_picker")
+        case .circular_gauge:
+            stubBlockPlaceholder("circular_gauge")
+        case .row:
+            stubBlockPlaceholder("row")
+        // SPEC-089d Nurrai
+        case .pricing_card:
+            stubBlockPlaceholder("pricing_card")
+        // Backward compatibility: unknown types render as invisible
+        case .unknown:
+            EmptyView()
         }
+    }
+
+    // MARK: - Stub Placeholder (SPEC-089d)
+
+    /// Placeholder view for new block types whose full renderers are not yet implemented.
+    /// Renders a subtle label in DEBUG builds; EmptyView in release builds.
+    @ViewBuilder
+    private func stubBlockPlaceholder(_ typeName: String) -> some View {
+        #if DEBUG
+        Text("[\(typeName)]")
+            .font(.caption2)
+            .foregroundColor(.secondary.opacity(0.5))
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 4)
+        #else
+        EmptyView()
+        #endif
     }
 
     // MARK: - Heading
