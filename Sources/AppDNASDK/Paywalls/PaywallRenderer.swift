@@ -26,17 +26,35 @@ struct PaywallRenderer: View {
         TemplateEngine.shared.buildContext()
     }
 
+    // SPEC-089d: Extract sticky_footer section if present
+    private var stickyFooterSection: PaywallSection? {
+        config.sections.first(where: { $0.type == "sticky_footer" })
+    }
+
+    // SPEC-089d: Toggle state for toggle sections
+    @State private var toggleStates: [String: Bool] = [:]
+    // SPEC-089d: Promo input state
+    @State private var promoCode: String = ""
+    @State private var promoState: PromoState = .idle
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             backgroundView
 
-            ScrollView {
-                VStack(spacing: config.layout.spacing ?? 16) {
-                    ForEach(Array(config.sections.enumerated()), id: \.offset) { _, section in
-                        sectionView(for: section)
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: config.layout.spacing ?? 16) {
+                        ForEach(Array(config.sections.enumerated()), id: \.offset) { _, section in
+                            sectionView(for: section)
+                        }
                     }
+                    .padding(config.layout.padding ?? 20)
                 }
-                .padding(config.layout.padding ?? 20)
+
+                // SPEC-089d: Sticky footer pinned to bottom
+                if let footer = stickyFooterSection {
+                    stickyFooterView(data: footer.data, style: footer.style)
+                }
             }
 
             // SPEC-085: Confetti/particle overlay
@@ -240,6 +258,40 @@ struct PaywallRenderer: View {
                 videoSectionView(data: section.data, style: section.style)
             case "rive":
                 riveSectionView(data: section.data, style: section.style)
+            // SPEC-089d: 12 new paywall section types
+            case "countdown":
+                countdownSectionView(data: section.data, style: section.style)
+                    .applyContainerStyle(section.style?.container)
+            case "legal":
+                legalSectionView(data: section.data, style: section.style)
+                    .applyContainerStyle(section.style?.container)
+            case "divider":
+                dividerSectionView(data: section.data, style: section.style)
+            case "sticky_footer":
+                EmptyView() // Rendered outside ScrollView — see stickyFooterOverlay
+            case "card":
+                cardSectionView(data: section.data, style: section.style)
+            case "carousel":
+                carouselSectionView(data: section.data, style: section.style)
+                    .applyContainerStyle(section.style?.container)
+            case "timeline":
+                timelineSectionView(data: section.data, style: section.style)
+                    .applyContainerStyle(section.style?.container)
+            case "icon_grid":
+                iconGridSectionView(data: section.data, style: section.style)
+                    .applyContainerStyle(section.style?.container)
+            case "comparison_table":
+                comparisonTableSectionView(data: section.data, style: section.style)
+                    .applyContainerStyle(section.style?.container)
+            case "promo_input":
+                promoInputSectionView(data: section.data, style: section.style)
+                    .applyContainerStyle(section.style?.container)
+            case "toggle":
+                toggleSectionView(data: section.data, style: section.style)
+                    .applyContainerStyle(section.style?.container)
+            case "reviews_carousel":
+                reviewsCarouselSectionView(data: section.data, style: section.style)
+                    .applyContainerStyle(section.style?.container)
             default:
                 EmptyView()
             }
@@ -436,6 +488,585 @@ struct PaywallRenderer: View {
             )
             RiveBlockView(block: block)
                 .applyContainerStyle(style?.container)
+        }
+    }
+
+    // MARK: - SPEC-089d: Countdown section (AC-028)
+
+    @ViewBuilder
+    private func countdownSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        let duration = data?.durationSeconds ?? data?.countdownSeconds ?? 3600
+        let textColor = data?.color ?? data?.accentColor ?? "#FFFFFF"
+        let valueTextStyle = style?.elements?["value"]?.textStyle
+        CountdownTimerView(seconds: duration, valueTextStyle: valueTextStyle)
+    }
+
+    // MARK: - SPEC-089d: Legal section (AC-029)
+
+    @ViewBuilder
+    private func legalSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        let textColor = Color(hex: data?.color ?? "#999999")
+        let size = data?.fontSize ?? 11
+        let textAlignment: TextAlignment = {
+            switch data?.alignment {
+            case "left": return .leading
+            case "right": return .trailing
+            default: return .center
+            }
+        }()
+
+        VStack(spacing: 8) {
+            if let text = data?.text {
+                // Parse markdown-style links: [text](url)
+                Text(parseMarkdownLinks(text))
+                    .font(.system(size: size))
+                    .foregroundColor(textColor)
+                    .multilineTextAlignment(textAlignment)
+                    .tint(Color(hex: data?.accentColor ?? "#6366F1"))
+            }
+
+            if let links = data?.links, !links.isEmpty {
+                HStack(spacing: 16) {
+                    ForEach(links, id: \.label) { link in
+                        if let url = URL(string: link.url) {
+                            Link(link.label, destination: url)
+                                .font(.system(size: size))
+                                .foregroundColor(Color(hex: data?.accentColor ?? "#6366F1"))
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func parseMarkdownLinks(_ text: String) -> AttributedString {
+        var result = AttributedString(text)
+        // Simple markdown link parser: [label](url)
+        let pattern = "\\[([^\\]]+)\\]\\(([^)]+)\\)"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return result }
+        // Reconstruct attributed string with links
+        var attrStr = AttributedString()
+        var remaining = text
+        while let match = regex.firstMatch(in: remaining, range: NSRange(remaining.startIndex..., in: remaining)) {
+            guard let labelRange = Range(match.range(at: 1), in: remaining),
+                  let urlRange = Range(match.range(at: 2), in: remaining),
+                  let fullRange = Range(match.range, in: remaining) else { break }
+            // Add text before the match
+            let beforeText = String(remaining[remaining.startIndex..<fullRange.lowerBound])
+            attrStr.append(AttributedString(beforeText))
+            // Add the link
+            let label = String(remaining[labelRange])
+            let urlString = String(remaining[urlRange])
+            var linkAttr = AttributedString(label)
+            if let url = URL(string: urlString) {
+                linkAttr.link = url
+            }
+            attrStr.append(linkAttr)
+            remaining = String(remaining[fullRange.upperBound...])
+        }
+        if !remaining.isEmpty {
+            attrStr.append(AttributedString(remaining))
+        }
+        return attrStr.characters.isEmpty ? result : attrStr
+    }
+
+    // MARK: - SPEC-089d: Divider section (AC-030)
+
+    @ViewBuilder
+    private func dividerSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        let dividerColor = Color(hex: data?.color ?? "#333333")
+        let thickness = data?.thickness ?? 1
+        let lineStyle = data?.lineStyle ?? "solid"
+        let mTop = data?.marginTop ?? 8
+        let mBottom = data?.marginBottom ?? 8
+        let mH = data?.marginHorizontal ?? 0
+
+        VStack(spacing: 0) {
+            if let labelText = data?.labelText {
+                // Divider with centered label
+                HStack(spacing: 12) {
+                    dividerLine(color: dividerColor, thickness: thickness, style: lineStyle)
+                    Text(labelText)
+                        .font(.system(size: data?.labelFontSize ?? 12))
+                        .foregroundColor(Color(hex: data?.labelColor ?? "#999999"))
+                        .padding(.horizontal, 8)
+                        .background(Color(hex: data?.labelBgColor ?? "#000000"))
+                    dividerLine(color: dividerColor, thickness: thickness, style: lineStyle)
+                }
+            } else {
+                dividerLine(color: dividerColor, thickness: thickness, style: lineStyle)
+            }
+        }
+        .padding(.top, mTop)
+        .padding(.bottom, mBottom)
+        .padding(.horizontal, mH)
+    }
+
+    @ViewBuilder
+    private func dividerLine(color: Color, thickness: CGFloat, style: String) -> some View {
+        switch style {
+        case "dashed":
+            Line()
+                .stroke(style: StrokeStyle(lineWidth: thickness, dash: [6, 3]))
+                .foregroundColor(color)
+                .frame(height: thickness)
+        case "dotted":
+            Line()
+                .stroke(style: StrokeStyle(lineWidth: thickness, dash: [2, 2]))
+                .foregroundColor(color)
+                .frame(height: thickness)
+        default: // solid
+            Rectangle()
+                .fill(color)
+                .frame(height: thickness)
+        }
+    }
+
+    // MARK: - SPEC-089d: Sticky footer (AC-031)
+
+    @ViewBuilder
+    private func stickyFooterView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        let bgColor = Color(hex: data?.backgroundColor ?? "#000000")
+
+        VStack(spacing: 8) {
+            // CTA button
+            if let ctaText = data?.ctaText {
+                Button {
+                    handleCTATap()
+                } label: {
+                    if isPurchasing {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Text(loc("sticky_footer.cta", ctaText))
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(Color(hex: data?.ctaTextColor ?? "#FFFFFF"))
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(Color(hex: data?.ctaBgColor ?? "#6366F1"))
+                .clipShape(RoundedRectangle(cornerRadius: data?.ctaCornerRadius ?? 14))
+                .disabled(isPurchasing)
+            }
+
+            // Secondary action
+            if let secondaryText = data?.secondaryText {
+                Button {
+                    switch data?.secondaryAction {
+                    case "restore":
+                        onRestore()
+                    case "link":
+                        if let urlStr = data?.secondaryUrl, let url = URL(string: urlStr) {
+                            #if canImport(UIKit)
+                            UIApplication.shared.open(url)
+                            #endif
+                        }
+                    default:
+                        break
+                    }
+                } label: {
+                    Text(loc("sticky_footer.secondary", secondaryText))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            // Legal text
+            if let legalText = data?.legalText {
+                Text(loc("sticky_footer.legal", legalText))
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.4))
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(.horizontal, data?.padding ?? 20)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity)
+        .background(
+            Group {
+                if data?.blurBackground == true {
+                    Rectangle().fill(.ultraThinMaterial)
+                } else {
+                    bgColor
+                }
+            }
+        )
+        .applyContainerStyle(style?.container)
+    }
+
+    // MARK: - SPEC-089d: Card section (AC-032)
+
+    @ViewBuilder
+    private func cardSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        let radius = data?.cornerRadius ?? 16
+
+        VStack(alignment: .leading, spacing: 12) {
+            if let title = data?.title {
+                Text(loc("card.title", title))
+                    .font(.headline)
+                    .foregroundColor(.white)
+            }
+
+            if let subtitle = data?.subtitle {
+                Text(loc("card.subtitle", subtitle))
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.8))
+            }
+
+            // Render child text/body if present
+            if let text = data?.text {
+                Text(loc("card.body", text))
+                    .font(.body)
+                    .foregroundColor(.white.opacity(0.9))
+            }
+        }
+        .padding(data?.padding ?? 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(hex: data?.backgroundColor ?? "#1A1A2E"))
+        .clipShape(RoundedRectangle(cornerRadius: radius))
+        .overlay(
+            RoundedRectangle(cornerRadius: radius)
+                .stroke(Color(hex: data?.borderColor ?? "#333333"), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+        .applyContainerStyle(style?.container)
+    }
+
+    // MARK: - SPEC-089d: Carousel section (AC-033)
+
+    @ViewBuilder
+    private func carouselSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        if let pages = data?.pages, !pages.isEmpty {
+            CarouselView(
+                pages: pages,
+                config: config,
+                autoScroll: data?.autoScroll ?? false,
+                autoScrollIntervalMs: data?.autoScrollIntervalMs ?? 3000,
+                showIndicators: data?.showIndicators ?? true,
+                indicatorColor: data?.indicatorColor ?? "#666666",
+                indicatorActiveColor: data?.indicatorActiveColor ?? "#FFFFFF",
+                height: data?.height,
+                loc: loc
+            )
+        }
+    }
+
+    // MARK: - SPEC-089d: Timeline section (AC-034)
+
+    @ViewBuilder
+    private func timelineSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        let items = data?.items ?? []
+        let isCompact = data?.compact ?? false
+        let showLine = data?.showLine ?? true
+
+        VStack(spacing: isCompact ? 12 : 24) {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                HStack(spacing: 16) {
+                    // Left: status indicator + connecting line
+                    VStack(spacing: 0) {
+                        let statusColor = timelineStatusColor(
+                            status: item.status ?? "upcoming",
+                            completedColor: data?.completedColor ?? "#22C55E",
+                            currentColor: data?.currentColor ?? "#6366F1",
+                            upcomingColor: data?.upcomingColor ?? "#666666"
+                        )
+
+                        ZStack {
+                            Circle()
+                                .fill(statusColor)
+                                .frame(width: 24, height: 24)
+                            if item.status == "completed" {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+
+                        if showLine && index < items.count - 1 {
+                            Rectangle()
+                                .fill(Color(hex: data?.lineColor ?? "#333333"))
+                                .frame(width: 2)
+                                .frame(maxHeight: .infinity)
+                        }
+                    }
+                    .frame(width: 24)
+
+                    // Right: content
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let title = item.title {
+                            Text(title)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.white)
+                        }
+                        if let subtitle = item.subtitle {
+                            Text(subtitle)
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+                    .padding(.bottom, isCompact ? 0 : 8)
+                }
+            }
+        }
+    }
+
+    private func timelineStatusColor(status: String, completedColor: String, currentColor: String, upcomingColor: String) -> Color {
+        switch status {
+        case "completed": return Color(hex: completedColor)
+        case "current": return Color(hex: currentColor)
+        default: return Color(hex: upcomingColor)
+        }
+    }
+
+    // MARK: - SPEC-089d: Icon grid section (AC-035)
+
+    @ViewBuilder
+    private func iconGridSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        let items = data?.items ?? []
+        let columnCount = data?.columns ?? 3
+        let gridSpacing = data?.spacing ?? 16
+        let iconSz = data?.iconSize ?? 32
+        let iconClr = data?.iconColor ?? "#6366F1"
+
+        let gridColumns = Array(repeating: GridItem(.flexible(), spacing: gridSpacing), count: columnCount)
+
+        LazyVGrid(columns: gridColumns, spacing: gridSpacing) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                VStack(spacing: 8) {
+                    if let icon = item.icon {
+                        // Check if it's an emoji or SF Symbol
+                        if icon.count <= 2 && icon.unicodeScalars.allSatisfy({ $0.value > 127 }) {
+                            Text(icon)
+                                .font(.system(size: iconSz))
+                        } else {
+                            Image(systemName: icon)
+                                .font(.system(size: iconSz * 0.6))
+                                .foregroundColor(Color(hex: iconClr))
+                                .frame(width: iconSz, height: iconSz)
+                        }
+                    }
+
+                    if let label = item.label ?? item.title {
+                        let ts = style?.elements?["title"]?.textStyle
+                        if let ts = ts {
+                            Text(label).applyTextStyle(ts)
+                        } else {
+                            Text(label)
+                                .font(.caption.weight(.medium))
+                                .foregroundColor(.white)
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+
+                    if let desc = item.description ?? item.subtitle {
+                        let ds = style?.elements?["description"]?.textStyle
+                        if let ds = ds {
+                            Text(desc).applyTextStyle(ds)
+                        } else {
+                            Text(desc)
+                                .font(.caption2)
+                                .foregroundColor(.white.opacity(0.6))
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - SPEC-089d: Comparison table section (AC-036)
+
+    @ViewBuilder
+    private func comparisonTableSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        let cols = data?.tableColumns ?? []
+        let rows = data?.tableRows ?? []
+        let checkClr = Color(hex: data?.checkColor ?? "#22C55E")
+        let crossClr = Color(hex: data?.crossColor ?? "#EF4444")
+        let highlightClr = Color(hex: data?.highlightColor ?? "#6366F1")
+        let borderClr = Color(hex: data?.borderColor ?? "#333333")
+        let radius = data?.cornerRadius ?? 12
+
+        VStack(spacing: 0) {
+            // Header row
+            HStack(spacing: 0) {
+                // Feature column header (empty)
+                Text("")
+                    .frame(maxWidth: .infinity)
+
+                ForEach(Array(cols.enumerated()), id: \.offset) { colIdx, col in
+                    Text(col.label)
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(col.highlighted == true ? highlightClr.opacity(0.15) : Color.clear)
+                }
+            }
+            .background(Color.white.opacity(0.05))
+
+            Divider().background(borderClr)
+
+            // Data rows
+            ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, row in
+                HStack(spacing: 0) {
+                    Text(row.feature)
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.9))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 8)
+
+                    ForEach(Array(row.values.enumerated()), id: \.offset) { valIdx, value in
+                        Group {
+                            switch value.lowercased() {
+                            case "check":
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(checkClr)
+                                    .font(.caption.weight(.bold))
+                            case "cross":
+                                Image(systemName: "xmark")
+                                    .foregroundColor(crossClr)
+                                    .font(.caption.weight(.bold))
+                            case "partial":
+                                Image(systemName: "minus")
+                                    .foregroundColor(.yellow)
+                                    .font(.caption.weight(.bold))
+                            default:
+                                Text(value)
+                                    .font(.caption)
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            valIdx < cols.count && cols[valIdx].highlighted == true
+                                ? highlightClr.opacity(0.08)
+                                : Color.clear
+                        )
+                    }
+                }
+
+                if rowIdx < rows.count - 1 {
+                    Divider().background(borderClr.opacity(0.3))
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: radius))
+        .overlay(
+            RoundedRectangle(cornerRadius: radius)
+                .stroke(borderClr, lineWidth: 1)
+        )
+    }
+
+    // MARK: - SPEC-089d: Promo input section (AC-037)
+
+    @ViewBuilder
+    private func promoInputSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        HStack(spacing: 8) {
+            TextField(data?.placeholder ?? "Promo code", text: $promoCode)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(8)
+                .foregroundColor(.white)
+                .font(.subheadline)
+
+            Button {
+                // Submit promo code — hook integration point
+                promoState = .loading
+                // In production, fire async hook with promo_code
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    // Placeholder: would be replaced by actual webhook
+                    promoState = promoCode.isEmpty ? .error : .success
+                }
+            } label: {
+                if case .loading = promoState {
+                    ProgressView().tint(.white)
+                } else {
+                    Text(loc("promo.button", data?.buttonText ?? "Apply"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color(hex: data?.accentColor ?? "#6366F1"))
+            .cornerRadius(8)
+            .disabled(promoState == .loading)
+        }
+
+        // Status messages
+        switch promoState {
+        case .success:
+            Text(data?.successText ?? "Code applied!")
+                .font(.caption)
+                .foregroundColor(.green)
+        case .error:
+            Text(data?.errorText ?? "Invalid code")
+                .font(.caption)
+                .foregroundColor(.red)
+        default:
+            EmptyView()
+        }
+    }
+
+    // MARK: - SPEC-089d: Toggle section (AC-038)
+
+    @ViewBuilder
+    private func toggleSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        let key = data?.label ?? "toggle"
+        let isOn = Binding<Bool>(
+            get: { toggleStates[key] ?? data?.defaultValue ?? false },
+            set: { toggleStates[key] = $0 }
+        )
+
+        HStack(spacing: 12) {
+            if let iconName = data?.icon {
+                Image(systemName: iconName)
+                    .foregroundColor(Color(hex: data?.accentColor ?? "#6366F1"))
+                    .font(.title3)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                if let label = data?.label {
+                    Text(loc("toggle.label", label))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(Color(hex: data?.labelColorVal ?? "#FFFFFF"))
+                }
+                if let desc = data?.description {
+                    Text(loc("toggle.description", desc))
+                        .font(.caption)
+                        .foregroundColor(Color(hex: data?.descriptionColor ?? "#999999"))
+                }
+            }
+
+            Spacer()
+
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(Color(hex: data?.onColor ?? "#6366F1"))
+        }
+    }
+
+    // MARK: - SPEC-089d: Reviews carousel section (AC-039)
+
+    @ViewBuilder
+    private func reviewsCarouselSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        if let reviews = data?.reviews, !reviews.isEmpty {
+            ReviewsCarouselView(
+                reviews: reviews,
+                autoScroll: data?.autoScroll ?? true,
+                autoScrollIntervalMs: data?.autoScrollIntervalMs ?? 4000,
+                showRatingStars: data?.showRatingStars ?? true,
+                starColor: data?.starColor ?? "#FBBF24",
+                textStyle: style?.elements?["text"]?.textStyle,
+                authorStyle: style?.elements?["author"]?.textStyle,
+                cardStyle: style?.elements?["card"],
+                loc: loc
+            )
         }
     }
 
@@ -641,6 +1272,200 @@ struct VideoBackgroundView: View {
         }
         .onAppear {
             player = AVPlayer(url: url)
+        }
+    }
+}
+
+// MARK: - SPEC-089d: Promo state enum
+
+enum PromoState: Equatable {
+    case idle
+    case loading
+    case success
+    case error
+}
+
+// MARK: - SPEC-089d: Line shape for dashed/dotted dividers
+
+struct Line: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        return path
+    }
+}
+
+// MARK: - SPEC-089d: Carousel sub-view (AC-033)
+
+struct CarouselView: View {
+    let pages: [PaywallCarouselPage]
+    let config: PaywallConfig
+    let autoScroll: Bool
+    let autoScrollIntervalMs: Int
+    let showIndicators: Bool
+    let indicatorColor: String
+    let indicatorActiveColor: String
+    let height: CGFloat?
+    let loc: (String, String) -> String
+
+    @State private var currentPage = 0
+
+    var body: some View {
+        VStack(spacing: 12) {
+            TabView(selection: $currentPage) {
+                ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
+                    VStack(spacing: 8) {
+                        if let children = page.children {
+                            ForEach(Array(children.enumerated()), id: \.offset) { _, child in
+                                // Render child sections (simplified: render text/title if present)
+                                if let title = child.data?.title {
+                                    Text(title)
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                }
+                                if let subtitle = child.data?.subtitle {
+                                    Text(subtitle)
+                                        .font(.subheadline)
+                                        .foregroundColor(.white.opacity(0.8))
+                                }
+                                if let imageUrl = child.data?.imageUrl, let url = URL(string: imageUrl) {
+                                    AsyncImage(url: url) { image in
+                                        image.resizable().scaledToFit()
+                                    } placeholder: {
+                                        ProgressView()
+                                    }
+                                    .frame(maxHeight: 120)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                            }
+                        }
+                    }
+                    .tag(index)
+                    .padding(.horizontal, 4)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: showIndicators ? .always : .never))
+            .frame(height: height ?? 200)
+
+            // Custom indicators (when show_indicators is true but we want custom colors)
+            if showIndicators {
+                HStack(spacing: 6) {
+                    ForEach(0..<pages.count, id: \.self) { idx in
+                        Circle()
+                            .fill(idx == currentPage
+                                  ? Color(hex: indicatorActiveColor)
+                                  : Color(hex: indicatorColor))
+                            .frame(width: 8, height: 8)
+                    }
+                }
+            }
+        }
+        .onAppear {
+            guard autoScroll else { return }
+            Timer.scheduledTimer(withTimeInterval: Double(autoScrollIntervalMs) / 1000.0, repeats: true) { _ in
+                withAnimation {
+                    currentPage = (currentPage + 1) % max(pages.count, 1)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - SPEC-089d: Reviews carousel sub-view (AC-039)
+
+struct ReviewsCarouselView: View {
+    let reviews: [PaywallReview]
+    let autoScroll: Bool
+    let autoScrollIntervalMs: Int
+    let showRatingStars: Bool
+    let starColor: String
+    let textStyle: TextStyleConfig?
+    let authorStyle: TextStyleConfig?
+    let cardStyle: ElementStyleConfig?
+    let loc: (String, String) -> String
+
+    @State private var currentReview = 0
+
+    var body: some View {
+        VStack(spacing: 8) {
+            TabView(selection: $currentReview) {
+                ForEach(Array(reviews.enumerated()), id: \.offset) { index, review in
+                    VStack(spacing: 12) {
+                        // Star rating
+                        if showRatingStars, let rating = review.rating {
+                            HStack(spacing: 2) {
+                                ForEach(0..<5, id: \.self) { star in
+                                    Image(systemName: Double(star) < rating ? "star.fill" : "star")
+                                        .font(.caption)
+                                        .foregroundColor(Color(hex: starColor))
+                                }
+                            }
+                        }
+
+                        // Quote text
+                        if let ts = textStyle {
+                            Text("\u{201C}\(review.text)\u{201D}")
+                                .applyTextStyle(ts)
+                                .multilineTextAlignment(.center)
+                        } else {
+                            Text("\u{201C}\(review.text)\u{201D}")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.9))
+                                .multilineTextAlignment(.center)
+                                .italic()
+                        }
+
+                        // Author
+                        HStack(spacing: 8) {
+                            if let avatarUrl = review.avatarUrl, let url = URL(string: avatarUrl) {
+                                AsyncImage(url: url) { image in
+                                    image.resizable().scaledToFill()
+                                } placeholder: {
+                                    Circle().fill(Color.gray.opacity(0.3))
+                                }
+                                .frame(width: 28, height: 28)
+                                .clipShape(Circle())
+                            }
+
+                            if let as_ = authorStyle {
+                                Text(review.author).applyTextStyle(as_)
+                            } else {
+                                Text(review.author)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+
+                            if let date = review.date {
+                                Text(date)
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.4))
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .tag(index)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(height: 180)
+
+            // Page dots
+            HStack(spacing: 6) {
+                ForEach(0..<reviews.count, id: \.self) { idx in
+                    Circle()
+                        .fill(idx == currentReview ? Color.white : Color.white.opacity(0.3))
+                        .frame(width: 6, height: 6)
+                }
+            }
+        }
+        .onAppear {
+            guard autoScroll else { return }
+            Timer.scheduledTimer(withTimeInterval: Double(autoScrollIntervalMs) / 1000.0, repeats: true) { _ in
+                withAnimation {
+                    currentReview = (currentReview + 1) % max(reviews.count, 1)
+                }
+            }
         }
     }
 }

@@ -24,7 +24,7 @@ struct PaywallLayout: Codable {
 }
 
 struct PaywallSection: Codable {
-    let type: String // "header", "features", "plans", "cta", "social_proof", "guarantee", "image", "spacer", "testimonial"
+    let type: String // "header", "features", "plans", "cta", "social_proof", "guarantee", "image", "spacer", "testimonial", "lottie", "video", "rive", "countdown", "legal", "divider", "sticky_footer", "card", "carousel", "timeline", "icon_grid", "comparison_table", "promo_input", "toggle", "reviews_carousel"
     let data: PaywallSectionData?
     // SPEC-084: Per-section styling
     let style: SectionStyleConfig?
@@ -80,6 +80,102 @@ struct PaywallSectionData: Codable {
     let riveUrl: String?
     let riveStateMachine: String?
 
+    // SPEC-089d: Countdown section
+    let variant: String?           // digital | circular | flip | bar
+    let durationSeconds: Int?
+    let targetDatetime: String?
+    let showDays: Bool?
+    let showHours: Bool?
+    let showMinutes: Bool?
+    let showSeconds: Bool?
+    let labels: [String: String]?
+    let onExpireAction: String?    // hide | show_expired_text | auto_advance
+    let expiredText: String?
+    let accentColor: String?
+    let backgroundColor: String?
+    let fontSize: CGFloat?
+    let alignment: String?
+
+    // SPEC-089d: Legal section
+    let color: String?
+    let links: [PaywallLink]?
+
+    // SPEC-089d: Divider section
+    let thickness: CGFloat?
+    let lineStyle: String?         // solid | dashed | dotted
+    let marginTop: CGFloat?
+    let marginBottom: CGFloat?
+    let marginHorizontal: CGFloat?
+    let labelText: String?
+    let labelColor: String?
+    let labelBgColor: String?
+    let labelFontSize: CGFloat?
+
+    // SPEC-089d: Sticky footer section
+    let ctaText: String?
+    let ctaBgColor: String?
+    let ctaTextColor: String?
+    let ctaCornerRadius: CGFloat?
+    let secondaryText: String?
+    let secondaryAction: String?   // restore | link
+    let secondaryUrl: String?
+    let legalText: String?
+    let blurBackground: Bool?
+    let padding: CGFloat?
+
+    // SPEC-089d: Carousel section
+    let pages: [PaywallCarouselPage]?
+    let autoScroll: Bool?
+    let autoScrollIntervalMs: Int?
+    let showIndicators: Bool?
+    let indicatorColor: String?
+    let indicatorActiveColor: String?
+
+    // SPEC-089d: Timeline / Icon grid items (shared JSON key "items")
+    let items: [PaywallGenericItem]?
+    let lineColor: String?
+    let completedColor: String?
+    let currentColor: String?
+    let upcomingColor: String?
+    let showLine: Bool?
+    let compact: Bool?
+
+    // SPEC-089d: Icon grid / comparison table columns (Int for icon_grid, array for comparison)
+    let columns: Int?
+    let iconSize: CGFloat?
+    let iconColor: String?
+    let spacing: CGFloat?
+
+    // SPEC-089d: Comparison table section
+    let tableColumns: [PaywallTableColumn]?
+    let tableRows: [PaywallTableRow]?
+    let checkColor: String?
+    let crossColor: String?
+    let highlightColor: String?
+    let borderColor: String?
+
+    // SPEC-089d: Promo input section
+    let placeholder: String?
+    let buttonText: String?
+    let successText: String?
+    let errorText: String?
+
+    // SPEC-089d: Toggle section
+    let label: String?
+    let description: String?
+    let defaultValue: Bool?
+    let onColor: String?
+    let offColor: String?
+    let labelColorVal: String?
+    let descriptionColor: String?
+    let icon: String?
+    let affectsPrice: Bool?
+
+    // SPEC-089d: Reviews carousel section
+    let reviews: [PaywallReview]?
+    let showRatingStars: Bool?
+    let starColor: String?
+
     enum CodingKeys: String, CodingKey {
         case title, subtitle, features, plans, cta, rating, testimonial, text, quote, height
         case imageUrl = "image_url"
@@ -101,6 +197,77 @@ struct PaywallSectionData: Codable {
         case videoHeight = "video_height"
         case riveUrl = "rive_url"
         case riveStateMachine = "rive_state_machine"
+        // SPEC-089d: New section fields
+        case variant
+        case durationSeconds = "duration_seconds"
+        case targetDatetime = "target_datetime"
+        case showDays = "show_days"
+        case showHours = "show_hours"
+        case showMinutes = "show_minutes"
+        case showSeconds = "show_seconds"
+        case labels
+        case onExpireAction = "on_expire_action"
+        case expiredText = "expired_text"
+        case accentColor = "accent_color"
+        case backgroundColor = "background_color"
+        case fontSize = "font_size"
+        case alignment
+        case color, links, thickness
+        case lineStyle = "style"
+        case marginTop = "margin_top"
+        case marginBottom = "margin_bottom"
+        case marginHorizontal = "margin_horizontal"
+        case labelText = "label_text"
+        case labelColor = "label_color"
+        case labelBgColor = "label_bg_color"
+        case labelFontSize = "label_font_size"
+        case ctaText = "cta_text"
+        case ctaBgColor = "cta_bg_color"
+        case ctaTextColor = "cta_text_color"
+        case ctaCornerRadius = "cta_corner_radius"
+        case secondaryText = "secondary_text"
+        case secondaryAction = "secondary_action"
+        case secondaryUrl = "secondary_url"
+        case legalText = "legal_text"
+        case blurBackground = "blur_background"
+        case padding, pages
+        case autoScroll = "auto_scroll"
+        case autoScrollIntervalMs = "auto_scroll_interval_ms"
+        case showIndicators = "show_indicators"
+        case indicatorColor = "indicator_color"
+        case indicatorActiveColor = "indicator_active_color"
+        case items
+        case lineColor = "line_color"
+        case completedColor = "completed_color"
+        case currentColor = "current_color"
+        case upcomingColor = "upcoming_color"
+        case showLine = "show_line"
+        case compact
+        case columns
+        case iconSize = "icon_size"
+        case iconColor = "icon_color"
+        case spacing
+        case tableColumns = "table_columns"
+        case tableRows = "rows"
+        case checkColor = "check_color"
+        case crossColor = "cross_color"
+        case highlightColor = "highlight_color"
+        case borderColor = "border_color"
+        case placeholder
+        case buttonText = "button_text"
+        case successText = "success_text"
+        case errorText = "error_text"
+        case label, description
+        case defaultValue = "default_value"
+        case onColor = "on_color"
+        case offColor = "off_color"
+        case labelColorVal = "toggle_label_color"
+        case descriptionColor = "description_color"
+        case icon
+        case affectsPrice = "affects_price"
+        case reviews
+        case showRatingStars = "show_rating_stars"
+        case starColor = "star_color"
     }
 }
 
@@ -145,6 +312,60 @@ struct PaywallBackground: Codable {
     // SPEC-085: Video background
     let video_url: String?
     let video_poster_url: String?
+}
+
+// MARK: - SPEC-089d: Codable sub-types for new paywall sections
+
+struct PaywallLink: Codable {
+    let label: String
+    let url: String
+}
+
+struct PaywallCarouselPage: Codable, Identifiable {
+    let id: String
+    let children: [PaywallSection]?
+
+    enum CodingKeys: String, CodingKey {
+        case id, children
+    }
+}
+
+/// Generic item used by timeline and icon_grid sections.
+/// Timeline uses: id, title, subtitle, icon, status
+/// Icon grid uses: icon, label, description
+struct PaywallGenericItem: Codable {
+    let id: String?
+    let title: String?
+    let subtitle: String?
+    let icon: String?
+    let status: String?       // completed | current | upcoming (timeline)
+    let label: String?         // icon_grid
+    let description: String?   // icon_grid
+}
+
+struct PaywallTableColumn: Codable {
+    let label: String
+    let highlighted: Bool?
+}
+
+struct PaywallTableRow: Codable {
+    let feature: String
+    let values: [String]
+}
+
+struct PaywallReview: Codable, Identifiable {
+    let text: String
+    let author: String
+    let rating: Double?
+    let avatarUrl: String?
+    let date: String?
+
+    var id: String { author + (text.prefix(20).description) }
+
+    enum CodingKeys: String, CodingKey {
+        case text, author, rating, date
+        case avatarUrl = "avatar_url"
+    }
 }
 
 // MARK: - Public types
