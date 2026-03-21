@@ -728,6 +728,14 @@ struct OnboardingStepRouter: View {
                 UIApplication.shared.open(url)
             }
             onNext(nil)
+        case "social_login":
+            // SPEC-089d AC-015: Social login fires onBeforeStepAdvance with provider info.
+            // The app delegate handles auth and returns .proceedWithData or .block.
+            let data: [String: Any] = [
+                "provider": actionValue ?? "unknown",
+                "action": "social_login",
+            ]
+            onNext(data)
         case "permission":
             // P1: Requires runtime permission request infrastructure.
             // action_value will specify the permission type (e.g. "camera", "notifications").

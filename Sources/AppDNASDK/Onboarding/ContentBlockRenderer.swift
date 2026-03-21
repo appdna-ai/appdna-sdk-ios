@@ -211,6 +211,39 @@ extension View {
     }
 }
 
+// MARK: - Nested Codable types for SPEC-089d block fields
+
+/// A single timeline item for the `timeline` block.
+public struct TimelineItemConfig: Codable, Identifiable {
+    public let id: String
+    public let title: String
+    public let subtitle: String?
+    public let icon: String?
+    public let status: String  // completed | current | upcoming
+}
+
+/// A social login provider entry for the `social_login` block.
+public struct SocialProviderConfig: Codable {
+    public let type: String    // apple, google, email, facebook, github
+    public let label: String?
+    public let enabled: Bool?
+}
+
+/// A single item for the `animated_loading` checklist.
+public struct LoadingItemConfig: Codable {
+    public let label: String
+    public let duration_ms: Int?
+    public let icon: String?
+}
+
+/// Countdown label overrides.
+public struct CountdownLabelsConfig: Codable {
+    public let days: String?
+    public let hours: String?
+    public let minutes: String?
+    public let seconds: String?
+}
+
 // MARK: - Content Block model
 
 public struct ContentBlock: Codable, Identifiable {
@@ -289,6 +322,84 @@ public struct ContentBlock: Codable, Identifiable {
     public let vertical_offset: Double?
     public let horizontal_offset: Double?
 
+    // SPEC-089d Phase A: page_indicator fields
+    public let dot_count: Int?
+    public let active_index: Int?
+    public let active_color: String?
+    public let inactive_color: String?
+    public let dot_size: Double?
+    public let dot_spacing: Double?
+    public let active_dot_width: Double?
+    public let alignment: String?
+
+    // SPEC-089d Phase A: social_login fields
+    public let providers: [SocialProviderConfig]?
+    public let button_style: String?       // filled, outlined, minimal
+    public let button_height: Double?
+    public let spacing: Double?
+    public let show_divider: Bool?
+    public let divider_text: String?
+
+    // SPEC-089d Phase A: countdown_timer fields
+    public let timer_variant: String?      // digital, circular, flip, bar
+    public let duration_seconds: Int?
+    public let show_days: Bool?
+    public let show_hours: Bool?
+    public let show_minutes: Bool?
+    public let show_seconds: Bool?
+    public let labels: CountdownLabelsConfig?
+    public let on_expire_action: String?   // hide, show_expired_text, auto_advance
+    public let expired_text: String?
+    public let accent_color: String?
+    public let font_size: Double?
+
+    // SPEC-089d Phase A: rating fields
+    public let max_stars: Int?
+    public let default_rating: Double?
+    public let star_size: Double?
+    public let filled_color: String?
+    public let empty_color: String?
+    public let allow_half: Bool?
+    public let field_id: String?
+    public let rating_label: String?
+
+    // SPEC-089d Phase A: rich_text fields
+    public let markdown_content: String?
+    public let rich_text_variant: String?  // default, legal
+    public let base_style: TextStyleConfig?
+    public let link_color: String?
+
+    // SPEC-089d Phase A: progress_bar fields
+    public let progress_variant: String?   // continuous, segmented
+    public let progress_value: Double?
+    public let total_segments: Int?
+    public let filled_segments: Int?
+    public let bar_height: Double?
+    public let bar_color: String?
+    public let track_color: String?
+    public let show_label: Bool?
+    public let segment_gap: Double?
+
+    // SPEC-089d Phase A: timeline fields
+    public let timeline_items: [TimelineItemConfig]?
+    public let line_color: String?
+    public let completed_color: String?
+    public let current_color: String?
+    public let upcoming_color: String?
+    public let show_line: Bool?
+    public let compact: Bool?
+    public let title_style: TextStyleConfig?
+    public let subtitle_style: TextStyleConfig?
+
+    // SPEC-089d Phase A: animated_loading fields
+    public let loading_variant: String?    // circular, linear, checklist
+    public let loading_items: [LoadingItemConfig]?
+    public let progress_color: String?
+    public let check_color: String?
+    public let total_duration_ms: Int?
+    public let auto_advance: Bool?
+    public let show_percentage: Bool?
+
     enum CodingKeys: String, CodingKey {
         case id, type, text, style, level
         case image_url, alt, corner_radius, height
@@ -306,6 +417,23 @@ public struct ContentBlock: Codable, Identifiable {
         case icon_ref
         case block_style
         case vertical_align, horizontal_align, vertical_offset, horizontal_offset
+        // SPEC-089d Phase A: new block fields
+        case dot_count, active_index, active_color, inactive_color
+        case dot_size, dot_spacing, active_dot_width, alignment
+        case providers, button_style, button_height, spacing
+        case show_divider, divider_text
+        case timer_variant, duration_seconds
+        case show_days, show_hours, show_minutes, show_seconds
+        case labels, on_expire_action, expired_text, accent_color, font_size
+        case max_stars, default_rating, star_size, filled_color, empty_color
+        case allow_half, field_id, rating_label
+        case markdown_content, rich_text_variant, base_style, link_color
+        case progress_variant, progress_value, total_segments, filled_segments
+        case bar_height, bar_color, track_color, show_label, segment_gap
+        case timeline_items, line_color, completed_color, current_color
+        case upcoming_color, show_line, compact, title_style, subtitle_style
+        case loading_variant, loading_items, progress_color, check_color
+        case total_duration_ms, auto_advance, show_percentage
     }
 }
 
@@ -367,29 +495,29 @@ struct ContentBlockRendererView: View {
             lottieBlock(block)
         case .rive:
             riveBlock(block)
-        // SPEC-089d Phase A: New onboarding block stubs
+        // SPEC-089d Phase A: New onboarding block renderers
         case .page_indicator:
-            stubBlockPlaceholder("page_indicator")
+            pageIndicatorBlock(block)
         case .wheel_picker:
             stubBlockPlaceholder("wheel_picker")
         case .pulsing_avatar:
             stubBlockPlaceholder("pulsing_avatar")
         case .social_login:
-            stubBlockPlaceholder("social_login")
+            socialLoginBlock(block)
         case .timeline:
-            stubBlockPlaceholder("timeline")
+            timelineBlock(block)
         case .animated_loading:
-            stubBlockPlaceholder("animated_loading")
+            AnimatedLoadingBlockView(block: block, onAction: onAction)
         case .star_background:
             stubBlockPlaceholder("star_background")
         case .countdown_timer:
-            stubBlockPlaceholder("countdown_timer")
+            CountdownTimerBlockView(block: block, onAction: onAction)
         case .rating:
-            stubBlockPlaceholder("rating")
+            RatingBlockView(block: block, onAction: onAction)
         case .rich_text:
-            stubBlockPlaceholder("rich_text")
+            richTextBlock(block)
         case .progress_bar:
-            stubBlockPlaceholder("progress_bar")
+            progressBarBlock(block)
         // SPEC-089d Phase F: Container & advanced block stubs
         case .stack:
             stubBlockPlaceholder("stack")
@@ -699,6 +827,649 @@ struct ContentBlockRendererView: View {
                 RiveBlockView(block: riveData)
             } else {
                 EmptyView()
+            }
+        }
+    }
+
+    // MARK: - Page Indicator (SPEC-089d AC-012)
+
+    private func pageIndicatorBlock(_ block: ContentBlock) -> some View {
+        let dotCount = block.dot_count ?? 3
+        let activeIdx = block.active_index ?? 0
+        let dotSize = CGFloat(block.dot_size ?? 8)
+        let dotSpacing = CGFloat(block.dot_spacing ?? 8)
+        let activeW = block.active_dot_width.map { CGFloat($0) }
+        let activeColor = Color(hex: block.active_color ?? "#6366F1")
+        let inactiveColor = Color(hex: block.inactive_color ?? "#D1D5DB")
+
+        let align: Alignment = {
+            switch block.alignment {
+            case "left": return .leading
+            case "right": return .trailing
+            default: return .center
+            }
+        }()
+
+        return HStack(spacing: dotSpacing) {
+            ForEach(0..<dotCount, id: \.self) { index in
+                if index == activeIdx {
+                    Capsule()
+                        .fill(activeColor)
+                        .frame(width: activeW ?? dotSize, height: dotSize)
+                } else {
+                    Circle()
+                        .fill(inactiveColor)
+                        .frame(width: dotSize, height: dotSize)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: align)
+        .accessibilityLabel("Page \(activeIdx + 1) of \(dotCount)")
+    }
+
+    // MARK: - Social Login (SPEC-089d AC-015)
+
+    private func socialLoginBlock(_ block: ContentBlock) -> some View {
+        let providerList = (block.providers ?? []).filter { $0.enabled != false }
+        let btnStyle = block.button_style ?? "filled"
+        let btnHeight = CGFloat(block.button_height ?? 50)
+        let btnSpacing = CGFloat(block.spacing ?? 12)
+        let btnRadius = CGFloat(block.button_corner_radius ?? 12)
+
+        return VStack(spacing: btnSpacing) {
+            ForEach(Array(providerList.enumerated()), id: \.offset) { _, provider in
+                Button {
+                    onAction("social_login", provider.type)
+                } label: {
+                    HStack(spacing: 10) {
+                        socialLoginIcon(provider.type)
+                        Text(provider.label ?? socialLoginDefaultLabel(provider.type))
+                            .font(.body.weight(.semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: btnHeight)
+                    .foregroundColor(socialLoginTextColor(provider.type, style: btnStyle))
+                    .background(socialLoginBgColor(provider.type, style: btnStyle))
+                    .clipShape(RoundedRectangle(cornerRadius: btnRadius))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: btnRadius)
+                            .stroke(socialLoginBorderColor(provider.type, style: btnStyle), lineWidth: btnStyle == "outlined" ? 1.5 : 0)
+                    )
+                }
+            }
+
+            // Optional divider between social login and other options
+            if block.show_divider == true {
+                HStack(spacing: 12) {
+                    Rectangle().fill(Color.gray.opacity(0.3)).frame(height: 1)
+                    Text(loc?("block.\(block.id).divider", block.divider_text ?? "or") ?? block.divider_text ?? "or")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Rectangle().fill(Color.gray.opacity(0.3)).frame(height: 1)
+                }
+            }
+        }
+    }
+
+    // Social login helpers
+
+    @ViewBuilder
+    private func socialLoginIcon(_ type: String) -> some View {
+        switch type {
+        case "apple":
+            Image(systemName: "applelogo")
+                .font(.body.weight(.medium))
+        case "google":
+            Text("G")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+        case "email":
+            Image(systemName: "envelope.fill")
+                .font(.body)
+        case "facebook":
+            Text("f")
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+        case "github":
+            Image(systemName: "chevron.left.forwardslash.chevron.right")
+                .font(.body)
+        default:
+            Image(systemName: "person.fill")
+                .font(.body)
+        }
+    }
+
+    private func socialLoginDefaultLabel(_ type: String) -> String {
+        switch type {
+        case "apple": return "Continue with Apple"
+        case "google": return "Continue with Google"
+        case "email": return "Continue with Email"
+        case "facebook": return "Continue with Facebook"
+        case "github": return "Continue with GitHub"
+        default: return "Continue"
+        }
+    }
+
+    private func socialLoginBgColor(_ type: String, style: String) -> Color {
+        if style == "outlined" || style == "minimal" { return .clear }
+        switch type {
+        case "apple": return .black
+        case "google": return .white
+        case "facebook": return Color(hex: "#1877F2")
+        case "github": return Color(hex: "#24292E")
+        default: return .accentColor
+        }
+    }
+
+    private func socialLoginTextColor(_ type: String, style: String) -> Color {
+        if style == "outlined" || style == "minimal" {
+            return type == "apple" ? .primary : .primary
+        }
+        switch type {
+        case "apple": return .white
+        case "google": return Color(hex: "#3C4043")
+        case "facebook": return .white
+        case "github": return .white
+        default: return .white
+        }
+    }
+
+    private func socialLoginBorderColor(_ type: String, style: String) -> Color {
+        if style != "outlined" { return .clear }
+        switch type {
+        case "google": return Color(hex: "#DADCE0")
+        default: return Color.gray.opacity(0.4)
+        }
+    }
+
+    // MARK: - Timeline (SPEC-089d AC-016)
+
+    private func timelineBlock(_ block: ContentBlock) -> some View {
+        let itemList = block.timeline_items ?? []
+        let isCompact = block.compact ?? false
+        let showConnector = block.show_line ?? true
+        let completedCol = Color(hex: block.completed_color ?? "#22C55E")
+        let currentCol = Color(hex: block.current_color ?? "#6366F1")
+        let upcomingCol = Color(hex: block.upcoming_color ?? "#D1D5DB")
+
+        return VStack(alignment: .leading, spacing: isCompact ? 0 : 8) {
+            ForEach(Array(itemList.enumerated()), id: \.element.id) { index, item in
+                HStack(alignment: .top, spacing: 16) {
+                    // Left column: status indicator + connecting line
+                    VStack(spacing: 0) {
+                        ZStack {
+                            Circle()
+                                .fill(timelineStatusColor(item.status, completed: completedCol, current: currentCol, upcoming: upcomingCol))
+                                .frame(width: 28, height: 28)
+
+                            if item.status == "completed" {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.white)
+                            } else if item.status == "current" {
+                                Circle()
+                                    .fill(Color.white)
+                                    .frame(width: 10, height: 10)
+                            }
+                        }
+
+                        if showConnector && index < itemList.count - 1 {
+                            Rectangle()
+                                .fill(Color(hex: block.line_color ?? "#E5E7EB"))
+                                .frame(width: 2)
+                                .frame(minHeight: isCompact ? 20 : 32)
+                        }
+                    }
+
+                    // Right column: title + subtitle
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.title)
+                            .font(.subheadline.weight(.semibold))
+                            .applyTextStyle(block.title_style)
+                            .foregroundColor(item.status == "upcoming" ? .secondary : .primary)
+
+                        if let subtitle = item.subtitle, !subtitle.isEmpty {
+                            Text(subtitle)
+                                .font(.caption)
+                                .applyTextStyle(block.subtitle_style)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.bottom, isCompact ? 8 : 12)
+
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private func timelineStatusColor(_ status: String, completed: Color, current: Color, upcoming: Color) -> Color {
+        switch status {
+        case "completed": return completed
+        case "current": return current
+        default: return upcoming
+        }
+    }
+
+    // MARK: - Rich Text (SPEC-089d AC-020)
+
+    private func richTextBlock(_ block: ContentBlock) -> some View {
+        let content = block.markdown_content ?? block.text ?? ""
+        let isLegal = block.rich_text_variant == "legal"
+        let linkCol = Color(hex: block.link_color ?? "#6366F1")
+
+        return Group {
+            if #available(iOS 15.0, *) {
+                let attributed = parseMarkdownToAttributedString(content, linkColor: linkCol)
+                Text(attributed)
+                    .font(isLegal ? .caption : .body)
+                    .foregroundColor(isLegal ? .secondary : .primary)
+                    .multilineTextAlignment(isLegal ? .center : .leading)
+                    .applyTextStyle(block.base_style)
+                    .frame(maxWidth: .infinity, alignment: isLegal ? .center : .leading)
+            } else {
+                // Fallback: render as plain text, stripping markdown tokens
+                Text(stripMarkdown(content))
+                    .font(isLegal ? .caption : .body)
+                    .foregroundColor(isLegal ? .secondary : .primary)
+                    .multilineTextAlignment(isLegal ? .center : .leading)
+                    .applyTextStyle(block.base_style)
+                    .frame(maxWidth: .infinity, alignment: isLegal ? .center : .leading)
+            }
+        }
+    }
+
+    /// Parse subset of markdown (**bold**, *italic*, [link](url)) to AttributedString.
+    @available(iOS 15.0, *)
+    private func parseMarkdownToAttributedString(_ markdown: String, linkColor: Color) -> AttributedString {
+        // Try native markdown parsing first (iOS 15+)
+        if var result = try? AttributedString(markdown: markdown, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+            // Override link color
+            for run in result.runs {
+                if run.link != nil {
+                    let range = run.range
+                    result[range].foregroundColor = UIColor(linkColor)
+                }
+            }
+            return result
+        }
+        // Fallback: plain text
+        return AttributedString(markdown)
+    }
+
+    /// Strip markdown tokens for pre-iOS 15 fallback.
+    private func stripMarkdown(_ text: String) -> String {
+        var result = text
+        // Bold: **text** or __text__
+        result = result.replacingOccurrences(of: "\\*\\*(.+?)\\*\\*", with: "$1", options: .regularExpression)
+        result = result.replacingOccurrences(of: "__(.+?)__", with: "$1", options: .regularExpression)
+        // Italic: *text* or _text_
+        result = result.replacingOccurrences(of: "\\*(.+?)\\*", with: "$1", options: .regularExpression)
+        result = result.replacingOccurrences(of: "_(.+?)_", with: "$1", options: .regularExpression)
+        // Links: [text](url)
+        result = result.replacingOccurrences(of: "\\[(.+?)\\]\\(.+?\\)", with: "$1", options: .regularExpression)
+        return result
+    }
+
+    // MARK: - Progress Bar (SPEC-089d AC-021)
+
+    private func progressBarBlock(_ block: ContentBlock) -> some View {
+        let variant = block.progress_variant ?? "continuous"
+        let totalSegs = block.total_segments ?? 5
+        let filledSegs = block.filled_segments ?? 1
+        let barH = CGFloat(block.bar_height ?? 6)
+        let barRadius = CGFloat(block.corner_radius ?? 3)
+        let fillColor = Color(hex: block.bar_color ?? "#6366F1")
+        let trackCol = Color(hex: block.track_color ?? "#E5E7EB")
+        let gap = CGFloat(block.segment_gap ?? 4)
+
+        return VStack(spacing: 8) {
+            if block.show_label == true {
+                Text("Step \(filledSegs) of \(totalSegs)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if variant == "segmented" {
+                // Segmented: individual rounded bars
+                HStack(spacing: gap) {
+                    ForEach(0..<totalSegs, id: \.self) { index in
+                        RoundedRectangle(cornerRadius: barRadius)
+                            .fill(index < filledSegs ? fillColor : trackCol)
+                            .frame(height: barH)
+                    }
+                }
+            } else {
+                // Continuous: single track + fill
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: barRadius)
+                            .fill(trackCol)
+                            .frame(height: barH)
+
+                        let fraction = totalSegs > 0 ? CGFloat(filledSegs) / CGFloat(totalSegs) : 0
+                        RoundedRectangle(cornerRadius: barRadius)
+                            .fill(fillColor)
+                            .frame(width: geometry.size.width * min(fraction, 1.0), height: barH)
+                    }
+                }
+                .frame(height: barH)
+            }
+        }
+    }
+}
+
+// MARK: - Rating Block View (SPEC-089d AC-019)
+
+/// Stateful star rating input rendered as an independent SwiftUI view.
+struct RatingBlockView: View {
+    let block: ContentBlock
+    let onAction: (_ action: String, _ actionValue: String?) -> Void
+
+    @State private var selectedRating: Double = 0
+
+    var body: some View {
+        let maxStars = block.max_stars ?? 5
+        let starSz = CGFloat(block.star_size ?? 32)
+        let filledCol = Color(hex: block.filled_color ?? "#FBBF24")
+        let emptyCol = Color(hex: block.empty_color ?? "#D1D5DB")
+        let halfEnabled = block.allow_half ?? false
+
+        VStack(spacing: 8) {
+            if let label = block.rating_label {
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+            }
+
+            HStack(spacing: 4) {
+                ForEach(1...maxStars, id: \.self) { index in
+                    starImage(for: Double(index), filled: filledCol, empty: emptyCol, halfEnabled: halfEnabled)
+                        .font(.system(size: starSz))
+                        .onTapGesture {
+                            selectedRating = Double(index)
+                        }
+                        .gesture(
+                            halfEnabled ?
+                            DragGesture(minimumDistance: 0)
+                                .onEnded { value in
+                                    let halfThreshold = starSz / 2
+                                    if value.location.x < halfThreshold {
+                                        selectedRating = Double(index) - 0.5
+                                    } else {
+                                        selectedRating = Double(index)
+                                    }
+                                }
+                            : nil
+                        )
+                        .accessibilityLabel("\(index) star\(index > 1 ? "s" : "")")
+                }
+            }
+        }
+        .onAppear {
+            selectedRating = block.default_rating ?? 0
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue("\(Int(selectedRating)) of \(maxStars) stars")
+    }
+
+    @ViewBuilder
+    private func starImage(for value: Double, filled: Color, empty: Color, halfEnabled: Bool) -> some View {
+        if selectedRating >= value {
+            Image(systemName: "star.fill")
+                .foregroundColor(filled)
+        } else if halfEnabled && selectedRating >= value - 0.5 {
+            Image(systemName: "star.leadinghalf.filled")
+                .foregroundColor(filled)
+        } else {
+            Image(systemName: "star")
+                .foregroundColor(empty)
+        }
+    }
+}
+
+// MARK: - Countdown Timer Block View (SPEC-089d AC-018)
+
+/// Stateful countdown timer driven by `Timer.publish`.
+struct CountdownTimerBlockView: View {
+    let block: ContentBlock
+    let onAction: (_ action: String, _ actionValue: String?) -> Void
+
+    @State private var remainingSeconds: Int = 0
+    @State private var expired: Bool = false
+
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        Group {
+            if expired {
+                expiredView
+            } else {
+                digitalTimerView
+            }
+        }
+        .onAppear {
+            remainingSeconds = block.duration_seconds ?? 60
+        }
+        .onReceive(timer) { _ in
+            guard !expired else { return }
+            if remainingSeconds > 0 {
+                remainingSeconds -= 1
+            }
+            if remainingSeconds <= 0 {
+                expired = true
+                handleExpiry()
+            }
+        }
+    }
+
+    // Digital variant (default): HStack of time unit columns
+    private var digitalTimerView: some View {
+        let timeColor = Color(hex: block.text_color ?? "#000000")
+        let accentCol = Color(hex: block.accent_color ?? "#6366F1")
+        let fontSize = CGFloat(block.font_size ?? 28)
+        let lbls = block.labels
+
+        let days = remainingSeconds / 86400
+        let hours = (remainingSeconds % 86400) / 3600
+        let minutes = (remainingSeconds % 3600) / 60
+        let seconds = remainingSeconds % 60
+
+        return HStack(spacing: 16) {
+            if block.show_days != false && days > 0 {
+                timerUnit(value: days, label: lbls?.days ?? "Days", fontSize: fontSize, color: timeColor, accent: accentCol)
+            }
+            if block.show_hours != false {
+                timerUnit(value: hours, label: lbls?.hours ?? "Hours", fontSize: fontSize, color: timeColor, accent: accentCol)
+            }
+            if block.show_minutes != false {
+                timerUnit(value: minutes, label: lbls?.minutes ?? "Min", fontSize: fontSize, color: timeColor, accent: accentCol)
+            }
+            if block.show_seconds != false {
+                timerUnit(value: seconds, label: lbls?.seconds ?? "Sec", fontSize: fontSize, color: timeColor, accent: accentCol)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func timerUnit(value: Int, label: String, fontSize: CGFloat, color: Color, accent: Color) -> some View {
+        VStack(spacing: 4) {
+            Text(String(format: "%02d", value))
+                .font(.system(size: fontSize, weight: .bold, design: .monospaced))
+                .foregroundColor(color)
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(accent)
+        }
+    }
+
+    @ViewBuilder
+    private var expiredView: some View {
+        switch block.on_expire_action {
+        case "hide":
+            EmptyView()
+        case "show_expired_text":
+            Text(block.expired_text ?? "Time's up!")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity)
+        default:
+            // auto_advance or no action specified — show brief expired text
+            Text(block.expired_text ?? "Time's up!")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func handleExpiry() {
+        if block.on_expire_action == "auto_advance" {
+            onAction("next", nil)
+        }
+    }
+}
+
+// MARK: - Animated Loading Block View (SPEC-089d AC-017)
+
+/// Stateful animated loading / checklist block driven by sequential timers.
+struct AnimatedLoadingBlockView: View {
+    let block: ContentBlock
+    let onAction: (_ action: String, _ actionValue: String?) -> Void
+
+    @State private var completedCount: Int = 0
+    @State private var overallProgress: CGFloat = 0
+    @State private var timerCancellable: Timer? = nil
+
+    var body: some View {
+        let variant = block.loading_variant ?? "checklist"
+        let itemList = block.loading_items ?? []
+        let progressCol = Color(hex: block.progress_color ?? "#6366F1")
+        let checkCol = Color(hex: block.check_color ?? "#22C55E")
+        let totalMs = block.total_duration_ms ?? itemList.reduce(0) { $0 + ($1.duration_ms ?? 1000) }
+
+        VStack(spacing: 16) {
+            if block.show_percentage == true {
+                Text("\(Int(overallProgress * 100))%")
+                    .font(.title2.weight(.bold))
+                    .foregroundColor(progressCol)
+            }
+
+            switch variant {
+            case "circular":
+                ZStack {
+                    Circle()
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 8)
+                        .frame(width: 80, height: 80)
+                    Circle()
+                        .trim(from: 0, to: overallProgress)
+                        .stroke(progressCol, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                        .frame(width: 80, height: 80)
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 0.3), value: overallProgress)
+                }
+
+            case "linear":
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(height: 8)
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(progressCol)
+                            .frame(width: geometry.size.width * overallProgress, height: 8)
+                            .animation(.linear(duration: 0.3), value: overallProgress)
+                    }
+                }
+                .frame(height: 8)
+
+            default: // checklist
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(Array(itemList.enumerated()), id: \.offset) { index, item in
+                        HStack(spacing: 12) {
+                            ZStack {
+                                if index < completedCount {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.title3)
+                                        .foregroundColor(checkCol)
+                                        .transition(.scale.combined(with: .opacity))
+                                } else if index == completedCount {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                        .transition(.opacity)
+                                } else {
+                                    Circle()
+                                        .stroke(Color.gray.opacity(0.3), lineWidth: 2)
+                                        .frame(width: 22, height: 22)
+                                }
+                            }
+                            .frame(width: 28, height: 28)
+                            .animation(.easeInOut(duration: 0.3), value: completedCount)
+
+                            Text(item.label)
+                                .font(.subheadline)
+                                .foregroundColor(index <= completedCount ? .primary : .secondary)
+                        }
+                    }
+                }
+            }
+        }
+        .onAppear {
+            startSequentialTimer(items: itemList, totalMs: totalMs)
+        }
+        .onDisappear {
+            timerCancellable?.invalidate()
+        }
+    }
+
+    private func startSequentialTimer(items: [LoadingItemConfig], totalMs: Int) {
+        guard !items.isEmpty else {
+            // No items: just run a single progress over totalMs
+            let duration = Double(totalMs) / 1000.0
+            let tickInterval = 0.05
+            var elapsed = 0.0
+            timerCancellable = Timer.scheduledTimer(withTimeInterval: tickInterval, repeats: true) { timer in
+                elapsed += tickInterval
+                let progress = min(elapsed / duration, 1.0)
+                DispatchQueue.main.async {
+                    overallProgress = CGFloat(progress)
+                }
+                if elapsed >= duration {
+                    timer.invalidate()
+                    if block.auto_advance == true {
+                        DispatchQueue.main.async {
+                            onAction("next", nil)
+                        }
+                    }
+                }
+            }
+            return
+        }
+
+        // Sequential item completion
+        var cumulativeDelay = 0.0
+        let totalDuration = Double(items.reduce(0) { $0 + ($1.duration_ms ?? 1000) })
+
+        for (index, item) in items.enumerated() {
+            let itemDuration = Double(item.duration_ms ?? 1000) / 1000.0
+            cumulativeDelay += itemDuration
+
+            let capturedDelay = cumulativeDelay
+            let capturedIndex = index
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + capturedDelay) {
+                withAnimation {
+                    completedCount = capturedIndex + 1
+                    overallProgress = CGFloat(capturedDelay / (totalDuration / 1000.0))
+                }
+
+                // If last item, handle auto_advance
+                if capturedIndex == items.count - 1 {
+                    overallProgress = 1.0
+                    if block.auto_advance == true {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            onAction("next", nil)
+                        }
+                    }
+                }
             }
         }
     }
