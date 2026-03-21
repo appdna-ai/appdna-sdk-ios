@@ -1,4 +1,6 @@
 import SwiftUI
+import MapKit
+import PhotosUI
 
 // MARK: - Content Block Type
 
@@ -1199,7 +1201,7 @@ struct ContentBlockRendererView: View {
         case .input_location:
             FormInputLocationPlaceholderBlock(block: block, inputValues: $inputValues)
         case .input_image_picker:
-            FormInputImagePickerPlaceholderBlock(block: block)
+            FormInputImagePickerPlaceholderBlock(block: block, inputValues: $inputValues)
         case .input_color:
             FormInputColorBlock(block: block, inputValues: $inputValues)
         case .input_signature:
@@ -3214,15 +3216,55 @@ struct FormInputPlaceholderBlock: View {
     }
 }
 
-// MARK: - AC-046: Location Input Placeholder (interactive text field)
+// MARK: - AC-046: Location Input with MKLocalSearchCompleter autocomplete
 
-/// Interactive text field placeholder for location input.
-/// Opens keyboard for typing; actual location autocomplete in future SDK update.
+/// Observable wrapper around MKLocalSearchCompleter for location autocomplete.
+class LocationSearchCompleter: NSObject, ObservableObject, MKLocalSearchCompleterDelegate {
+    @Published var results: [MKLocalSearchCompletion] = []
+    @Published var isSearching = false
+
+    private let completer = MKLocalSearchCompleter()
+
+    override init() {
+        super.init()
+        completer.delegate = self
+        completer.resultTypes = .address
+    }
+
+    func search(query: String) {
+        guard !query.isEmpty else {
+            results = []
+            isSearching = false
+            return
+        }
+        isSearching = true
+        completer.queryFragment = query
+    }
+
+    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        DispatchQueue.main.async {
+            self.results = Array(completer.results.prefix(5))
+            self.isSearching = false
+        }
+    }
+
+    func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        DispatchQueue.main.async {
+            self.results = []
+            self.isSearching = false
+        }
+    }
+}
+
+/// Location input with autocomplete powered by MKLocalSearchCompleter.
+/// User types to search, selects a result, and the formatted address + coordinates are stored.
 struct FormInputLocationPlaceholderBlock: View {
     let block: ContentBlock
     @Binding var inputValues: [String: Any]
 
     @State private var text: String = ""
+    @State private var showResults = false
+    @StateObject private var searchCompleter = LocationSearchCompleter()
 
     var body: some View {
         let fieldId = block.field_id ?? block.id
@@ -3238,8 +3280,15 @@ struct FormInputLocationPlaceholderBlock: View {
                 TextField(block.field_placeholder ?? "Search location...", text: $text)
                     .font(.subheadline)
                     .onChange(of: text) { newValue in
+                        searchCompleter.search(query: newValue)
+                        showResults = !newValue.isEmpty
+                        // Store raw text as fallback until a result is selected
                         inputValues[fieldId] = newValue
                     }
+                if searchCompleter.isSearching {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                }
             }
             .padding(12)
             .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
@@ -3248,50 +3297,149 @@ struct FormInputLocationPlaceholderBlock: View {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(borderColor, lineWidth: 1)
             )
+
+            // Autocomplete results dropdown
+            if showResults && !searchCompleter.results.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(searchCompleter.results, id: \.self) { result in
+                        Button {
+                            selectResult(result, fieldId: fieldId)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(result.title)
+                                    .font(.subheadline)
+                                    .foregroundColor(.primary)
+                                if !result.subtitle.isEmpty {
+                                    Text(result.subtitle)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
+                        Divider()
+                    }
+                }
+                .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
+                .cornerRadius(cornerRadius)
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(borderColor, lineWidth: 1)
+                )
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    private func selectResult(_ result: MKLocalSearchCompletion, fieldId: String) {
+        let displayText = result.subtitle.isEmpty ? result.title : "\(result.title), \(result.subtitle)"
+        text = displayText
+        showResults = false
+
+        // Resolve coordinates via MKLocalSearch
+        let searchRequest = MKLocalSearch.Request(completion: result)
+        let search = MKLocalSearch(request: searchRequest)
+        search.start { response, _ in
+            guard let mapItem = response?.mapItems.first else {
+                // Store formatted address without coordinates
+                inputValues[fieldId] = ["address": displayText]
+                return
+            }
+            let coordinate = mapItem.placemark.coordinate
+            inputValues[fieldId] = [
+                "address": displayText,
+                "latitude": coordinate.latitude,
+                "longitude": coordinate.longitude,
+            ]
+        }
+    }
 }
 
-// MARK: - AC-048: Image Picker Placeholder (interactive button with alert)
+// MARK: - AC-048: Image Picker with PhotosPicker (iOS 16+)
 
-/// Interactive placeholder for image picker. Shows an alert on tap.
+/// Image picker using PhotosPicker. Stores selected image data as base64 in inputValues.
 struct FormInputImagePickerPlaceholderBlock: View {
     let block: ContentBlock
+    @Binding var inputValues: [String: Any]
 
-    @State private var showAlert = false
+    @State private var selectedItem: PhotosPickerItem? = nil
+    @State private var selectedImageData: Data? = nil
+    @State private var thumbnailImage: UIImage? = nil
 
     var body: some View {
+        let fieldId = block.field_id ?? block.id
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
 
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
 
-            Button {
-                showAlert = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "photo.fill")
-                        .foregroundColor(.secondary)
-                    Text("Tap to pick image")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+            PhotosPicker(selection: $selectedItem, matching: .images) {
+                if let thumbnailImage = thumbnailImage {
+                    // Show selected image thumbnail
+                    Image(uiImage: thumbnailImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 120)
+                        .clipped()
+                        .cornerRadius(cornerRadius)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .stroke(borderColor, lineWidth: 1)
+                        )
+                        .overlay(alignment: .topTrailing) {
+                            Image(systemName: "pencil.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(.white)
+                                .shadow(radius: 2)
+                                .padding(8)
+                        }
+                } else {
+                    // Empty state — dashed border tap target
+                    HStack(spacing: 8) {
+                        Image(systemName: "photo.fill")
+                            .foregroundColor(.secondary)
+                        Text("Tap to pick image")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(16)
+                    .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
+                    .cornerRadius(cornerRadius)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(borderColor, style: StrokeStyle(lineWidth: 1, dash: [6, 3]))
+                    )
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(16)
-                .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
-                .cornerRadius(cornerRadius)
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(borderColor, style: StrokeStyle(lineWidth: 1, dash: [6, 3]))
-                )
             }
             .buttonStyle(.plain)
-            .alert("Photo Picker", isPresented: $showAlert) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Photo picker coming in next SDK update.")
+            .onChange(of: selectedItem) { newItem in
+                guard let newItem = newItem else { return }
+                newItem.loadTransferable(type: Data.self) { result in
+                    DispatchQueue.main.async {
+                        switch result {
+                        case .success(let data):
+                            if let data = data {
+                                self.selectedImageData = data
+                                self.thumbnailImage = UIImage(data: data)
+                                // Store base64 string and metadata in inputValues
+                                let base64 = data.base64EncodedString()
+                                inputValues[fieldId] = [
+                                    "data": base64,
+                                    "size": data.count,
+                                    "mime_type": "image/jpeg",
+                                ]
+                            }
+                        case .failure:
+                            break
+                        }
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
