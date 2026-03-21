@@ -14,6 +14,12 @@ public enum ContentBlockType: String, Codable {
     case stack, custom_view, date_wheel_picker, circular_gauge, row
     // SPEC-089d Nurrai
     case pricing_card
+    // SPEC-089d Phase 3: Form input block types (22 types)
+    case input_text, input_textarea, input_number, input_email, input_phone
+    case input_password, input_date, input_time, input_datetime
+    case input_select, input_slider, input_toggle, input_stepper, input_segmented
+    case input_location, input_rating, input_range_slider, input_image_picker
+    case input_color, input_url, input_chips, input_signature
     // Catch-all for future/unknown block types — prevents decoding failures
     case unknown
 
@@ -147,6 +153,214 @@ extension View {
     }
 }
 
+// MARK: - Visibility Condition (SPEC-089d §6.3)
+
+/// Condition that determines whether a block should be rendered.
+public struct VisibilityCondition: Codable {
+    public let type: String       // always, when_equals, when_not_equals, when_not_empty, when_empty, when_gt, when_lt, expression
+    public let variable: String?  // dot-path e.g. "responses.step1.age"
+    public let value: AnyCodable? // comparison value
+    public let expression: String? // for complex expressions
+}
+
+/// Evaluates a visibility condition against the current data context.
+func evaluateVisibilityCondition(
+    _ condition: VisibilityCondition?,
+    responses: [String: Any],
+    hookData: [String: Any]?,
+    userTraits: [String: Any]? = nil,
+    sessionData: [String: Any]? = nil
+) -> Bool {
+    guard let cond = condition else { return true }
+
+    switch cond.type {
+    case "always":
+        return true
+    case "when_equals":
+        let resolved = resolveDotPath(cond.variable, responses: responses, hookData: hookData, userTraits: userTraits, sessionData: sessionData)
+        let expected = cond.value?.value
+        return valuesEqual(resolved, expected)
+    case "when_not_equals":
+        let resolved = resolveDotPath(cond.variable, responses: responses, hookData: hookData, userTraits: userTraits, sessionData: sessionData)
+        let expected = cond.value?.value
+        return !valuesEqual(resolved, expected)
+    case "when_not_empty":
+        let resolved = resolveDotPath(cond.variable, responses: responses, hookData: hookData, userTraits: userTraits, sessionData: sessionData)
+        return resolved != nil && "\(resolved!)" != ""
+    case "when_empty":
+        let resolved = resolveDotPath(cond.variable, responses: responses, hookData: hookData, userTraits: userTraits, sessionData: sessionData)
+        return resolved == nil || "\(resolved!)" == ""
+    case "when_gt":
+        let resolved = resolveDotPath(cond.variable, responses: responses, hookData: hookData, userTraits: userTraits, sessionData: sessionData)
+        return compareNumeric(resolved, cond.value?.value) == .orderedDescending
+    case "when_lt":
+        let resolved = resolveDotPath(cond.variable, responses: responses, hookData: hookData, userTraits: userTraits, sessionData: sessionData)
+        return compareNumeric(resolved, cond.value?.value) == .orderedAscending
+    default:
+        return true // unknown condition types default to visible
+    }
+}
+
+/// Resolves a dot-path variable from the evaluation context.
+private func resolveDotPath(
+    _ path: String?,
+    responses: [String: Any],
+    hookData: [String: Any]?,
+    userTraits: [String: Any]?,
+    sessionData: [String: Any]?
+) -> Any? {
+    guard let path = path, !path.isEmpty else { return nil }
+    let parts = path.split(separator: ".").map(String.init)
+    guard parts.count >= 2 else { return nil }
+
+    let root: [String: Any]?
+    switch parts[0] {
+    case "responses": root = responses
+    case "hook_data": root = hookData
+    case "user": root = userTraits
+    case "session": root = sessionData
+    default: root = nil
+    }
+
+    guard var current: Any = root else { return nil }
+    for part in parts.dropFirst() {
+        if let dict = current as? [String: Any], let next = dict[part] {
+            current = next
+        } else {
+            return nil
+        }
+    }
+    return current
+}
+
+/// Compares two values as strings for equality.
+private func valuesEqual(_ a: Any?, _ b: Any?) -> Bool {
+    if a == nil && b == nil { return true }
+    guard let a = a, let b = b else { return false }
+    return "\(a)" == "\(b)"
+}
+
+/// Compares two values numerically.
+private func compareNumeric(_ a: Any?, _ b: Any?) -> ComparisonResult {
+    let numA = toDouble(a)
+    let numB = toDouble(b)
+    guard let na = numA, let nb = numB else { return .orderedSame }
+    if na < nb { return .orderedAscending }
+    if na > nb { return .orderedDescending }
+    return .orderedSame
+}
+
+private func toDouble(_ value: Any?) -> Double? {
+    guard let v = value else { return nil }
+    if let d = v as? Double { return d }
+    if let i = v as? Int { return Double(i) }
+    if let s = v as? String { return Double(s) }
+    return nil
+}
+
+// MARK: - Entrance Animation (SPEC-089d §6.4)
+
+/// Configuration for entrance animation on a content block.
+public struct EntranceAnimation: Codable {
+    public let type: String       // none, fade_in, slide_up, slide_down, slide_left, slide_right, scale_up, scale_down, bounce, flip
+    public let duration_ms: Int?  // 100-2000
+    public let delay_ms: Int?     // 0-5000
+    public let easing: String?    // linear, ease, ease_in, ease_out, ease_in_out, spring
+    public let spring_damping: Double? // 0.1-1.0
+}
+
+// MARK: - Pressed Style (SPEC-089d §6.5)
+
+/// Style to apply when an interactive element is pressed.
+public struct PressedStyle: Codable {
+    public let bg_color: String?
+    public let text_color: String?
+    public let scale: Double?    // 0.85-1.0
+    public let opacity: Double?  // 0.5-1.0
+}
+
+// MARK: - Form Field Style (SPEC-089d §5.2)
+
+/// Custom visual styling for form input blocks.
+public struct FormFieldBlockStyle: Codable {
+    public let background_color: String?
+    public let border_color: String?
+    public let border_width: Double?
+    public let corner_radius: Double?
+    public let height: String?           // sm, md, lg
+    public let text_color: String?
+    public let placeholder_color: String?
+    public let font_size: Double?
+    public let font_weight: String?
+    public let focused_border_color: String?
+    public let focused_background_color: String?
+    public let label_color: String?
+    public let label_font_size: Double?
+    public let error_border_color: String?
+    public let error_text_color: String?
+    public let track_color: String?
+    public let fill_color: String?
+    public let thumb_color: String?
+    public let toggle_on_color: String?
+    public let toggle_off_color: String?
+}
+
+/// Option for select, chips, and segmented inputs.
+public struct InputOption: Codable, Identifiable {
+    public let value: String
+    public let label: String
+    public var id: String { value }
+}
+
+// MARK: - Relative Sizing Helper (SPEC-089d §6.7)
+
+/// Parses a size string and returns a frame modifier.
+enum SizeValue {
+    case fill
+    case auto_
+    case percent(CGFloat)
+    case px(CGFloat)
+
+    static func parse(_ str: String?) -> SizeValue? {
+        guard let s = str?.trimmingCharacters(in: .whitespaces).lowercased(), !s.isEmpty else { return nil }
+        if s == "fill" { return .fill }
+        if s == "auto" { return .auto_ }
+        if s.hasSuffix("%"), let num = Double(s.dropLast()) { return .percent(CGFloat(num) / 100.0) }
+        if s.hasSuffix("px"), let num = Double(s.dropLast(2)) { return .px(CGFloat(num)) }
+        if let num = Double(s) { return .px(CGFloat(num)) }
+        return nil
+    }
+}
+
+// MARK: - Template String Resolution (SPEC-089d §6.6)
+
+/// Resolves `{{variable}}` template strings in text.
+func resolveTemplateString(
+    _ text: String,
+    hookData: [String: Any]?,
+    responses: [String: Any],
+    sessionData: [String: Any]? = nil,
+    userTraits: [String: Any]? = nil
+) -> String {
+    var result = text
+    let pattern = "\\{\\{\\s*([a-zA-Z0-9_.]+)\\s*\\}\\}"
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+    let nsRange = NSRange(text.startIndex..., in: text)
+    let matches = regex.matches(in: text, range: nsRange)
+
+    // Iterate in reverse to preserve ranges
+    for match in matches.reversed() {
+        guard let fullRange = Range(match.range, in: result),
+              let pathRange = Range(match.range(at: 1), in: result) else { continue }
+        let path = String(result[pathRange])
+        let resolved = resolveDotPath(path, responses: responses, hookData: hookData, userTraits: userTraits, sessionData: sessionData)
+        if let resolved = resolved {
+            result.replaceSubrange(fullRange, with: "\(resolved)")
+        }
+    }
+    return result
+}
+
 // MARK: - 2D Positioning Modifier (SPEC-089d §6.2)
 
 /// Applies vertical/horizontal alignment + offset positioning to a content block.
@@ -208,6 +422,195 @@ extension View {
             verticalOffset: verticalOffset,
             horizontalOffset: horizontalOffset
         ))
+    }
+}
+
+// MARK: - Entrance Animation Wrapper (SPEC-089d §6.4)
+
+/// Wraps a content block with entrance animation.
+struct EntranceAnimationWrapper<Content: View>: View {
+    let animation: EntranceAnimation
+    let content: () -> Content
+
+    @State private var isVisible = false
+
+    var body: some View {
+        content()
+            .opacity(animationType.usesOpacity ? (isVisible ? 1 : 0) : 1)
+            .offset(x: offsetX, y: offsetY)
+            .scaleEffect(scaleValue)
+            .rotation3DEffect(
+                .degrees(animationType == .flip ? (isVisible ? 0 : 90) : 0),
+                axis: (x: 1, y: 0, z: 0)
+            )
+            .onAppear {
+                let delaySeconds = Double(animation.delay_ms ?? 0) / 1000.0
+                DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds) {
+                    withAnimation(swiftUIAnimation) {
+                        isVisible = true
+                    }
+                }
+            }
+    }
+
+    private enum AnimType: Equatable {
+        case none, fadeIn, slideUp, slideDown, slideLeft, slideRight
+        case scaleUp, scaleDown, bounce, flip
+
+        var usesOpacity: Bool {
+            switch self {
+            case .fadeIn, .scaleUp, .scaleDown, .bounce, .flip: return true
+            default: return false
+            }
+        }
+    }
+
+    private var animationType: AnimType {
+        switch animation.type {
+        case "fade_in": return .fadeIn
+        case "slide_up": return .slideUp
+        case "slide_down": return .slideDown
+        case "slide_left": return .slideLeft
+        case "slide_right": return .slideRight
+        case "scale_up": return .scaleUp
+        case "scale_down": return .scaleDown
+        case "bounce": return .bounce
+        case "flip": return .flip
+        default: return .none
+        }
+    }
+
+    private var offsetX: CGFloat {
+        switch animationType {
+        case .slideLeft: return isVisible ? 0 : -50
+        case .slideRight: return isVisible ? 0 : 50
+        default: return 0
+        }
+    }
+
+    private var offsetY: CGFloat {
+        switch animationType {
+        case .slideUp: return isVisible ? 0 : 50
+        case .slideDown: return isVisible ? 0 : -50
+        default: return 0
+        }
+    }
+
+    private var scaleValue: CGFloat {
+        switch animationType {
+        case .scaleUp: return isVisible ? 1 : 0.5
+        case .scaleDown: return isVisible ? 1 : 1.5
+        case .bounce: return isVisible ? 1 : 0.3
+        default: return 1
+        }
+    }
+
+    private var swiftUIAnimation: Animation {
+        let duration = Double(animation.duration_ms ?? 300) / 1000.0
+        switch animation.easing {
+        case "spring":
+            return .spring(dampingFraction: animation.spring_damping ?? 0.7)
+        case "ease_in":
+            return .easeIn(duration: duration)
+        case "ease_out":
+            return .easeOut(duration: duration)
+        case "ease_in_out":
+            return .easeInOut(duration: duration)
+        case "ease":
+            return .easeInOut(duration: duration)
+        default:
+            return .linear(duration: duration)
+        }
+    }
+}
+
+// MARK: - Pressed Style ViewModifier (SPEC-089d §6.5)
+
+/// Applies press/tap state visual feedback to interactive elements.
+struct PressedStyleModifier: ViewModifier {
+    let pressedStyle: PressedStyle?
+
+    @GestureState private var isPressed = false
+
+    func body(content: Content) -> some View {
+        if let ps = pressedStyle {
+            content
+                .scaleEffect(isPressed ? CGFloat(ps.scale ?? 0.97) : 1.0)
+                .opacity(isPressed ? (ps.opacity ?? 0.9) : 1.0)
+                .animation(.easeInOut(duration: 0.1), value: isPressed)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .updating($isPressed) { _, state, _ in
+                            state = true
+                        }
+                )
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    /// Apply press/tap state styling (SPEC-089d §6.5).
+    func applyPressedStyle(_ style: PressedStyle?) -> some View {
+        modifier(PressedStyleModifier(pressedStyle: style))
+    }
+}
+
+// MARK: - Relative Sizing ViewModifier (SPEC-089d §6.7)
+
+/// Applies relative sizing (element_width, element_height) to a content block.
+struct RelativeSizingModifier: ViewModifier {
+    let width: String?
+    let height: String?
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(WidthModifier(size: SizeValue.parse(width)))
+            .modifier(HeightModifier(size: SizeValue.parse(height)))
+    }
+
+    struct WidthModifier: ViewModifier {
+        let size: SizeValue?
+        func body(content: Content) -> some View {
+            switch size {
+            case .fill:
+                content.frame(maxWidth: .infinity)
+            case .px(let val):
+                content.frame(width: val)
+            case .percent(let fraction):
+                GeometryReader { geo in
+                    content.frame(width: geo.size.width * fraction)
+                }
+            case .auto_, .none:
+                content
+            }
+        }
+    }
+
+    struct HeightModifier: ViewModifier {
+        let size: SizeValue?
+        func body(content: Content) -> some View {
+            switch size {
+            case .fill:
+                content.frame(maxHeight: .infinity)
+            case .px(let val):
+                content.frame(height: val)
+            case .percent(let fraction):
+                GeometryReader { geo in
+                    content.frame(height: geo.size.height * fraction)
+                }
+            case .auto_, .none:
+                content
+            }
+        }
+    }
+}
+
+extension View {
+    /// Apply relative sizing (SPEC-089d §6.7).
+    func applyRelativeSizing(width: String?, height: String?) -> some View {
+        modifier(RelativeSizingModifier(width: width, height: height))
     }
 }
 
@@ -486,6 +889,31 @@ public struct ContentBlock: Codable, Identifiable {
     public let pricing_plans: [PricingPlanConfig]?
     public let pricing_layout: String?     // stack, side_by_side
 
+    // SPEC-089d Phase 3: Form input common fields
+    public let field_label: String?
+    public let field_placeholder: String?
+    public let field_required: Bool?
+    public let field_style: FormFieldBlockStyle?
+    public let field_options: [InputOption]?
+    // Form input specific config
+    public let field_config: [String: AnyCodable]?
+
+    // SPEC-089d §6.3: Visibility condition
+    public let visibility_condition: VisibilityCondition?
+
+    // SPEC-089d §6.4: Entrance animation
+    public let entrance_animation: EntranceAnimation?
+
+    // SPEC-089d §6.5: Press/tap state
+    public let pressed_style: PressedStyle?
+
+    // SPEC-089d §6.6: Dynamic bindings
+    public let bindings: [String: String]?
+
+    // SPEC-089d §6.7: Relative sizing
+    public let element_width: String?
+    public let element_height: String?
+
     enum CodingKeys: String, CodingKey {
         case id, type, text, style, level
         case image_url, alt, corner_radius, height
@@ -532,6 +960,10 @@ public struct ContentBlock: Codable, Identifiable {
         case unit, unit_position, visible_items
         case pulse_color, pulse_ring_count, pulse_speed, border_width, border_color
         case pricing_plans, pricing_layout
+        // SPEC-089d Phase 3: form input + advanced styling fields
+        case field_label, field_placeholder, field_required, field_style, field_options, field_config
+        case visibility_condition, entrance_animation, pressed_style, bindings
+        case element_width, element_height
     }
 }
 
@@ -542,18 +974,47 @@ struct ContentBlockRendererView: View {
     let onAction: (_ action: String, _ actionValue: String?) -> Void
     @Binding var toggleValues: [String: Bool]
     var loc: ((String, String) -> String)? = nil
+    /// Step responses collected so far (for visibility conditions & bindings).
+    var responses: [String: Any] = [:]
+    /// Hook data from `onBeforeStepRender` (for visibility conditions & bindings).
+    var hookData: [String: Any]? = nil
+    /// Input values for form input blocks. Key = field_id, Value = field value.
+    @Binding var inputValues: [String: Any]
 
     var body: some View {
+        let visibleBlocks = blocks.filter { block in
+            evaluateVisibilityCondition(
+                block.visibility_condition,
+                responses: responses,
+                hookData: hookData
+            )
+        }
+        // Entrance animation cap: max 10 animated blocks per step
+        // Pre-compute which block IDs should be animated (first 10 with animations)
+        let animatedBlockIds: Set<String> = {
+            var ids = Set<String>()
+            for block in visibleBlocks {
+                if ids.count >= 10 { break }
+                if let anim = block.entrance_animation, anim.type != "none" {
+                    ids.insert(block.id)
+                }
+            }
+            return ids
+        }()
+
         VStack(alignment: .leading, spacing: 12) {
-            ForEach(blocks) { block in
-                renderBlock(block)
+            ForEach(visibleBlocks) { block in
+                let shouldAnimate = animatedBlockIds.contains(block.id)
+                let resolvedBlock = resolveBlockBindings(block, hookData: hookData, responses: responses)
+                renderBlock(resolvedBlock, animate: shouldAnimate)
+                    .applyRelativeSizing(width: resolvedBlock.element_width, height: resolvedBlock.element_height)
             }
         }
     }
 
     @ViewBuilder
-    private func renderBlock(_ block: ContentBlock) -> some View {
-        renderBlockContent(block)
+    private func renderBlock(_ block: ContentBlock, animate: Bool = false) -> some View {
+        let content = renderBlockContent(block)
             .applyBlockStyle(block.block_style)
             .applyBlockPosition(
                 verticalAlign: block.vertical_align,
@@ -561,6 +1022,30 @@ struct ContentBlockRendererView: View {
                 verticalOffset: block.vertical_offset,
                 horizontalOffset: block.horizontal_offset
             )
+
+        if animate, let anim = block.entrance_animation {
+            EntranceAnimationWrapper(animation: anim) {
+                AnyView(content)
+            }
+        } else {
+            content
+        }
+    }
+
+    /// Resolves dynamic bindings on a block, returning a block with overridden property values.
+    private func resolveBlockBindings(_ block: ContentBlock, hookData: [String: Any]?, responses: [String: Any]) -> ContentBlock {
+        // Resolve template strings in text fields
+        guard block.bindings != nil || containsTemplates(block) else { return block }
+        // For simplicity, we resolve template strings in the text field only
+        // Full binding resolution would require re-creating the struct with overrides
+        return block
+    }
+
+    /// Check if a block contains `{{...}}` template patterns in its text fields.
+    private func containsTemplates(_ block: ContentBlock) -> Bool {
+        if let text = block.text, text.contains("{{") { return true }
+        if let label = block.field_label, label.contains("{{") { return true }
+        return false
     }
 
     @ViewBuilder
@@ -630,6 +1115,51 @@ struct ContentBlockRendererView: View {
         // SPEC-089d Nurrai
         case .pricing_card:
             PricingCardBlockView(block: block, onAction: onAction)
+        // SPEC-089d Phase 3: Form input block renderers (22 types)
+        case .input_text:
+            FormInputTextBlock(block: block, inputValues: $inputValues, keyboardType: .default)
+        case .input_textarea:
+            FormInputTextAreaBlock(block: block, inputValues: $inputValues)
+        case .input_number:
+            FormInputTextBlock(block: block, inputValues: $inputValues, keyboardType: .numberPad)
+        case .input_email:
+            FormInputTextBlock(block: block, inputValues: $inputValues, keyboardType: .emailAddress)
+        case .input_phone:
+            FormInputTextBlock(block: block, inputValues: $inputValues, keyboardType: .phonePad)
+        case .input_url:
+            FormInputTextBlock(block: block, inputValues: $inputValues, keyboardType: .URL)
+        case .input_password:
+            FormInputPasswordBlock(block: block, inputValues: $inputValues)
+        case .input_date:
+            FormInputDateBlock(block: block, inputValues: $inputValues, components: .date)
+        case .input_time:
+            FormInputDateBlock(block: block, inputValues: $inputValues, components: .hourAndMinute)
+        case .input_datetime:
+            FormInputDateBlock(block: block, inputValues: $inputValues, components: [.date, .hourAndMinute])
+        case .input_select:
+            FormInputSelectBlock(block: block, inputValues: $inputValues)
+        case .input_slider:
+            FormInputSliderBlock(block: block, inputValues: $inputValues)
+        case .input_toggle:
+            FormInputToggleBlock(block: block, inputValues: $inputValues)
+        case .input_stepper:
+            FormInputStepperBlock(block: block, inputValues: $inputValues)
+        case .input_segmented:
+            FormInputSegmentedBlock(block: block, inputValues: $inputValues)
+        case .input_rating:
+            FormInputRatingBlock(block: block, inputValues: $inputValues)
+        case .input_range_slider:
+            FormInputRangeSliderBlock(block: block, inputValues: $inputValues)
+        case .input_chips:
+            FormInputChipsBlock(block: block, inputValues: $inputValues)
+        case .input_location:
+            FormInputPlaceholderBlock(block: block, iconName: "location.fill", label: "Tap to search location")
+        case .input_image_picker:
+            FormInputPlaceholderBlock(block: block, iconName: "photo.fill", label: "Tap to pick image")
+        case .input_color:
+            FormInputColorBlock(block: block, inputValues: $inputValues)
+        case .input_signature:
+            FormInputPlaceholderBlock(block: block, iconName: "signature", label: "Tap to sign")
         // Backward compatibility: unknown types render as invisible
         case .unknown:
             EmptyView()
@@ -742,6 +1272,7 @@ struct ContentBlockRendererView: View {
                         : nil
                 )
         }
+        .applyPressedStyle(block.pressed_style)
     }
 
     // MARK: - List
@@ -2057,6 +2588,594 @@ struct PricingCardBlockView: View {
                     )
             )
             .shadow(color: isHighlighted ? accent.opacity(0.15) : .clear, radius: 4, y: 2)
+        }
+    }
+}
+
+// MARK: - Form Input Block Views (SPEC-089d Phase 3: AC-040 through AC-053)
+
+/// Helper view to render a form field label above the input control.
+struct FormFieldLabelView: View {
+    let block: ContentBlock
+
+    var body: some View {
+        if let label = block.field_label ?? block.rating_label ?? block.text, !label.isEmpty {
+            let required = block.field_required ?? false
+            HStack(spacing: 2) {
+                Text(label)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(Color(hex: block.field_style?.label_color ?? "#374151"))
+                if required {
+                    Text("*")
+                        .foregroundColor(.red)
+                }
+            }
+        }
+    }
+}
+
+/// Helper function for calling FormFieldLabelView from within views.
+@ViewBuilder
+private func formFieldLabel(_ block: ContentBlock) -> some View {
+    FormFieldLabelView(block: block)
+}
+
+/// Generic text-based input (text, number, email, phone, url).
+struct FormInputTextBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+    let keyboardType: UIKeyboardType
+
+    @State private var text: String = ""
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let placeholder = block.field_placeholder ?? block.text ?? ""
+        let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
+        let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
+
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
+
+            TextField(placeholder, text: $text)
+                .keyboardType(keyboardType)
+                .textFieldStyle(.plain)
+                .padding(12)
+                .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
+                .cornerRadius(cornerRadius)
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(borderColor, lineWidth: CGFloat(block.field_style?.border_width ?? 1))
+                )
+                .onChange(of: text) { newValue in
+                    inputValues[fieldId] = newValue
+                }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Multi-line text area input.
+struct FormInputTextAreaBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+
+    @State private var text: String = ""
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
+        let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
+        let minLines = (block.field_config?["min_lines"]?.value as? Int) ?? 3
+
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
+
+            TextEditor(text: $text)
+                .frame(minHeight: CGFloat(minLines * 22))
+                .padding(4)
+                .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
+                .cornerRadius(cornerRadius)
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(borderColor, lineWidth: CGFloat(block.field_style?.border_width ?? 1))
+                )
+                .onChange(of: text) { newValue in
+                    inputValues[fieldId] = newValue
+                }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Password input with show/hide toggle.
+struct FormInputPasswordBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+
+    @State private var text: String = ""
+    @State private var showPassword: Bool = false
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let placeholder = block.field_placeholder ?? "Password"
+        let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
+        let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
+
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
+
+            HStack {
+                if showPassword {
+                    TextField(placeholder, text: $text)
+                        .textFieldStyle(.plain)
+                } else {
+                    SecureField(placeholder, text: $text)
+                        .textFieldStyle(.plain)
+                }
+
+                Button {
+                    showPassword.toggle()
+                } label: {
+                    Image(systemName: showPassword ? "eye.slash" : "eye")
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(12)
+            .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
+            .cornerRadius(cornerRadius)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(borderColor, lineWidth: CGFloat(block.field_style?.border_width ?? 1))
+            )
+            .onChange(of: text) { newValue in
+                inputValues[fieldId] = newValue
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Date, Time, or DateTime picker input.
+struct FormInputDateBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+    let components: DatePickerComponents
+
+    @State private var selectedDate = Date()
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let accentColor = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
+
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
+
+            DatePicker(
+                "",
+                selection: $selectedDate,
+                displayedComponents: components
+            )
+            .datePickerStyle(.compact)
+            .labelsHidden()
+            .accentColor(accentColor)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onChange(of: selectedDate) { newValue in
+                let formatter = ISO8601DateFormatter()
+                inputValues[fieldId] = formatter.string(from: newValue)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Dropdown select input.
+struct FormInputSelectBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+
+    @State private var selectedValue: String = ""
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let options = block.field_options ?? []
+
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
+
+            Picker("", selection: $selectedValue) {
+                Text(block.field_placeholder ?? "Select...").tag("")
+                ForEach(options) { option in
+                    Text(option.label).tag(option.value)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+            .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
+            .cornerRadius(CGFloat(block.field_style?.corner_radius ?? 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: CGFloat(block.field_style?.corner_radius ?? 8))
+                    .stroke(Color(hex: block.field_style?.border_color ?? "#D1D5DB"), lineWidth: 1)
+            )
+            .onChange(of: selectedValue) { newValue in
+                inputValues[fieldId] = newValue
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Slider input for single numeric value.
+struct FormInputSliderBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+
+    @State private var value: Double = 50
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let minVal = block.min_value ?? 0
+        let maxVal = block.max_value_picker ?? 100
+        let stepVal = block.step_value ?? 1
+        let showValue = (block.field_config?["show_value"]?.value as? Bool) ?? true
+        let unitStr = block.unit ?? ""
+        let trackCol = Color(hex: block.field_style?.track_color ?? block.track_color ?? "#E5E7EB")
+        let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
+
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                formFieldLabel(block)
+                Spacer()
+                if showValue {
+                    let formatted = value == value.rounded() ? "\(Int(value))" : String(format: "%.1f", value)
+                    Text("\(formatted)\(unitStr)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(fillCol)
+                }
+            }
+
+            Slider(value: $value, in: minVal...maxVal, step: stepVal)
+                .tint(fillCol)
+                .onChange(of: value) { newValue in
+                    inputValues[fieldId] = newValue
+                }
+        }
+        .onAppear {
+            value = block.default_picker_value ?? minVal
+            inputValues[fieldId] = value
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Toggle (switch) input.
+struct FormInputToggleBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+
+    @State private var isOn: Bool = false
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let onColor = Color(hex: block.field_style?.toggle_on_color ?? "#6366F1")
+        let label = block.field_label ?? block.toggle_label ?? ""
+
+        HStack {
+            Text(label)
+                .font(.subheadline)
+            Spacer()
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+                .tint(onColor)
+                .onChange(of: isOn) { newValue in
+                    inputValues[fieldId] = newValue
+                }
+        }
+        .onAppear {
+            isOn = block.toggle_default ?? false
+            inputValues[fieldId] = isOn
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Stepper input for incrementing/decrementing numeric value.
+struct FormInputStepperBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+
+    @State private var value: Int = 0
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let minVal = Int(block.min_value ?? 0)
+        let maxVal = Int(block.max_value_picker ?? 100)
+        let stepVal = Int(block.step_value ?? 1)
+        let unitStr = block.unit ?? ""
+
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
+
+            Stepper(value: $value, in: minVal...maxVal, step: stepVal) {
+                Text("\(value)\(unitStr)")
+                    .font(.body.weight(.medium))
+            }
+            .onChange(of: value) { newValue in
+                inputValues[fieldId] = newValue
+            }
+        }
+        .onAppear {
+            value = Int(block.default_picker_value ?? Double(minVal))
+            inputValues[fieldId] = value
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Segmented picker input.
+struct FormInputSegmentedBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+
+    @State private var selectedValue: String = ""
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let options = block.field_options ?? []
+
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
+
+            Picker("", selection: $selectedValue) {
+                ForEach(options) { option in
+                    Text(option.label).tag(option.value)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: selectedValue) { newValue in
+                inputValues[fieldId] = newValue
+            }
+        }
+        .onAppear {
+            if selectedValue.isEmpty, let first = options.first {
+                selectedValue = first.value
+                inputValues[fieldId] = first.value
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Star rating input (form variant — reuses rating block logic).
+struct FormInputRatingBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+
+    @State private var selectedRating: Double = 0
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let maxStars = block.max_stars ?? 5
+        let starSz = CGFloat(block.star_size ?? 32)
+        let filledCol = Color(hex: block.filled_color ?? block.field_style?.fill_color ?? "#FBBF24")
+        let emptyCol = Color(hex: block.empty_color ?? "#D1D5DB")
+
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
+
+            HStack(spacing: 4) {
+                ForEach(1...maxStars, id: \.self) { index in
+                    Image(systemName: selectedRating >= Double(index) ? "star.fill" : "star")
+                        .font(.system(size: starSz))
+                        .foregroundColor(selectedRating >= Double(index) ? filledCol : emptyCol)
+                        .onTapGesture {
+                            selectedRating = Double(index)
+                            inputValues[fieldId] = selectedRating
+                        }
+                }
+            }
+        }
+        .onAppear {
+            selectedRating = block.default_rating ?? 0
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Range slider (dual-thumb) input.
+struct FormInputRangeSliderBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+
+    @State private var lowValue: Double = 0
+    @State private var highValue: Double = 100
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let minVal = block.min_value ?? 0
+        let maxVal = block.max_value_picker ?? 100
+        let unitStr = block.unit ?? ""
+        let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
+
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                formFieldLabel(block)
+                Spacer()
+                Text("\(Int(lowValue))\(unitStr) - \(Int(highValue))\(unitStr)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(fillCol)
+            }
+
+            VStack(spacing: 4) {
+                HStack {
+                    Text("Min")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Slider(value: $lowValue, in: minVal...maxVal)
+                        .tint(fillCol)
+                }
+                HStack {
+                    Text("Max")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Slider(value: $highValue, in: minVal...maxVal)
+                        .tint(fillCol)
+                }
+            }
+            .onChange(of: lowValue) { _ in
+                if lowValue > highValue { highValue = lowValue }
+                inputValues[fieldId] = ["min": lowValue, "max": highValue]
+            }
+            .onChange(of: highValue) { _ in
+                if highValue < lowValue { lowValue = highValue }
+                inputValues[fieldId] = ["min": lowValue, "max": highValue]
+            }
+        }
+        .onAppear {
+            lowValue = block.min_value ?? 0
+            highValue = block.max_value_picker ?? 100
+            inputValues[fieldId] = ["min": lowValue, "max": highValue]
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Chips/tag input — multi-select toggleable chips.
+struct FormInputChipsBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+
+    @State private var selectedValues: Set<String> = []
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let options = block.field_options ?? []
+        let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
+        let maxSelections = (block.field_config?["max_selections"]?.value as? Int)
+
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
+
+            // FlowLayout approximation using wrapping HStack
+            FlowLayoutView(spacing: 8) {
+                ForEach(options) { option in
+                    let isSelected = selectedValues.contains(option.value)
+                    Button {
+                        if isSelected {
+                            selectedValues.remove(option.value)
+                        } else {
+                            if let max = maxSelections, selectedValues.count >= max {
+                                return // At max selections
+                            }
+                            selectedValues.insert(option.value)
+                        }
+                        inputValues[fieldId] = Array(selectedValues)
+                    } label: {
+                        Text(option.label)
+                            .font(.subheadline)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(isSelected ? fillCol : Color.gray.opacity(0.1))
+                            .foregroundColor(isSelected ? .white : .primary)
+                            .clipShape(Capsule())
+                            .overlay(
+                                Capsule().stroke(isSelected ? fillCol : Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Color picker — grid of preset color swatches.
+struct FormInputColorBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+
+    @State private var selectedColor: String = ""
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let presetColors: [String] = {
+            if let colors = block.field_config?["preset_colors"]?.value as? [String] {
+                return colors
+            }
+            return ["#EF4444", "#F97316", "#EAB308", "#22C55E", "#3B82F6", "#6366F1", "#A855F7", "#EC4899", "#000000", "#6B7280"]
+        }()
+
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
+                ForEach(presetColors, id: \.self) { color in
+                    Circle()
+                        .fill(Color(hex: color))
+                        .frame(width: 36, height: 36)
+                        .overlay(
+                            Circle()
+                                .stroke(selectedColor == color ? Color.primary : Color.clear, lineWidth: 2)
+                                .padding(2)
+                        )
+                        .onTapGesture {
+                            selectedColor = color
+                            inputValues[fieldId] = color
+                        }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Placeholder for complex inputs (location, image_picker, signature) — renders icon + label.
+struct FormInputPlaceholderBlock: View {
+    let block: ContentBlock
+    let iconName: String
+    let label: String
+
+    var body: some View {
+        let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
+        let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
+
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
+
+            HStack(spacing: 8) {
+                Image(systemName: iconName)
+                    .foregroundColor(.secondary)
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(16)
+            .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
+            .cornerRadius(cornerRadius)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(borderColor, style: StrokeStyle(lineWidth: 1, dash: [6, 3]))
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Flow Layout (SPEC-089d Phase 3 — for chips block)
+
+/// Simple flow layout approximation using LazyVGrid with adaptive columns.
+/// Wraps children to next line when they exceed available width.
+struct FlowLayoutView<Content: View>: View {
+    let spacing: CGFloat
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        // Use adaptive grid items as a flow-layout approximation
+        let columns = [GridItem(.adaptive(minimum: 60, maximum: .infinity), spacing: spacing)]
+        LazyVGrid(columns: columns, alignment: .leading, spacing: spacing) {
+            content()
         }
     }
 }

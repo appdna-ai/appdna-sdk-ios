@@ -568,6 +568,7 @@ struct OnboardingStepRouter: View {
     let onSkip: () -> Void
 
     @State private var toggleValues: [String: Bool] = [:]
+    @State private var inputValues: [String: Any] = [:]
 
     // SPEC-084: Localization helper for step text
     // SPEC-087: Also interpolates {{variables}} after localization
@@ -615,7 +616,7 @@ struct OnboardingStepRouter: View {
                 ScrollView {
                     VStack(spacing: 12) {
                         Spacer(minLength: 200)
-                        ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc)
+                        ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues)
                             .padding(.horizontal, 20)
                     }
                 }
@@ -635,7 +636,7 @@ struct OnboardingStepRouter: View {
                         .clipped()
                     }
                     ScrollView {
-                        ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc)
+                        ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues)
                             .padding(16)
                     }
                     .frame(width: geometry.size.width * 0.6)
@@ -645,7 +646,7 @@ struct OnboardingStepRouter: View {
         case "image_bottom":
             ScrollView {
                 VStack(spacing: 12) {
-                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc)
+                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues)
                         .padding(.horizontal, 20)
                     if let url = effectiveConfig.image_url {
                         AsyncImage(url: URL(string: url)) { phase in
@@ -668,7 +669,7 @@ struct OnboardingStepRouter: View {
                             }
                         }
                     }
-                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc)
+                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues)
                         .padding(.horizontal, 20)
                 }
                 .padding(.vertical, 20)
@@ -676,7 +677,7 @@ struct OnboardingStepRouter: View {
 
         default: // no_image
             ScrollView {
-                ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc)
+                ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 20)
             }
@@ -715,10 +716,14 @@ struct OnboardingStepRouter: View {
     private func handleBlockAction(_ action: String, _ actionValue: String?) {
         switch action {
         case "next":
-            // Collect toggle values into response
+            // Collect toggle values and input values into response
             var data: [String: Any] = [:]
             for (key, value) in toggleValues {
                 data["toggle_\(key)"] = value
+            }
+            // SPEC-089d Phase 3: Include form input values in step response
+            for (key, value) in inputValues {
+                data[key] = value
             }
             onNext(data.isEmpty ? nil : data)
         case "skip":
