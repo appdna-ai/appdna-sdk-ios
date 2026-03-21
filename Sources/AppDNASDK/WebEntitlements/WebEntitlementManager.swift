@@ -46,7 +46,7 @@ final class WebEntitlementManager {
         let path = "orgs/\(orgId)/apps/\(appId)/users/\(userId)/web_entitlements"
         Log.debug("WebEntitlementManager: observing \(path)")
 
-        listener = Firestore.firestore().document(path).addSnapshotListener { [weak self] snapshot, error in
+        listener = AppDNA.firestoreDB.document(path).addSnapshotListener { [weak self] snapshot, error in
             guard let self else { return }
 
             if let error {

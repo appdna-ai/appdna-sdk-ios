@@ -29,7 +29,7 @@ class EntitlementCache {
 
     func startObserving(orgId: String, appId: String, userId: String) {
         let path = "orgs/\(orgId)/apps/\(appId)/users/\(userId)/entitlements/current"
-        firestoreListener = Firestore.firestore().document(path)
+        firestoreListener = AppDNA.firestoreDB.document(path)
             .addSnapshotListener { [weak self] snapshot, error in
                 guard let self = self, let data = snapshot?.data() else { return }
                 self.parseFirestoreData(data)

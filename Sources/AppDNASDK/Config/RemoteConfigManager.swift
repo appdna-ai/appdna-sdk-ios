@@ -112,7 +112,7 @@ final class RemoteConfigManager {
             return
         }
 
-        let db = Firestore.firestore()
+        let db = AppDNA.firestoreDB
         let basePath = "\(firestorePath)/config"
 
         // Fetch all 6 config documents in parallel

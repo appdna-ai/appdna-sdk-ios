@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import UserNotifications
 import FirebaseCore
+import FirebaseFirestore
 
 /// Main entry point for the AppDNA SDK.
 /// All public methods are thread-safe.
@@ -9,6 +10,11 @@ public final class AppDNA: @unchecked Sendable {
 
     /// SDK version string.
     public static let sdkVersion = "1.0.3"
+
+    /// Firestore instance used by the SDK.
+    /// Uses a secondary Firebase app ("appdna") if GoogleService-Info-AppDNA.plist is found,
+    /// otherwise falls back to the default Firebase app's Firestore instance.
+    internal static var firestoreDB: Firestore = Firestore.firestore()
 
     /// Notification posted when remote config is refreshed.
     public static let configUpdated = Notification.Name("AppDNA.configUpdated")
@@ -417,9 +423,24 @@ public final class AppDNA: @unchecked Sendable {
 
         Log.info("Configuring AppDNA SDK v\(AppDNA.sdkVersion) (\(environment.rawValue))")
 
-        // Validate Firebase is configured (required for remote config via Firestore)
-        if FirebaseApp.app() == nil {
-            Log.error("⚠️ Firebase not configured. Call FirebaseApp.configure() before AppDNA.configure(). Remote config (paywalls, experiments, flags) will not work. See docs: https://docs.appdna.ai/sdks/ios/installation")
+        // Configure Firebase for Firestore config access.
+        // Priority: secondary app from GoogleService-Info-AppDNA.plist > default FirebaseApp.
+        if let appdnaPlistPath = Bundle.main.path(forResource: "GoogleService-Info-AppDNA", ofType: "plist"),
+           let appdnaOptions = FirebaseOptions(contentsOfFile: appdnaPlistPath) {
+            // Use a dedicated secondary Firebase app so the host app's Firebase is untouched
+            if FirebaseApp.app(name: "appdna") == nil {
+                FirebaseApp.configure(name: "appdna", options: appdnaOptions)
+            }
+            if let secondaryApp = FirebaseApp.app(name: "appdna") {
+                AppDNA.firestoreDB = Firestore.firestore(app: secondaryApp)
+                Log.info("Using secondary Firebase app 'appdna' for Firestore (GoogleService-Info-AppDNA.plist)")
+            }
+        } else if FirebaseApp.app() != nil {
+            // Fall back to the host app's default Firebase instance
+            AppDNA.firestoreDB = Firestore.firestore()
+            Log.info("Using default Firebase app for Firestore")
+        } else {
+            Log.error("Firebase not configured. Either add GoogleService-Info-AppDNA.plist or call FirebaseApp.configure() before AppDNA.configure(). Remote config (paywalls, experiments, flags) will not work. See docs: https://docs.appdna.ai/sdks/ios/installation")
         }
 
         // 1. Initialize core managers
