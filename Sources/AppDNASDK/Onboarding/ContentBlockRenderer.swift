@@ -244,6 +244,32 @@ public struct CountdownLabelsConfig: Codable {
     public let seconds: String?
 }
 
+/// A pricing plan entry for the `pricing_card` block.
+public struct PricingPlanConfig: Codable, Identifiable {
+    public let id: String
+    public let label: String
+    public let price: String
+    public let period: String
+    public let badge: String?
+    public let is_highlighted: Bool?
+}
+
+/// A date wheel picker column for the `date_wheel_picker` block.
+public struct DateWheelColumnConfig: Codable {
+    public let type: String   // day | month | year | custom
+    public let label: String?
+    public let values: [String]?
+}
+
+/// Star/particle background config for `star_background` block.
+public struct StarParticle {
+    var x: CGFloat
+    var y: CGFloat
+    var size: CGFloat
+    var opacity: Double
+    var speed: CGFloat
+}
+
 // MARK: - Content Block model
 
 public struct ContentBlock: Codable, Identifiable {
@@ -400,6 +426,66 @@ public struct ContentBlock: Codable, Identifiable {
     public let auto_advance: Bool?
     public let show_percentage: Bool?
 
+    // SPEC-089d Phase F: circular_gauge fields
+    public let gauge_value: Double?
+    public let max_value: Double?
+    public let sublabel: String?
+    public let stroke_width: Double?
+    public let label_color: String?
+    public let label_font_size: Double?
+    public let animate: Bool?
+    public let animation_duration_ms: Int?
+
+    // SPEC-089d Phase F: date_wheel_picker fields
+    public let columns: [DateWheelColumnConfig]?
+    public let default_date_value: String?
+    public let min_date: String?
+    public let max_date: String?
+    public let highlight_color: String?
+    public let haptic_on_scroll: Bool?
+
+    // SPEC-089d Phase F: stack / row fields (container blocks)
+    public let children: [ContentBlock]?
+    public let z_index: Double?
+    public let gap: Double?
+    public let wrap: Bool?
+    public let justify: String?
+    public let align_items: String?
+
+    // SPEC-089d Phase F: custom_view fields
+    public let view_key: String?
+    public let custom_config: [String: AnyCodable]?
+    public let placeholder_image_url: String?
+    public let placeholder_text: String?
+
+    // SPEC-089d Phase F: star_background fields
+    public let particle_type: String?      // stars, sparkles, dots, snow, bokeh
+    public let density: String?            // sparse, medium, dense
+    public let speed: String?              // slow, medium, fast
+    public let secondary_color: String?
+    public let size_range: [Double]?
+    public let fullscreen: Bool?
+
+    // SPEC-089d Phase F: wheel_picker fields
+    public let min_value: Double?
+    public let max_value_picker: Double?
+    public let step_value: Double?
+    public let default_picker_value: Double?
+    public let unit: String?
+    public let unit_position: String?
+    public let visible_items: Int?
+
+    // SPEC-089d Phase F: pulsing_avatar fields
+    public let pulse_color: String?
+    public let pulse_ring_count: Int?
+    public let pulse_speed: Double?
+    public let border_width: Double?
+    public let border_color: String?
+
+    // SPEC-089d Nurrai: pricing_card fields
+    public let pricing_plans: [PricingPlanConfig]?
+    public let pricing_layout: String?     // stack, side_by_side
+
     enum CodingKeys: String, CodingKey {
         case id, type, text, style, level
         case image_url, alt, corner_radius, height
@@ -434,6 +520,18 @@ public struct ContentBlock: Codable, Identifiable {
         case upcoming_color, show_line, compact, title_style, subtitle_style
         case loading_variant, loading_items, progress_color, check_color
         case total_duration_ms, auto_advance, show_percentage
+        // SPEC-089d Phase F: new block fields
+        case gauge_value, max_value, sublabel, stroke_width
+        case label_color, label_font_size, animate, animation_duration_ms
+        case columns, default_date_value, min_date, max_date
+        case highlight_color, haptic_on_scroll
+        case children, z_index, gap, wrap, justify, align_items
+        case view_key, custom_config, placeholder_image_url, placeholder_text
+        case particle_type, density, speed, secondary_color, size_range, fullscreen
+        case min_value, max_value_picker, step_value, default_picker_value
+        case unit, unit_position, visible_items
+        case pulse_color, pulse_ring_count, pulse_speed, border_width, border_color
+        case pricing_plans, pricing_layout
     }
 }
 
@@ -499,9 +597,9 @@ struct ContentBlockRendererView: View {
         case .page_indicator:
             pageIndicatorBlock(block)
         case .wheel_picker:
-            stubBlockPlaceholder("wheel_picker")
+            WheelPickerBlockView(block: block)
         case .pulsing_avatar:
-            stubBlockPlaceholder("pulsing_avatar")
+            PulsingAvatarBlockView(block: block)
         case .social_login:
             socialLoginBlock(block)
         case .timeline:
@@ -509,7 +607,7 @@ struct ContentBlockRendererView: View {
         case .animated_loading:
             AnimatedLoadingBlockView(block: block, onAction: onAction)
         case .star_background:
-            stubBlockPlaceholder("star_background")
+            StarBackgroundBlockView(block: block)
         case .countdown_timer:
             CountdownTimerBlockView(block: block, onAction: onAction)
         case .rating:
@@ -518,20 +616,20 @@ struct ContentBlockRendererView: View {
             richTextBlock(block)
         case .progress_bar:
             progressBarBlock(block)
-        // SPEC-089d Phase F: Container & advanced block stubs
+        // SPEC-089d Phase F: Container & advanced block types
         case .stack:
-            stubBlockPlaceholder("stack")
+            stackBlock(block)
         case .custom_view:
-            stubBlockPlaceholder("custom_view")
+            customViewBlock(block)
         case .date_wheel_picker:
-            stubBlockPlaceholder("date_wheel_picker")
+            DateWheelPickerBlockView(block: block)
         case .circular_gauge:
-            stubBlockPlaceholder("circular_gauge")
+            CircularGaugeBlockView(block: block)
         case .row:
-            stubBlockPlaceholder("row")
+            rowBlock(block)
         // SPEC-089d Nurrai
         case .pricing_card:
-            stubBlockPlaceholder("pricing_card")
+            PricingCardBlockView(block: block, onAction: onAction)
         // Backward compatibility: unknown types render as invisible
         case .unknown:
             EmptyView()
@@ -618,20 +716,31 @@ struct ContentBlockRendererView: View {
             .overlay(Image(systemName: "photo").foregroundColor(.gray))
     }
 
-    // MARK: - Button
+    // MARK: - Button (with outline variant — SPEC-089d §3.18)
 
     private func buttonBlock(_ block: ContentBlock) -> some View {
-        Button {
+        let btnVariant = block.variant ?? "primary"
+        let radius = CGFloat(block.button_corner_radius ?? 12)
+        let bgColor = Color(hex: block.bg_color ?? "#6366F1")
+        let txtColor = Color(hex: block.text_color ?? "#FFFFFF")
+        let labelText = loc?("block.\(block.id).text", block.text ?? "Continue") ?? block.text ?? "Continue"
+
+        return Button {
             onAction(block.action ?? "next", block.action_value)
         } label: {
-            Text(loc?("block.\(block.id).text", block.text ?? "Continue") ?? block.text ?? "Continue")
+            Text(labelText)
                 .font(.body.weight(.semibold))
-                .foregroundColor(Color(hex: block.text_color ?? "#FFFFFF"))
-                .applyTextStyle(block.style)  // SPEC-084 Gap #8: override with schema-driven style when present
+                .foregroundColor(btnVariant == "outline" ? bgColor : (btnVariant == "text" ? bgColor : txtColor))
+                .applyTextStyle(block.style)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Color(hex: block.bg_color ?? "#6366F1"))
-                .clipShape(RoundedRectangle(cornerRadius: CGFloat(block.button_corner_radius ?? 12)))
+                .background(btnVariant == "outline" || btnVariant == "text" ? Color.clear : bgColor)
+                .clipShape(RoundedRectangle(cornerRadius: radius))
+                .overlay(
+                    btnVariant == "outline"
+                        ? RoundedRectangle(cornerRadius: radius).stroke(bgColor, lineWidth: 1.5)
+                        : nil
+                )
         }
     }
 
@@ -1156,6 +1265,89 @@ struct ContentBlockRendererView: View {
             }
         }
     }
+
+    // MARK: - Stack (ZStack container — SPEC-089d AC-024)
+
+    @ViewBuilder
+    private func stackBlock(_ block: ContentBlock) -> some View {
+        let childBlocks = (block.children ?? []).sorted { ($0.z_index ?? 0) < ($1.z_index ?? 0) }
+        let align: Alignment = {
+            switch block.alignment {
+            case "top_left", "topLeading": return .topLeading
+            case "top", "topCenter": return .top
+            case "top_right", "topTrailing": return .topTrailing
+            case "left", "leading": return .leading
+            case "right", "trailing": return .trailing
+            case "bottom_left", "bottomLeading": return .bottomLeading
+            case "bottom", "bottomCenter": return .bottom
+            case "bottom_right", "bottomTrailing": return .bottomTrailing
+            default: return .center
+            }
+        }()
+
+        ZStack(alignment: align) {
+            ForEach(childBlocks) { child in
+                renderBlock(child)
+            }
+        }
+    }
+
+    // MARK: - Row (HStack container — SPEC-089d AC-025)
+
+    @ViewBuilder
+    private func rowBlock(_ block: ContentBlock) -> some View {
+        let childBlocks = block.children ?? []
+        let rowGap = CGFloat(block.gap ?? 8)
+        let vAlign: VerticalAlignment = {
+            switch block.align_items {
+            case "top": return .top
+            case "bottom": return .bottom
+            default: return .center
+            }
+        }()
+
+        HStack(alignment: vAlign, spacing: rowGap) {
+            ForEach(childBlocks) { child in
+                renderBlock(child)
+            }
+        }
+    }
+
+    // MARK: - Custom View (SPEC-089d AC-026)
+
+    @ViewBuilder
+    private func customViewBlock(_ block: ContentBlock) -> some View {
+        let key = block.view_key ?? ""
+        if let factory = AppDNA.registeredCustomViews[key] {
+            factory()
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: block.height.map { CGFloat($0) }
+                )
+        } else if let placeholderUrl = block.placeholder_image_url, let url = URL(string: placeholderUrl) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fit)
+                case .failure:
+                    placeholderTextView(block.placeholder_text ?? "[\(key)]")
+                default:
+                    ProgressView()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: block.height.map { CGFloat($0) })
+        } else {
+            placeholderTextView(block.placeholder_text ?? "[\(key)]")
+        }
+    }
+
+    private func placeholderTextView(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(8)
+    }
 }
 
 // MARK: - Rating Block View (SPEC-089d AC-019)
@@ -1471,6 +1663,400 @@ struct AnimatedLoadingBlockView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - Circular Gauge Block View (SPEC-089d AC-022)
+
+/// Renders a circular arc gauge with center label. Supports animated fill.
+struct CircularGaugeBlockView: View {
+    let block: ContentBlock
+
+    @State private var animatedProgress: CGFloat = 0
+
+    var body: some View {
+        let value = CGFloat(block.gauge_value ?? block.progress_value ?? 0)
+        let maxVal = CGFloat(block.max_value ?? 100)
+        let targetProgress = maxVal > 0 ? min(value / maxVal, 1.0) : 0
+        let size = CGFloat(block.height ?? 120)
+        let strokeW = CGFloat(block.stroke_width ?? 10)
+        let fillCol = Color(hex: block.bar_color ?? block.active_color ?? "#6366F1")
+        let trackCol = Color(hex: block.track_color ?? "#E5E7EB")
+        let labelCol = Color(hex: block.label_color ?? block.text_color ?? "#000000")
+        let labelFontSz = CGFloat(block.label_font_size ?? block.font_size ?? 20)
+        let shouldAnimate = block.animate ?? true
+        let animDuration = Double(block.animation_duration_ms ?? 800) / 1000.0
+        let showPct = block.show_percentage ?? false
+
+        ZStack {
+            // Track
+            Circle()
+                .stroke(trackCol, lineWidth: strokeW)
+            // Filled arc
+            Circle()
+                .trim(from: 0, to: animatedProgress)
+                .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            // Center label
+            VStack(spacing: 2) {
+                Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
+                    .font(.system(size: labelFontSz, weight: .bold))
+                    .foregroundColor(labelCol)
+                if let sub = block.sublabel {
+                    Text(sub)
+                        .font(.caption)
+                        .foregroundColor(labelCol.opacity(0.7))
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .frame(maxWidth: .infinity)
+        .onAppear {
+            if shouldAnimate {
+                withAnimation(.easeInOut(duration: animDuration)) {
+                    animatedProgress = targetProgress
+                }
+            } else {
+                animatedProgress = targetProgress
+            }
+        }
+    }
+}
+
+// MARK: - Date Wheel Picker Block View (SPEC-089d AC-023)
+
+/// Multi-column date picker using native iOS wheel picker style.
+struct DateWheelPickerBlockView: View {
+    let block: ContentBlock
+
+    @State private var selectedDate = Date()
+
+    var body: some View {
+        let highlightCol = Color(hex: block.highlight_color ?? "#6366F1")
+
+        VStack(spacing: 8) {
+            DatePicker(
+                "",
+                selection: $selectedDate,
+                displayedComponents: [.date]
+            )
+            .datePickerStyle(.wheel)
+            .labelsHidden()
+            .accentColor(highlightCol)
+            .frame(maxWidth: .infinity)
+        }
+    }
+}
+
+// MARK: - Wheel Picker Block View (SPEC-089d AC-013)
+
+/// Numeric wheel picker for single-value selection.
+struct WheelPickerBlockView: View {
+    let block: ContentBlock
+
+    @State private var selectedIndex: Int = 0
+
+    var body: some View {
+        let minVal = block.min_value ?? 0
+        let maxVal = block.max_value_picker ?? 100
+        let step = block.step_value ?? 1
+        let defaultVal = block.default_picker_value ?? minVal
+        let unitStr = block.unit ?? ""
+        let unitPos = block.unit_position ?? "after"
+        let highlightCol = Color(hex: block.highlight_color ?? block.active_color ?? "#6366F1")
+
+        // Generate values
+        let values: [Double] = {
+            var vals: [Double] = []
+            var current = minVal
+            while current <= maxVal {
+                vals.append(current)
+                current += step
+            }
+            return vals.isEmpty ? [0] : vals
+        }()
+
+        let initialIndex = values.firstIndex(where: { $0 >= defaultVal }) ?? 0
+
+        VStack(spacing: 8) {
+            if let label = block.rating_label ?? block.text {
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+
+            Picker("", selection: $selectedIndex) {
+                ForEach(0..<values.count, id: \.self) { idx in
+                    let val = values[idx]
+                    let formatted = val == val.rounded() ? String(Int(val)) : String(format: "%.1f", val)
+                    let display = unitPos == "before" ? "\(unitStr)\(formatted)" : "\(formatted)\(unitStr)"
+                    Text(display)
+                        .tag(idx)
+                }
+            }
+            .pickerStyle(.wheel)
+            .frame(maxWidth: .infinity)
+            .accentColor(highlightCol)
+        }
+        .onAppear {
+            selectedIndex = initialIndex
+        }
+    }
+}
+
+// MARK: - Pulsing Avatar Block View (SPEC-089d AC-014)
+
+/// Avatar image with animated pulsing ring effects.
+struct PulsingAvatarBlockView: View {
+    let block: ContentBlock
+
+    @State private var isPulsing = false
+
+    var body: some View {
+        let avatarSize = CGFloat(block.icon_size ?? block.height ?? 80)
+        let pulseCol = Color(hex: block.pulse_color ?? "#6366F1")
+        let ringCount = block.pulse_ring_count ?? 3
+        let pulseDuration = block.pulse_speed ?? 1.5
+        let borderW = CGFloat(block.border_width ?? 0)
+        let borderCol = Color(hex: block.border_color ?? "#FFFFFF")
+
+        let align: Alignment = {
+            switch block.alignment {
+            case "left": return .leading
+            case "right": return .trailing
+            default: return .center
+            }
+        }()
+
+        ZStack {
+            // Pulse rings
+            ForEach(0..<ringCount, id: \.self) { ringIndex in
+                Circle()
+                    .stroke(pulseCol.opacity(0.3), lineWidth: 2)
+                    .frame(width: avatarSize + CGFloat(ringIndex + 1) * 20,
+                           height: avatarSize + CGFloat(ringIndex + 1) * 20)
+                    .scaleEffect(isPulsing ? 1.2 : 1.0)
+                    .opacity(isPulsing ? 0 : 0.6)
+                    .animation(
+                        Animation.easeInOut(duration: pulseDuration)
+                            .repeatForever(autoreverses: false)
+                            .delay(pulseDuration / Double(ringCount) * Double(ringIndex)),
+                        value: isPulsing
+                    )
+            }
+
+            // Avatar image
+            Group {
+                if let urlString = block.image_url, let url = URL(string: urlString) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        default:
+                            Circle().fill(Color.gray.opacity(0.2))
+                        }
+                    }
+                } else {
+                    Circle().fill(Color.gray.opacity(0.2))
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .font(.system(size: avatarSize * 0.4))
+                                .foregroundColor(.gray)
+                        )
+                }
+            }
+            .frame(width: avatarSize, height: avatarSize)
+            .clipShape(Circle())
+            .overlay(
+                borderW > 0
+                    ? Circle().stroke(borderCol, lineWidth: borderW)
+                    : nil
+            )
+
+            // Badge
+            if let badgeText = block.badge_text, !badgeText.isEmpty {
+                Text(badgeText)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(Color(hex: block.badge_text_color ?? "#FFFFFF"))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color(hex: block.badge_bg_color ?? "#EF4444"))
+                    .clipShape(Capsule())
+                    .offset(x: avatarSize * 0.35, y: -avatarSize * 0.35)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: align)
+        .onAppear {
+            isPulsing = true
+        }
+    }
+}
+
+// MARK: - Star Background Block View (SPEC-089d AC-027)
+
+/// Animated star/particle background using Canvas + TimelineView.
+struct StarBackgroundBlockView: View {
+    let block: ContentBlock
+
+    @State private var particles: [StarParticle] = []
+    @State private var isActive = true
+
+    var body: some View {
+        let color = Color(hex: block.active_color ?? block.text_color ?? "#FFFFFF")
+        let opacity = block.block_style?.opacity ?? 0.8
+        let particleCount: Int = {
+            switch block.density {
+            case "sparse": return 20
+            case "dense": return 100
+            default: return 50
+            }
+        }()
+        let speedFactor: CGFloat = {
+            switch block.speed {
+            case "slow": return 0.3
+            case "fast": return 1.5
+            default: return 0.8
+            }
+        }()
+        let minSize = CGFloat(block.size_range?.first ?? 1)
+        let maxSize = CGFloat(block.size_range?.last ?? 3)
+        let isFullscreen = block.fullscreen ?? false
+        let height = CGFloat(block.height ?? 200)
+
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isActive)) { timeline in
+            Canvas { context, size in
+                for particle in particles {
+                    let rect = CGRect(
+                        x: particle.x,
+                        y: particle.y,
+                        width: particle.size,
+                        height: particle.size
+                    )
+                    context.opacity = particle.opacity * opacity
+                    context.fill(
+                        Path(ellipseIn: rect),
+                        with: .color(color)
+                    )
+                }
+            }
+            .onChange(of: timeline.date) { _ in
+                updateParticles(speedFactor: speedFactor)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: isFullscreen ? .infinity : height)
+        .clipped()
+        .onAppear {
+            initializeParticles(count: particleCount, minSize: minSize, maxSize: maxSize)
+        }
+        .onDisappear {
+            isActive = false
+        }
+    }
+
+    private func initializeParticles(count: Int, minSize: CGFloat, maxSize: CGFloat) {
+        particles = (0..<count).map { _ in
+            StarParticle(
+                x: CGFloat.random(in: 0...UIScreen.main.bounds.width),
+                y: CGFloat.random(in: 0...(UIScreen.main.bounds.height)),
+                size: CGFloat.random(in: minSize...maxSize),
+                opacity: Double.random(in: 0.2...1.0),
+                speed: CGFloat.random(in: 0.2...1.0)
+            )
+        }
+    }
+
+    private func updateParticles(speedFactor: CGFloat) {
+        for i in particles.indices {
+            particles[i].y += particles[i].speed * speedFactor
+            particles[i].opacity += Double.random(in: -0.02...0.02)
+            particles[i].opacity = max(0.1, min(1.0, particles[i].opacity))
+
+            // Wrap around when particle falls off screen
+            if particles[i].y > UIScreen.main.bounds.height {
+                particles[i].y = -particles[i].size
+                particles[i].x = CGFloat.random(in: 0...UIScreen.main.bounds.width)
+            }
+        }
+    }
+}
+
+// MARK: - Pricing Card Block View (SPEC-089d Nurrai)
+
+/// Renders pricing plan cards in stack or side-by-side layout.
+struct PricingCardBlockView: View {
+    let block: ContentBlock
+    let onAction: (_ action: String, _ actionValue: String?) -> Void
+
+    @State private var selectedPlanId: String? = nil
+
+    var body: some View {
+        let plans = block.pricing_plans ?? []
+        let isSideBySide = block.pricing_layout == "side_by_side"
+        let accentCol = Color(hex: block.active_color ?? block.bg_color ?? "#6366F1")
+
+        Group {
+            if isSideBySide {
+                HStack(spacing: 12) {
+                    ForEach(plans) { plan in
+                        planCard(plan, accent: accentCol)
+                    }
+                }
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(plans) { plan in
+                        planCard(plan, accent: accentCol)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func planCard(_ plan: PricingPlanConfig, accent: Color) -> some View {
+        let isHighlighted = plan.is_highlighted ?? false
+        let isSelected = selectedPlanId == plan.id
+
+        return Button {
+            selectedPlanId = plan.id
+            onAction("select_plan", plan.id)
+        } label: {
+            VStack(spacing: 6) {
+                // Badge
+                if let badge = plan.badge, !badge.isEmpty {
+                    Text(badge)
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(accent)
+                        .clipShape(Capsule())
+                }
+
+                Text(plan.label)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(.primary)
+
+                Text(plan.price)
+                    .font(.title2.weight(.bold))
+                    .foregroundColor(.primary)
+
+                Text(plan.period)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(16)
+            .background(isSelected ? accent.opacity(0.05) : Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        isSelected ? accent : (isHighlighted ? accent : Color.gray.opacity(0.3)),
+                        lineWidth: isSelected || isHighlighted ? 2 : 1
+                    )
+            )
+            .shadow(color: isHighlighted ? accent.opacity(0.15) : .clear, radius: 4, y: 2)
         }
     }
 }

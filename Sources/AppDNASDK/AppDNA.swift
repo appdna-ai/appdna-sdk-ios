@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import SwiftUI
 import UserNotifications
 import FirebaseCore
 import FirebaseFirestore
@@ -53,6 +54,20 @@ public final class AppDNA: @unchecked Sendable {
     public static let deepLinks = DeepLinksModule()
     /// Experiments module.
     public static let experiments = ExperimentsModule(manager: nil)
+
+    // MARK: - Custom View Registry (SPEC-089d AC-026)
+
+    /// Registry of developer-provided custom views keyed by `view_key`.
+    /// Used by the `custom_view` content block to render developer escape-hatch views.
+    public static var registeredCustomViews: [String: () -> AnyView] = [:]
+
+    /// Register a custom SwiftUI view factory for use in onboarding content blocks.
+    /// - Parameters:
+    ///   - key: The `view_key` value from the block config.
+    ///   - factory: A closure returning an `AnyView`.
+    public static func registerCustomView(_ key: String, factory: @escaping () -> AnyView) {
+        registeredCustomViews[key] = factory
+    }
 
     // MARK: - Config Bundle (v1.0)
 
