@@ -980,6 +980,10 @@ struct ContentBlockRendererView: View {
     var hookData: [String: Any]? = nil
     /// Input values for form input blocks. Key = field_id, Value = field value.
     @Binding var inputValues: [String: Any]
+    /// Current step index in the onboarding flow (0-based). Used for auto-binding page_indicator and progress_bar.
+    var currentStepIndex: Int = 0
+    /// Total number of steps in the onboarding flow. Used for auto-binding progress_bar.
+    var totalSteps: Int = 1
 
     var body: some View {
         let visibleBlocks = blocks.filter { block in
@@ -1032,12 +1036,49 @@ struct ContentBlockRendererView: View {
         }
     }
 
-    /// Resolves dynamic bindings on a block, returning a block with overridden property values.
+    /// AC-064/065/066: Resolves dynamic bindings and template strings on a block.
+    /// Returns a new block with resolved text fields and binding overrides.
     private func resolveBlockBindings(_ block: ContentBlock, hookData: [String: Any]?, responses: [String: Any]) -> ContentBlock {
-        // Resolve template strings in text fields
         guard block.bindings != nil || containsTemplates(block) else { return block }
-        // For simplicity, we resolve template strings in the text field only
-        // Full binding resolution would require re-creating the struct with overrides
+
+        // Since ContentBlock is a struct with let properties, we use JSON round-trip to create a mutable copy.
+        // This is the simplest approach without refactoring the entire model to use var properties.
+        guard let data = try? JSONEncoder().encode(block),
+              var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return block
+        }
+
+        // AC-066: Resolve bindings map — override block properties from data context
+        if let bindings = block.bindings {
+            for (property, path) in bindings {
+                if let resolved = resolveDotPath(path, responses: responses, hookData: hookData, userTraits: nil, sessionData: nil) {
+                    json[property] = resolved
+                }
+            }
+        }
+
+        // AC-064: Resolve template strings in text fields
+        if let text = json["text"] as? String, text.contains("{{") {
+            json["text"] = resolveTemplateString(text, hookData: hookData, responses: responses)
+        }
+        if let label = json["field_label"] as? String, label.contains("{{") {
+            json["field_label"] = resolveTemplateString(label, hookData: hookData, responses: responses)
+        }
+        if let placeholder = json["field_placeholder"] as? String, placeholder.contains("{{") {
+            json["field_placeholder"] = resolveTemplateString(placeholder, hookData: hookData, responses: responses)
+        }
+        if let badgeText = json["badge_text"] as? String, badgeText.contains("{{") {
+            json["badge_text"] = resolveTemplateString(badgeText, hookData: hookData, responses: responses)
+        }
+        if let toggleLabel = json["toggle_label"] as? String, toggleLabel.contains("{{") {
+            json["toggle_label"] = resolveTemplateString(toggleLabel, hookData: hookData, responses: responses)
+        }
+
+        // Decode back to ContentBlock
+        if let updatedData = try? JSONSerialization.data(withJSONObject: json),
+           let resolved = try? JSONDecoder().decode(ContentBlock.self, from: updatedData) {
+            return resolved
+        }
         return block
     }
 
@@ -1045,6 +1086,9 @@ struct ContentBlockRendererView: View {
     private func containsTemplates(_ block: ContentBlock) -> Bool {
         if let text = block.text, text.contains("{{") { return true }
         if let label = block.field_label, label.contains("{{") { return true }
+        if let placeholder = block.field_placeholder, placeholder.contains("{{") { return true }
+        if let badgeText = block.badge_text, badgeText.contains("{{") { return true }
+        if let toggleLabel = block.toggle_label, toggleLabel.contains("{{") { return true }
         return false
     }
 
@@ -1153,13 +1197,13 @@ struct ContentBlockRendererView: View {
         case .input_chips:
             FormInputChipsBlock(block: block, inputValues: $inputValues)
         case .input_location:
-            FormInputPlaceholderBlock(block: block, iconName: "location.fill", label: "Tap to search location")
+            FormInputLocationPlaceholderBlock(block: block, inputValues: $inputValues)
         case .input_image_picker:
-            FormInputPlaceholderBlock(block: block, iconName: "photo.fill", label: "Tap to pick image")
+            FormInputImagePickerPlaceholderBlock(block: block)
         case .input_color:
             FormInputColorBlock(block: block, inputValues: $inputValues)
         case .input_signature:
-            FormInputPlaceholderBlock(block: block, iconName: "signature", label: "Tap to sign")
+            FormInputSignatureBlock(block: block, inputValues: $inputValues)
         // Backward compatibility: unknown types render as invisible
         case .unknown:
             EmptyView()
@@ -1474,8 +1518,9 @@ struct ContentBlockRendererView: View {
     // MARK: - Page Indicator (SPEC-089d AC-012)
 
     private func pageIndicatorBlock(_ block: ContentBlock) -> some View {
-        let dotCount = block.dot_count ?? 3
-        let activeIdx = block.active_index ?? 0
+        let dotCount = block.dot_count ?? totalSteps
+        // AC-012: Auto-bind active_index to current step index when not explicitly set or 0
+        let activeIdx = (block.active_index ?? 0) == 0 ? currentStepIndex : (block.active_index ?? 0)
         let dotSize = CGFloat(block.dot_size ?? 8)
         let dotSpacing = CGFloat(block.dot_spacing ?? 8)
         let activeW = block.active_dot_width.map { CGFloat($0) }
@@ -1753,8 +1798,14 @@ struct ContentBlockRendererView: View {
 
     private func progressBarBlock(_ block: ContentBlock) -> some View {
         let variant = block.progress_variant ?? "continuous"
-        let totalSegs = block.total_segments ?? 5
-        let filledSegs = block.filled_segments ?? 1
+        // AC-021: Auto-bind to step index when no explicit values set
+        let totalSegs = block.total_segments ?? totalSteps
+        let filledSegs: Int = {
+            if let explicit = block.filled_segments { return explicit }
+            if block.progress_value != nil { return block.filled_segments ?? 1 }
+            // Auto-bind: current step index + 1 (1-based fill)
+            return currentStepIndex + 1
+        }()
         let barH = CGFloat(block.bar_height ?? 6)
         let barRadius = CGFloat(block.corner_radius ?? 3)
         let fillColor = Color(hex: block.bar_color ?? "#6366F1")
@@ -3158,6 +3209,163 @@ struct FormInputPlaceholderBlock: View {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(borderColor, style: StrokeStyle(lineWidth: 1, dash: [6, 3]))
             )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - AC-046: Location Input Placeholder (interactive text field)
+
+/// Interactive text field placeholder for location input.
+/// Opens keyboard for typing; actual location autocomplete in future SDK update.
+struct FormInputLocationPlaceholderBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+
+    @State private var text: String = ""
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
+        let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
+
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
+
+            HStack(spacing: 8) {
+                Image(systemName: "location.fill")
+                    .foregroundColor(.secondary)
+                TextField(block.field_placeholder ?? "Search location...", text: $text)
+                    .font(.subheadline)
+                    .onChange(of: text) { newValue in
+                        inputValues[fieldId] = newValue
+                    }
+            }
+            .padding(12)
+            .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
+            .cornerRadius(cornerRadius)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(borderColor, lineWidth: 1)
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - AC-048: Image Picker Placeholder (interactive button with alert)
+
+/// Interactive placeholder for image picker. Shows an alert on tap.
+struct FormInputImagePickerPlaceholderBlock: View {
+    let block: ContentBlock
+
+    @State private var showAlert = false
+
+    var body: some View {
+        let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
+        let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
+
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
+
+            Button {
+                showAlert = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "photo.fill")
+                        .foregroundColor(.secondary)
+                    Text("Tap to pick image")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(16)
+                .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
+                .cornerRadius(cornerRadius)
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(borderColor, style: StrokeStyle(lineWidth: 1, dash: [6, 3]))
+                )
+            }
+            .buttonStyle(.plain)
+            .alert("Photo Picker", isPresented: $showAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Photo picker coming in next SDK update.")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - AC-051: Signature Input (interactive Canvas with touch drawing)
+
+/// Interactive signature pad with basic touch/drag drawing.
+struct FormInputSignatureBlock: View {
+    let block: ContentBlock
+    @Binding var inputValues: [String: Any]
+
+    @State private var lines: [[CGPoint]] = []
+    @State private var currentLine: [CGPoint] = []
+
+    var body: some View {
+        let fieldId = block.field_id ?? block.id
+        let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
+        let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
+
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
+
+            ZStack(alignment: .topTrailing) {
+                Canvas { context, size in
+                    for line in lines + [currentLine] {
+                        guard line.count > 1 else { continue }
+                        var path = Path()
+                        path.move(to: line[0])
+                        for point in line.dropFirst() {
+                            path.addLine(to: point)
+                        }
+                        context.stroke(path, with: .color(.primary), lineWidth: 2)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 120)
+                .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
+                .cornerRadius(cornerRadius)
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(borderColor, style: StrokeStyle(lineWidth: 1, dash: [6, 3]))
+                )
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            currentLine.append(value.location)
+                        }
+                        .onEnded { _ in
+                            lines.append(currentLine)
+                            currentLine = []
+                            inputValues[fieldId] = "signed"
+                        }
+                )
+
+                // Clear button
+                if !lines.isEmpty {
+                    Button {
+                        lines = []
+                        currentLine = []
+                        inputValues.removeValue(forKey: fieldId)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                            .padding(8)
+                    }
+                }
+            }
+
+            if lines.isEmpty {
+                Text("Draw your signature above")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

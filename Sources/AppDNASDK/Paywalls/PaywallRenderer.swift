@@ -3,9 +3,11 @@ import SwiftUI
 /// Schema-driven SwiftUI view that renders a PaywallConfig.
 struct PaywallRenderer: View {
     let config: PaywallConfig
-    let onPlanSelected: (PaywallPlan) -> Void
+    let onPlanSelected: (PaywallPlan, _ metadata: [String: Any]) -> Void
     let onRestore: () -> Void
     let onDismiss: (DismissReason) -> Void
+    /// AC-037: Callback for promo code validation. Returns true if code is valid, false otherwise.
+    var onPromoCodeSubmit: ((String, @escaping (Bool) -> Void) -> Void)? = nil
 
     @State private var selectedPlanId: String?
     @State private var showDismiss = false
@@ -975,11 +977,16 @@ struct PaywallRenderer: View {
                 .font(.subheadline)
 
             Button {
-                // Submit promo code — hook integration point
+                // AC-037: Submit promo code via delegate callback
                 promoState = .loading
-                // In production, fire async hook with promo_code
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                    // Placeholder: would be replaced by actual webhook
+                if let onPromoCodeSubmit = onPromoCodeSubmit {
+                    onPromoCodeSubmit(promoCode) { isValid in
+                        DispatchQueue.main.async {
+                            promoState = isValid ? .success : .error
+                        }
+                    }
+                } else {
+                    // No delegate configured — basic non-empty check fallback
                     promoState = promoCode.isEmpty ? .error : .success
                 }
             } label: {
@@ -1152,7 +1159,15 @@ struct PaywallRenderer: View {
             showConfetti = true
         }
         isPurchasing = true
-        onPlanSelected(plan)
+        // AC-038: Include toggle states in purchase metadata
+        var metadata: [String: Any] = [:]
+        if !toggleStates.isEmpty {
+            metadata["toggle_states"] = toggleStates
+        }
+        if !promoCode.isEmpty && promoState == .success {
+            metadata["promo_code"] = promoCode
+        }
+        onPlanSelected(plan, metadata)
     }
 }
 

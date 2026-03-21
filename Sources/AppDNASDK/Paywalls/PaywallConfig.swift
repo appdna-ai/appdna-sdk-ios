@@ -408,6 +408,8 @@ public protocol AppDNAPaywallDelegate: AnyObject {
     func onPaywallPurchaseCompleted(paywallId: String, productId: String, transaction: TransactionInfo)
     func onPaywallPurchaseFailed(paywallId: String, error: Error)
     func onPaywallDismissed(paywallId: String)
+    /// AC-037: Validate a promo code entered by the user. Call the completion handler with `true` if valid, `false` otherwise.
+    func onPromoCodeSubmit(paywallId: String, code: String, completion: @escaping (Bool) -> Void)
 }
 
 /// Default empty implementations so delegates can opt into specific callbacks.
@@ -418,4 +420,5 @@ public extension AppDNAPaywallDelegate {
     func onPaywallPurchaseCompleted(paywallId: String, productId: String, transaction: TransactionInfo) {}
     func onPaywallPurchaseFailed(paywallId: String, error: Error) {}
     func onPaywallDismissed(paywallId: String) {}
+    func onPromoCodeSubmit(paywallId: String, code: String, completion: @escaping (Bool) -> Void) { completion(false) }
 }

@@ -44,8 +44,8 @@ final class PaywallManager {
 
         let paywallView = PaywallRenderer(
             config: config,
-            onPlanSelected: { [weak self] plan in
-                self?.handlePurchase(paywallId: id, plan: plan, delegate: delegate)
+            onPlanSelected: { [weak self] plan, metadata in
+                self?.handlePurchase(paywallId: id, plan: plan, metadata: metadata, delegate: delegate)
             },
             onRestore: { [weak self] in
                 self?.handleRestore(paywallId: id, delegate: delegate)
@@ -58,6 +58,9 @@ final class PaywallManager {
                 viewController.dismiss(animated: true) {
                     delegate?.onPaywallDismissed(paywallId: id)
                 }
+            },
+            onPromoCodeSubmit: delegate == nil ? nil : { code, completion in
+                delegate?.onPromoCodeSubmit(paywallId: id, code: code, completion: completion)
             }
         )
 
@@ -70,17 +73,22 @@ final class PaywallManager {
 
     // MARK: - Purchase flow
 
-    private func handlePurchase(paywallId: String, plan: PaywallPlan, delegate: AppDNAPaywallDelegate?) {
+    private func handlePurchase(paywallId: String, plan: PaywallPlan, metadata: [String: Any] = [:], delegate: AppDNAPaywallDelegate?) {
         guard let bridge = billingBridge else {
             Log.error("No billing bridge configured")
             return
         }
 
         delegate?.onPaywallPurchaseStarted(paywallId: paywallId, productId: plan.productId)
-        eventTracker.track(event: "purchase_started", properties: [
+        // AC-038: Include toggle states and promo code in purchase event
+        var purchaseProps: [String: Any] = [
             "paywall_id": paywallId,
             "product_id": plan.productId,
-        ])
+        ]
+        for (key, value) in metadata {
+            purchaseProps[key] = value
+        }
+        eventTracker.track(event: "purchase_started", properties: purchaseProps)
 
         Task {
             do {

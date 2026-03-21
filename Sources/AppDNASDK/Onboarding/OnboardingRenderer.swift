@@ -48,7 +48,9 @@ struct OnboardingFlowHost: View {
                             },
                             onSkip: {
                                 handleStepSkipped(step: step)
-                            }
+                            },
+                            currentStepIndex: currentIndex,
+                            totalSteps: flow.steps.count
                         )
                         .id(currentIndex)
                         .transition(.asymmetric(
@@ -566,6 +568,10 @@ struct OnboardingStepRouter: View {
     let effectiveConfig: StepConfig
     let onNext: ([String: Any]?) -> Void
     let onSkip: () -> Void
+    /// Current step index (0-based) for auto-binding page_indicator / progress_bar.
+    var currentStepIndex: Int = 0
+    /// Total steps in the flow for auto-binding page_indicator / progress_bar.
+    var totalSteps: Int = 1
 
     @State private var toggleValues: [String: Bool] = [:]
     @State private var inputValues: [String: Any] = [:]
@@ -616,7 +622,7 @@ struct OnboardingStepRouter: View {
                 ScrollView {
                     VStack(spacing: 12) {
                         Spacer(minLength: 200)
-                        ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues)
+                        ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues, currentStepIndex: currentStepIndex, totalSteps: totalSteps)
                             .padding(.horizontal, 20)
                     }
                 }
@@ -636,7 +642,7 @@ struct OnboardingStepRouter: View {
                         .clipped()
                     }
                     ScrollView {
-                        ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues)
+                        ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues, currentStepIndex: currentStepIndex, totalSteps: totalSteps)
                             .padding(16)
                     }
                     .frame(width: geometry.size.width * 0.6)
@@ -646,7 +652,7 @@ struct OnboardingStepRouter: View {
         case "image_bottom":
             ScrollView {
                 VStack(spacing: 12) {
-                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues)
+                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues, currentStepIndex: currentStepIndex, totalSteps: totalSteps)
                         .padding(.horizontal, 20)
                     if let url = effectiveConfig.image_url {
                         AsyncImage(url: URL(string: url)) { phase in
@@ -669,7 +675,7 @@ struct OnboardingStepRouter: View {
                             }
                         }
                     }
-                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues)
+                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues, currentStepIndex: currentStepIndex, totalSteps: totalSteps)
                         .padding(.horizontal, 20)
                 }
                 .padding(.vertical, 20)
@@ -677,7 +683,7 @@ struct OnboardingStepRouter: View {
 
         default: // no_image
             ScrollView {
-                ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues)
+                ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues, currentStepIndex: currentStepIndex, totalSteps: totalSteps)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 20)
             }
