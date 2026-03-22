@@ -457,7 +457,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
             "text": "How are you feeling today?",
             "required": true,
             "emoji_config": {
-                "emojis": ["\\u{1F621}", "\\u{1F615}", "\\u{1F610}", "\\u{1F60A}", "\\u{1F60D}"]
+                "emojis": ["\u{1F621}", "\u{1F615}", "\u{1F610}", "\u{1F60A}", "\u{1F60D}"]
             }
         }
         """.data(using: .utf8)!
@@ -1344,7 +1344,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
                     "text": "Mood?",
                     "required": false,
                     "emoji_config": {
-                        "emojis": ["\\u{1F44E}", "\\u{1F44D}"]
+                        "emojis": ["\u{1F44E}", "\u{1F44D}"]
                     }
                 }
             ],
