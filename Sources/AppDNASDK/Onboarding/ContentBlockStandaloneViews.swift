@@ -312,7 +312,7 @@ struct AnimatedLoadingBlockView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + capturedDelay) {
                 withAnimation {
                     completedCount = capturedIndex + 1
-                    overallProgress = CGFloat(capturedDelay / (totalDuration / 1000.0))
+                    overallProgress = totalDuration > 0 ? CGFloat(capturedDelay / (totalDuration / 1000.0)) : 1.0
                 }
 
                 // If last item, handle auto_advance
