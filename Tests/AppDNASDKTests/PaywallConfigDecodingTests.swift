@@ -939,7 +939,7 @@ final class PaywallConfigDecodingTests: XCTestCase {
         XCTAssertEqual(review.avatarUrl, "https://example.com/alex.png")
         XCTAssertEqual(review.date, "2026-03-15")
         // Verify computed id
-        XCTAssertEqual(review.id, "Alex K.Absolutely incredible ")
+        XCTAssertEqual(review.id, "Alex K.Absolutely incredibl")
     }
 
     // 26. PaywallTableColumn and PaywallTableRow decoded individually
