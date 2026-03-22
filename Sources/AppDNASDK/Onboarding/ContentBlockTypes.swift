@@ -308,10 +308,29 @@ public struct FormFieldBlockStyle: Codable {
 }
 
 /// Option for select, chips, and segmented inputs.
+/// Editor writes "id" + "label"; SDK accepts both "id"/"value" for the identifier.
 public struct InputOption: Codable, Identifiable {
-    public let value: String
+    public let id: String
     public let label: String
-    public var id: String { value }
+    public let value: String?
+    public let icon: String?
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let rawId = try container.decodeIfPresent(String.self, forKey: .id)
+        let rawValue = try container.decodeIfPresent(String.self, forKey: .value)
+        self.id = rawId ?? rawValue ?? ""
+        self.value = rawValue ?? rawId
+        self.label = try container.decode(String.self, forKey: .label)
+        self.icon = try container.decodeIfPresent(String.self, forKey: .icon)
+    }
+
+    /// Non-optional value — falls back to id if value is nil.
+    public var resolvedValue: String { value ?? id }
+
+    enum CodingKeys: String, CodingKey {
+        case id, label, value, icon
+    }
 }
 
 // MARK: - Relative Sizing Helper (SPEC-089d §6.7)

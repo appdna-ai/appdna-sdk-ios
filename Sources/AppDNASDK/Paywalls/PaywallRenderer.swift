@@ -134,46 +134,45 @@ struct PaywallRenderer: View {
 
     // MARK: - Background
 
-    @ViewBuilder
-    private var backgroundView: some View {
+    private var backgroundView: AnyView {
         switch config.background?.type {
         case "gradient":
             if let colors = config.background?.colors, colors.count >= 2 {
-                LinearGradient(
+                return AnyView(LinearGradient(
                     colors: colors.map { Color(hex: $0) },
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .ignoresSafeArea()
+                .ignoresSafeArea())
             } else {
-                Color.black.ignoresSafeArea()
+                return AnyView(Color.black.ignoresSafeArea())
             }
         case "image":
             if let urlString = config.background?.value, let url = URL(string: urlString) {
-                AsyncImage(url: url) { image in
+                return AnyView(AsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
                     Color.black
                 }
-                .ignoresSafeArea()
+                .ignoresSafeArea())
             } else {
-                Color.black.ignoresSafeArea()
+                return AnyView(Color.black.ignoresSafeArea())
             }
         case "video":
             // SPEC-085: Video background
-            ZStack {
+            return AnyView(ZStack {
                 Color.black.ignoresSafeArea()
                 if let videoUrlStr = config.background?.video_url ?? config.background?.value,
                    let videoUrl = URL(string: videoUrlStr) {
                     VideoBackgroundView(url: videoUrl)
                         .ignoresSafeArea()
                 }
-            }
+            })
         case "color":
-            Color(hex: config.background?.value ?? "#000000")
-                .ignoresSafeArea()
+            return AnyView(Color(hex: config.background?.value ?? "#000000")
+                .ignoresSafeArea())
         default:
-            Color(.systemBackground).ignoresSafeArea()
+            return AnyView(Color(.systemBackground).ignoresSafeArea())
         }
     }
 
@@ -205,128 +204,131 @@ struct PaywallRenderer: View {
         .transition(.opacity)
     }
 
-    // MARK: - Section rendering
+    // MARK: - Section rendering (AnyView to avoid exponential type-checking on 24-case switch)
 
-    @ViewBuilder
     private func sectionView(for section: PaywallSection) -> some View {
         let staggerDelay = config.animation?.section_stagger_delay_ms ?? 0
+        return sectionContent(for: section)
+            .sectionStagger(config.animation?.section_stagger, delayMs: staggerDelay)
+    }
 
-        Group {
-            switch section.type {
-            case "header":
-                HeaderSection(data: section.data, loc: loc, sectionStyle: section.style)
-                    .applyContainerStyle(section.style?.container)
-            case "features":
-                FeatureList(features: (section.data?.features ?? []).enumerated().map { i, f in loc("feature.\(i)", f) }, sectionStyle: section.style)
-                    .applyContainerStyle(section.style?.container)
-            case "plans":
-                plansSection(plans: section.data?.plans ?? [], style: section.style)
-                    .applyContainerStyle(section.style?.container)
-            case "cta":
-                CTAButton(
-                    cta: section.data?.cta,
-                    isPurchasing: isPurchasing,
-                    onTap: handleCTATap,
-                    loc: loc,
-                    sectionStyle: section.style
-                )
-                .ctaAnimation(config.animation?.cta_animation)
-                .applyContainerStyle(section.style?.container)
-            case "social_proof":
-                socialProofSection(data: section.data, style: section.style)
-                    .applyContainerStyle(section.style?.container)
-            case "guarantee":
-                if let text = section.data?.guaranteeText {
-                    let ts = section.style?.elements?["text"]?.textStyle
-                    Text(loc("guarantee.text", text))
-                        .applyTextStyle(ts)
-                        .font(ts == nil ? .caption : nil)
-                        .foregroundColor(ts?.color == nil ? .secondary : nil)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                        .applyContainerStyle(section.style?.container)
-                }
-            // SPEC-084: Missing sections
-            case "image":
-                imageSectionView(data: section.data, style: section.style)
-            case "spacer":
-                Spacer().frame(height: section.data?.spacerHeight ?? 24)
-            case "testimonial":
-                testimonialSectionView(data: section.data, style: section.style)
-            // SPEC-085: Rich media sections
-            case "lottie":
-                lottieSectionView(data: section.data, style: section.style)
-            case "video":
-                videoSectionView(data: section.data, style: section.style)
-            case "rive":
-                riveSectionView(data: section.data, style: section.style)
-            // SPEC-089d: 12 new paywall section types
-            case "countdown":
-                countdownSectionView(data: section.data, style: section.style)
-                    .applyContainerStyle(section.style?.container)
-            case "legal":
-                legalSectionView(data: section.data, style: section.style)
-                    .applyContainerStyle(section.style?.container)
-            case "divider":
-                dividerSectionView(data: section.data, style: section.style)
-            case "sticky_footer":
-                EmptyView() // Rendered outside ScrollView — see stickyFooterOverlay
-            case "card":
-                cardSectionView(data: section.data, style: section.style)
-            case "carousel":
-                carouselSectionView(data: section.data, style: section.style)
-                    .applyContainerStyle(section.style?.container)
-            case "timeline":
-                timelineSectionView(data: section.data, style: section.style)
-                    .applyContainerStyle(section.style?.container)
-            case "icon_grid":
-                iconGridSectionView(data: section.data, style: section.style)
-                    .applyContainerStyle(section.style?.container)
-            case "comparison_table":
-                comparisonTableSectionView(data: section.data, style: section.style)
-                    .applyContainerStyle(section.style?.container)
-            case "promo_input":
-                promoInputSectionView(data: section.data, style: section.style)
-                    .applyContainerStyle(section.style?.container)
-            case "toggle":
-                toggleSectionView(data: section.data, style: section.style)
-                    .applyContainerStyle(section.style?.container)
-            case "reviews_carousel":
-                reviewsCarouselSectionView(data: section.data, style: section.style)
-                    .applyContainerStyle(section.style?.container)
-            default:
-                EmptyView()
-            }
+    private func sectionContent(for section: PaywallSection) -> AnyView {
+        switch section.type {
+        case "header":
+            return AnyView(HeaderSection(data: section.data, loc: loc, sectionStyle: section.style)
+                .applyContainerStyle(section.style?.container))
+        case "features":
+            return AnyView(FeatureList(features: (section.data?.features ?? []).enumerated().map { i, f in loc("feature.\(i)", f) }, sectionStyle: section.style)
+                .applyContainerStyle(section.style?.container))
+        case "plans":
+            return AnyView(plansSection(plans: section.data?.plans ?? [], style: section.style)
+                .applyContainerStyle(section.style?.container))
+        case "cta":
+            return AnyView(CTAButton(
+                cta: section.data?.cta,
+                isPurchasing: isPurchasing,
+                onTap: handleCTATap,
+                loc: loc,
+                sectionStyle: section.style
+            )
+            .ctaAnimation(config.animation?.cta_animation)
+            .applyContainerStyle(section.style?.container))
+        case "social_proof":
+            return AnyView(socialProofSection(data: section.data, style: section.style)
+                .applyContainerStyle(section.style?.container))
+        case "guarantee":
+            return AnyView(guaranteeSectionView(data: section.data, style: section.style))
+        case "image":
+            return AnyView(imageSectionView(data: section.data, style: section.style))
+        case "spacer":
+            return AnyView(Spacer().frame(height: section.data?.spacerHeight ?? 24))
+        case "testimonial":
+            return AnyView(testimonialSectionView(data: section.data, style: section.style))
+        case "lottie":
+            return AnyView(lottieSectionView(data: section.data, style: section.style))
+        case "video":
+            return AnyView(videoSectionView(data: section.data, style: section.style))
+        case "rive":
+            return AnyView(riveSectionView(data: section.data, style: section.style))
+        case "countdown":
+            return AnyView(countdownSectionView(data: section.data, style: section.style)
+                .applyContainerStyle(section.style?.container))
+        case "legal":
+            return AnyView(legalSectionView(data: section.data, style: section.style)
+                .applyContainerStyle(section.style?.container))
+        case "divider":
+            return AnyView(dividerSectionView(data: section.data, style: section.style))
+        case "sticky_footer":
+            return AnyView(EmptyView()) // Rendered outside ScrollView
+        case "card":
+            return AnyView(cardSectionView(data: section.data, style: section.style))
+        case "carousel":
+            return AnyView(carouselSectionView(data: section.data, style: section.style)
+                .applyContainerStyle(section.style?.container))
+        case "timeline":
+            return AnyView(timelineSectionView(data: section.data, style: section.style)
+                .applyContainerStyle(section.style?.container))
+        case "icon_grid":
+            return AnyView(iconGridSectionView(data: section.data, style: section.style)
+                .applyContainerStyle(section.style?.container))
+        case "comparison_table":
+            return AnyView(comparisonTableSectionView(data: section.data, style: section.style)
+                .applyContainerStyle(section.style?.container))
+        case "promo_input":
+            return AnyView(promoInputSectionView(data: section.data, style: section.style)
+                .applyContainerStyle(section.style?.container))
+        case "toggle":
+            return AnyView(toggleSectionView(data: section.data, style: section.style)
+                .applyContainerStyle(section.style?.container))
+        case "reviews_carousel":
+            return AnyView(reviewsCarouselSectionView(data: section.data, style: section.style)
+                .applyContainerStyle(section.style?.container))
+        default:
+            return AnyView(EmptyView())
         }
-        .sectionStagger(config.animation?.section_stagger, delayMs: staggerDelay)
+    }
+
+    // MARK: - Guarantee section (extracted from inline switch case)
+
+    @ViewBuilder
+    private func guaranteeSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+        if let text = data?.guaranteeText {
+            let ts = style?.elements?["text"]?.textStyle
+            Text(loc("guarantee.text", text))
+                .applyTextStyle(ts)
+                .font(ts == nil ? .caption : nil)
+                .foregroundColor(ts?.color == nil ? .secondary : nil)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+                .applyContainerStyle(style?.container)
+        }
     }
 
     // MARK: - SPEC-084: Social proof with sub-types
 
-    @ViewBuilder
-    private func socialProofSection(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
+    private func socialProofSection(data: PaywallSectionData?, style: SectionStyleConfig?) -> AnyView {
         switch data?.subType {
         case "countdown":
-            CountdownTimerView(seconds: data?.countdownSeconds ?? 86400, valueTextStyle: style?.elements?["value"]?.textStyle)
+            return AnyView(CountdownTimerView(seconds: data?.countdownSeconds ?? 86400, valueTextStyle: style?.elements?["value"]?.textStyle))
         case "trial_badge":
             if let ts = style?.elements?["value"]?.textStyle {
-                Text(loc("social_proof.trial_badge", data?.text ?? "Free Trial"))
+                return AnyView(Text(loc("social_proof.trial_badge", data?.text ?? "Free Trial"))
                     .applyTextStyle(ts)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .background(Color.accentColor.opacity(0.15))
-                    .clipShape(Capsule())
+                    .clipShape(Capsule()))
             } else {
-                Text(loc("social_proof.trial_badge", data?.text ?? "Free Trial"))
+                return AnyView(Text(loc("social_proof.trial_badge", data?.text ?? "Free Trial"))
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .background(Color.accentColor.opacity(0.15))
                     .foregroundColor(.accentColor)
-                    .clipShape(Capsule())
+                    .clipShape(Capsule()))
             }
         default: // app_rating
-            SocialProof(data: data, loc: loc, sectionStyle: style)
+            return AnyView(SocialProof(data: data, loc: loc, sectionStyle: style))
         }
     }
 
@@ -605,23 +607,22 @@ struct PaywallRenderer: View {
         .padding(.horizontal, mH)
     }
 
-    @ViewBuilder
-    private func dividerLine(color: Color, thickness: CGFloat, style: String) -> some View {
+    private func dividerLine(color: Color, thickness: CGFloat, style: String) -> AnyView {
         switch style {
         case "dashed":
-            Line()
+            return AnyView(Line()
                 .stroke(style: StrokeStyle(lineWidth: thickness, dash: [6, 3]))
                 .foregroundColor(color)
-                .frame(height: thickness)
+                .frame(height: thickness))
         case "dotted":
-            Line()
+            return AnyView(Line()
                 .stroke(style: StrokeStyle(lineWidth: thickness, dash: [2, 2]))
                 .foregroundColor(color)
-                .frame(height: thickness)
+                .frame(height: thickness))
         default: // solid
-            Rectangle()
+            return AnyView(Rectangle()
                 .fill(color)
-                .frame(height: thickness)
+                .frame(height: thickness))
         }
     }
 
@@ -1080,49 +1081,26 @@ struct PaywallRenderer: View {
     // MARK: - Plans
 
     // SPEC-084: Grid/carousel/stack plan layouts
-    @ViewBuilder
     private func plansSection(plans: [PaywallPlan], style: SectionStyleConfig? = nil) -> some View {
         let layoutType = config.layout.type
 
-        VStack(spacing: 12) {
-            switch layoutType {
-            case "grid":
-                // Side-by-side plan cards
-                let columns = [GridItem(.flexible()), GridItem(.flexible())]
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                        PlanCard(
-                            plan: plan,
-                            isSelected: selectedPlanId == plan.id,
-                            onSelect: { selectedPlanId = plan.id; HapticEngine.triggerIfEnabled(config.haptic?.triggers.on_plan_select, config: config.haptic) },
-                            planIndex: index,
-                            loc: loc,
-                            sectionStyle: style
-                        )
-                        .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
-                    }
-                }
+        return VStack(spacing: 12) {
+            planLayoutView(plans: plans, layoutType: layoutType, style: style)
 
-            case "carousel":
-                // Swipeable horizontal plan cards
-                TabView {
-                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                        PlanCard(
-                            plan: plan,
-                            isSelected: selectedPlanId == plan.id,
-                            onSelect: { selectedPlanId = plan.id; HapticEngine.triggerIfEnabled(config.haptic?.triggers.on_plan_select, config: config.haptic) },
-                            planIndex: index,
-                            loc: loc,
-                            sectionStyle: style
-                        )
-                        .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
-                        .padding(.horizontal, 8)
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .always))
-                .frame(height: 140)
+            Button(loc("restore.text", "Restore Purchases")) {
+                onRestore()
+            }
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
+    }
 
-            default: // "stack"
+    /// Type-erased plan layout to avoid @ViewBuilder switch in plansSection.
+    private func planLayoutView(plans: [PaywallPlan], layoutType: String, style: SectionStyleConfig?) -> AnyView {
+        switch layoutType {
+        case "grid":
+            let columns = [GridItem(.flexible()), GridItem(.flexible())]
+            return AnyView(LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
                     PlanCard(
                         plan: plan,
@@ -1134,13 +1112,38 @@ struct PaywallRenderer: View {
                     )
                     .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
                 }
-            }
+            })
 
-            Button(loc("restore.text", "Restore Purchases")) {
-                onRestore()
+        case "carousel":
+            return AnyView(TabView {
+                ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                    PlanCard(
+                        plan: plan,
+                        isSelected: selectedPlanId == plan.id,
+                        onSelect: { selectedPlanId = plan.id; HapticEngine.triggerIfEnabled(config.haptic?.triggers.on_plan_select, config: config.haptic) },
+                        planIndex: index,
+                        loc: loc,
+                        sectionStyle: style
+                    )
+                    .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
+                    .padding(.horizontal, 8)
+                }
             }
-            .font(.caption)
-            .foregroundColor(.secondary)
+            .tabViewStyle(.page(indexDisplayMode: .always))
+            .frame(height: 140))
+
+        default: // "stack"
+            return AnyView(ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                PlanCard(
+                    plan: plan,
+                    isSelected: selectedPlanId == plan.id,
+                    onSelect: { selectedPlanId = plan.id; HapticEngine.triggerIfEnabled(config.haptic?.triggers.on_plan_select, config: config.haptic) },
+                    planIndex: index,
+                    loc: loc,
+                    sectionStyle: style
+                )
+                .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
+            })
         }
     }
 
@@ -1168,319 +1171,5 @@ struct PaywallRenderer: View {
             metadata["promo_code"] = promoCode
         }
         onPlanSelected(plan, metadata)
-    }
-}
-
-// MARK: - Countdown timer (SPEC-084 social proof sub-type)
-
-struct CountdownTimerView: View {
-    let seconds: Int
-    var valueTextStyle: TextStyleConfig? = nil
-    @State private var remaining: Int
-
-    init(seconds: Int, valueTextStyle: TextStyleConfig? = nil) {
-        self.seconds = seconds
-        self.valueTextStyle = valueTextStyle
-        self._remaining = State(initialValue: seconds)
-    }
-
-    var body: some View {
-        let hours = remaining / 3600
-        let minutes = (remaining % 3600) / 60
-        let secs = remaining % 60
-
-        HStack(spacing: 4) {
-            timeUnit(hours, label: "h")
-            Text(":").foregroundColor(.white.opacity(0.6))
-            timeUnit(minutes, label: "m")
-            Text(":").foregroundColor(.white.opacity(0.6))
-            timeUnit(secs, label: "s")
-        }
-        .onAppear {
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
-                if remaining > 0 {
-                    remaining -= 1
-                } else {
-                    timer.invalidate()
-                }
-            }
-        }
-    }
-
-    private func timeUnit(_ value: Int, label: String) -> some View {
-        VStack(spacing: 2) {
-            if let ts = valueTextStyle {
-                Text(String(format: "%02d", value))
-                    .applyTextStyle(ts)
-                    .monospacedDigit()
-            } else {
-                Text(String(format: "%02d", value))
-                    .font(.title2.monospacedDigit().bold())
-                    .foregroundColor(.white)
-            }
-            Text(label)
-                .font(.caption2)
-                .foregroundColor(.white.opacity(0.6))
-        }
-        .frame(minWidth: 40)
-        .padding(.vertical, 6)
-        .background(Color.white.opacity(0.1))
-        .cornerRadius(8)
-    }
-}
-
-// MARK: - Color hex extension
-
-extension Color {
-    init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let r, g, b, a: UInt64
-        switch hex.count {
-        case 6:
-            (r, g, b, a) = (int >> 16, int >> 8 & 0xFF, int & 0xFF, 255)
-        case 8:
-            (r, g, b, a) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default:
-            (r, g, b, a) = (0, 0, 0, 255)
-        }
-        self.init(
-            .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue: Double(b) / 255,
-            opacity: Double(a) / 255
-        )
-    }
-}
-
-// MARK: - SPEC-085: Video background view
-
-import AVKit
-
-struct VideoBackgroundView: View {
-    let url: URL
-    @State private var player: AVPlayer?
-
-    var body: some View {
-        Group {
-            if let player = player {
-                VideoPlayer(player: player)
-                    .disabled(true)  // No controls for background
-                    .onAppear {
-                        player.isMuted = true
-                        player.play()
-                        // Loop the video
-                        NotificationCenter.default.addObserver(
-                            forName: .AVPlayerItemDidPlayToEndTime,
-                            object: player.currentItem,
-                            queue: .main
-                        ) { _ in
-                            player.seek(to: .zero)
-                            player.play()
-                        }
-                    }
-            } else {
-                Color.black
-            }
-        }
-        .onAppear {
-            player = AVPlayer(url: url)
-        }
-    }
-}
-
-// MARK: - SPEC-089d: Promo state enum
-
-enum PromoState: Equatable {
-    case idle
-    case loading
-    case success
-    case error
-}
-
-// MARK: - SPEC-089d: Line shape for dashed/dotted dividers
-
-struct Line: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: 0, y: rect.midY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-        return path
-    }
-}
-
-// MARK: - SPEC-089d: Carousel sub-view (AC-033)
-
-struct CarouselView: View {
-    let pages: [PaywallCarouselPage]
-    let config: PaywallConfig
-    let autoScroll: Bool
-    let autoScrollIntervalMs: Int
-    let showIndicators: Bool
-    let indicatorColor: String
-    let indicatorActiveColor: String
-    let height: CGFloat?
-    let loc: (String, String) -> String
-
-    @State private var currentPage = 0
-
-    var body: some View {
-        VStack(spacing: 12) {
-            TabView(selection: $currentPage) {
-                ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
-                    VStack(spacing: 8) {
-                        if let children = page.children {
-                            ForEach(Array(children.enumerated()), id: \.offset) { _, child in
-                                // Render child sections (simplified: render text/title if present)
-                                if let title = child.data?.title {
-                                    Text(title)
-                                        .font(.headline)
-                                        .foregroundColor(.white)
-                                }
-                                if let subtitle = child.data?.subtitle {
-                                    Text(subtitle)
-                                        .font(.subheadline)
-                                        .foregroundColor(.white.opacity(0.8))
-                                }
-                                if let imageUrl = child.data?.imageUrl, let url = URL(string: imageUrl) {
-                                    AsyncImage(url: url) { image in
-                                        image.resizable().scaledToFit()
-                                    } placeholder: {
-                                        ProgressView()
-                                    }
-                                    .frame(maxHeight: 120)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                                }
-                            }
-                        }
-                    }
-                    .tag(index)
-                    .padding(.horizontal, 4)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: showIndicators ? .always : .never))
-            .frame(height: height ?? 200)
-
-            // Custom indicators (when show_indicators is true but we want custom colors)
-            if showIndicators {
-                HStack(spacing: 6) {
-                    ForEach(0..<pages.count, id: \.self) { idx in
-                        Circle()
-                            .fill(idx == currentPage
-                                  ? Color(hex: indicatorActiveColor)
-                                  : Color(hex: indicatorColor))
-                            .frame(width: 8, height: 8)
-                    }
-                }
-            }
-        }
-        .onAppear {
-            guard autoScroll else { return }
-            Timer.scheduledTimer(withTimeInterval: Double(autoScrollIntervalMs) / 1000.0, repeats: true) { _ in
-                withAnimation {
-                    currentPage = (currentPage + 1) % max(pages.count, 1)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - SPEC-089d: Reviews carousel sub-view (AC-039)
-
-struct ReviewsCarouselView: View {
-    let reviews: [PaywallReview]
-    let autoScroll: Bool
-    let autoScrollIntervalMs: Int
-    let showRatingStars: Bool
-    let starColor: String
-    let textStyle: TextStyleConfig?
-    let authorStyle: TextStyleConfig?
-    let cardStyle: ElementStyleConfig?
-    let loc: (String, String) -> String
-
-    @State private var currentReview = 0
-
-    var body: some View {
-        VStack(spacing: 8) {
-            TabView(selection: $currentReview) {
-                ForEach(Array(reviews.enumerated()), id: \.offset) { index, review in
-                    VStack(spacing: 12) {
-                        // Star rating
-                        if showRatingStars, let rating = review.rating {
-                            HStack(spacing: 2) {
-                                ForEach(0..<5, id: \.self) { star in
-                                    Image(systemName: Double(star) < rating ? "star.fill" : "star")
-                                        .font(.caption)
-                                        .foregroundColor(Color(hex: starColor))
-                                }
-                            }
-                        }
-
-                        // Quote text
-                        if let ts = textStyle {
-                            Text("\u{201C}\(review.text)\u{201D}")
-                                .applyTextStyle(ts)
-                                .multilineTextAlignment(.center)
-                        } else {
-                            Text("\u{201C}\(review.text)\u{201D}")
-                                .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.9))
-                                .multilineTextAlignment(.center)
-                                .italic()
-                        }
-
-                        // Author
-                        HStack(spacing: 8) {
-                            if let avatarUrl = review.avatarUrl, let url = URL(string: avatarUrl) {
-                                AsyncImage(url: url) { image in
-                                    image.resizable().scaledToFill()
-                                } placeholder: {
-                                    Circle().fill(Color.gray.opacity(0.3))
-                                }
-                                .frame(width: 28, height: 28)
-                                .clipShape(Circle())
-                            }
-
-                            if let as_ = authorStyle {
-                                Text(review.author).applyTextStyle(as_)
-                            } else {
-                                Text(review.author)
-                                    .font(.caption.weight(.medium))
-                                    .foregroundColor(.white.opacity(0.7))
-                            }
-
-                            if let date = review.date {
-                                Text(date)
-                                    .font(.caption2)
-                                    .foregroundColor(.white.opacity(0.4))
-                            }
-                        }
-                    }
-                    .padding(16)
-                    .tag(index)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 180)
-
-            // Page dots
-            HStack(spacing: 6) {
-                ForEach(0..<reviews.count, id: \.self) { idx in
-                    Circle()
-                        .fill(idx == currentReview ? Color.white : Color.white.opacity(0.3))
-                        .frame(width: 6, height: 6)
-                }
-            }
-        }
-        .onAppear {
-            guard autoScroll else { return }
-            Timer.scheduledTimer(withTimeInterval: Double(autoScrollIntervalMs) / 1000.0, repeats: true) { _ in
-                withAnimation {
-                    currentReview = (currentReview + 1) % max(reviews.count, 1)
-                }
-            }
-        }
     }
 }

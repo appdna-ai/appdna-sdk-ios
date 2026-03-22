@@ -195,7 +195,7 @@ struct FormInputSelectBlock: View {
             Picker("", selection: $selectedValue) {
                 Text(block.field_placeholder ?? "Select...").tag("")
                 ForEach(options) { option in
-                    Text(option.label).tag(option.value)
+                    Text(option.label).tag(option.resolvedValue)
                 }
             }
             .pickerStyle(.menu)
@@ -338,7 +338,7 @@ struct FormInputSegmentedBlock: View {
 
             Picker("", selection: $selectedValue) {
                 ForEach(options) { option in
-                    Text(option.label).tag(option.value)
+                    Text(option.label).tag(option.resolvedValue)
                 }
             }
             .pickerStyle(.segmented)
@@ -348,8 +348,8 @@ struct FormInputSegmentedBlock: View {
         }
         .onAppear {
             if selectedValue.isEmpty, let first = options.first {
-                selectedValue = first.value
-                inputValues[fieldId] = first.value
+                selectedValue = first.resolvedValue
+                inputValues[fieldId] = first.resolvedValue
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -469,15 +469,15 @@ struct FormInputChipsBlock: View {
             // FlowLayout approximation using wrapping HStack
             FlowLayoutView(spacing: 8) {
                 ForEach(options) { option in
-                    let isSelected = selectedValues.contains(option.value)
+                    let isSelected = selectedValues.contains(option.resolvedValue)
                     Button {
                         if isSelected {
-                            selectedValues.remove(option.value)
+                            selectedValues.remove(option.resolvedValue)
                         } else {
                             if let max = maxSelections, selectedValues.count >= max {
                                 return // At max selections
                             }
-                            selectedValues.insert(option.value)
+                            selectedValues.insert(option.resolvedValue)
                         }
                         inputValues[fieldId] = Array(selectedValues)
                     } label: {
