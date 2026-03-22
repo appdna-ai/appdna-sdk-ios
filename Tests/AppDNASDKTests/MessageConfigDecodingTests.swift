@@ -339,7 +339,7 @@ final class MessageConfigDecodingTests: XCTestCase {
             "rive_state_machine": "celebrate",
             "video_url": "https://cdn.example.com/hero.mp4",
             "video_thumbnail_url": "https://cdn.example.com/thumb.jpg",
-            "cta_icon": { "library": "emoji", "name": "\\u{1F389}" },
+            "cta_icon": { "library": "emoji", "name": "\u{1F389}" },
             "secondary_cta_icon": { "library": "material", "name": "share", "size": 18 },
             "haptic": {
                 "enabled": true,
