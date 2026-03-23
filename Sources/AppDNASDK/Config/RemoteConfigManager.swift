@@ -197,6 +197,17 @@ final class RemoteConfigManager {
             }
         }
 
+        // SPEC-089c: Fetch screen_index for server-driven UI
+        group.enter()
+        db.document("\(basePath)/screen_index").getDocument { [weak self] snapshot, error in
+            defer { group.leave() }
+            if let data = snapshot?.data() {
+                self?.parseScreenIndex(data)
+            } else if let error {
+                Log.debug("No screen_index config: \(error.localizedDescription)")
+            }
+        }
+
         group.notify(queue: .global()) {
             self.configCache.markFetched()
             Log.info("Remote config fetched successfully")
@@ -357,6 +368,53 @@ final class RemoteConfigManager {
             configCache.storeSurveys(jsonData)
         }
     }
+
+    // MARK: - SPEC-089c: Screen Index
+
+    private func parseScreenIndex(_ data: [String: Any]) {
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: data)
+            let index = try JSONDecoder().decode(ScreenIndex.self, from: jsonData)
+            ScreenManager.shared.updateIndex(index)
+            Log.info("Screen index loaded: \(index.screens?.count ?? 0) screens, \(index.flows?.count ?? 0) flows, \(index.slots?.count ?? 0) slots")
+        } catch {
+            Log.error("Failed to parse screen_index: \(error)")
+        }
+    }
+
+    /// Fetch a single screen config on-demand by ID.
+    func fetchScreenConfig(screenId: String, completion: @escaping (ScreenConfig?) -> Void) {
+        let basePath = "\(firestorePath)/config"
+        db.document("\(basePath)/screens/\(screenId)").getDocument { snapshot, error in
+            guard let data = snapshot?.data() else {
+                completion(nil)
+                return
+            }
+            do {
+                let jsonData = try JSONSerialization.data(withJSONObject: data)
+                let wrapper = try JSONDecoder().decode(ScreenFirestoreWrapper.self, from: jsonData)
+                let config = wrapper.config
+                ScreenManager.shared.cacheScreen(screenId, config: config)
+                completion(config)
+            } catch {
+                // Try parsing the data directly as a ScreenConfig
+                do {
+                    let jsonData = try JSONSerialization.data(withJSONObject: data)
+                    let config = try JSONDecoder().decode(ScreenConfig.self, from: jsonData)
+                    ScreenManager.shared.cacheScreen(screenId, config: config)
+                    completion(config)
+                } catch {
+                    Log.error("Failed to parse screen config \(screenId): \(error)")
+                    completion(nil)
+                }
+            }
+        }
+    }
+}
+
+/// Wrapper for Firestore screen document (has `config` field inside).
+private struct ScreenFirestoreWrapper: Codable {
+    let config: ScreenConfig
 }
 
 // MARK: - Experiment config model

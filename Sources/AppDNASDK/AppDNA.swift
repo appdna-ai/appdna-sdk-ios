@@ -28,6 +28,9 @@ public final class AppDNA: @unchecked Sendable {
     /// Delegate for billing/purchase events.
     public static weak var billingDelegate: AppDNABillingDelegate?
 
+    /// Delegate for server-driven screen events (SPEC-089c).
+    public static weak var screenDelegate: AppDNAScreenDelegate?
+
     /// Internal accessor for the push token manager (legacy).
     static var push: PushTokenManager? { shared.pushTokenManager }
     static var geocodeClient: APIClient? { shared.apiClient }
@@ -101,6 +104,7 @@ public final class AppDNA: @unchecked Sendable {
     private var surveyManager: SurveyManager?
     private var webEntitlementManager: WebEntitlementManager?
     private var deferredDeepLinkManager: DeferredDeepLinkManager?
+    private var screenManager: ScreenManager?
 
     private var bootstrapData: BootstrapData?
     private var isConfigured = false
@@ -272,6 +276,64 @@ public final class AppDNA: @unchecked Sendable {
             }
         }
         return result
+    }
+
+    // MARK: - Public API: Server-Driven Screens (SPEC-089c)
+
+    /// Show a server-driven screen by ID. The screen config is fetched from cache or Firestore.
+    public static func showScreen(_ screenId: String, completion: ((ScreenResult) -> Void)? = nil) {
+        ScreenManager.shared.showScreen(screenId, completion: completion)
+    }
+
+    /// Show a server-driven multi-screen flow by ID.
+    public static func showFlow(_ flowId: String, completion: ((FlowResult) -> Void)? = nil) {
+        ScreenManager.shared.showFlow(flowId, completion: completion)
+    }
+
+    /// Dismiss the currently presented server-driven screen or flow.
+    public static func dismissScreen() {
+        ScreenManager.shared.dismissScreen()
+    }
+
+    /// Enable navigation interception. SDK will inject server-driven screens between
+    /// app navigations based on console-configured interception rules.
+    public static func enableNavigationInterception(forScreens: [String]? = nil) {
+        ScreenManager.shared.enableNavigationInterception(forScreens: forScreens)
+        NavigationInterceptor.shared.enable()
+    }
+
+    /// Disable navigation interception.
+    public static func disableNavigationInterception() {
+        ScreenManager.shared.disableNavigationInterception()
+        NavigationInterceptor.shared.disable()
+    }
+
+    /// Preview a screen from raw JSON (debug builds only).
+    #if DEBUG
+    public static func previewScreen(json: String, completion: ((ScreenResult) -> Void)? = nil) {
+        ScreenManager.shared.previewScreen(json: json, completion: completion)
+    }
+    #endif
+
+    /// Check if analytics consent is granted. Used by zero-code mechanisms.
+    public static func isConsentGranted() -> Bool {
+        shared.eventTracker?.isConsentGranted ?? true
+    }
+
+    /// Get current user traits for audience rule evaluation.
+    public static func getUserTraits() -> [String: Any] {
+        shared.identityManager?.traits ?? [:]
+    }
+
+    /// Shorthand to show a paywall by ID (used by screen action routing).
+    public static func showPaywall(_ id: String) {
+        guard let vc = topViewController() else { return }
+        presentPaywall(id: id, from: vc)
+    }
+
+    /// Shorthand to show a survey by ID (used by screen action routing).
+    public static func showSurvey(_ id: String) {
+        shared.surveyManager?.present(surveyId: id)
     }
 
     // MARK: - Public API: Push Token (v0.2) + Push Tracking (v0.4 / SPEC-030)

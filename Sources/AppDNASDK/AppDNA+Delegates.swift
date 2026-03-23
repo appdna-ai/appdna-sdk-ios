@@ -72,6 +72,22 @@ public extension AppDNADeepLinkDelegate {
     func onDeepLinkReceived(url: URL, params: [String: String]) {}
 }
 
+/// Delegate for server-driven screen events (SPEC-089c).
+public protocol AppDNAScreenDelegate: AnyObject {
+    func onScreenPresented(screenId: String)
+    func onScreenDismissed(screenId: String, result: ScreenResult)
+    func onFlowCompleted(flowId: String, result: FlowResult)
+    func onScreenAction(screenId: String, action: SectionAction) -> Bool
+}
+
+/// Default implementations — all methods optional.
+public extension AppDNAScreenDelegate {
+    func onScreenPresented(screenId: String) {}
+    func onScreenDismissed(screenId: String, result: ScreenResult) {}
+    func onFlowCompleted(flowId: String, result: FlowResult) {}
+    func onScreenAction(screenId: String, action: SectionAction) -> Bool { true }
+}
+
 // MARK: - Support Types
 
 /// Transaction info from a completed purchase.
