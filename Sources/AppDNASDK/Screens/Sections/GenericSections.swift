@@ -54,9 +54,43 @@ private struct ContentBlocksSectionView: View {
         )
     }
 
+    /// Validate required form fields before allowing next/submit (AC-130, AC-131, AC-132)
+    private func validateFormFields() -> Bool {
+        for block in blocks {
+            let blockType = block.type.rawValue
+            guard blockType.hasPrefix("input_") else { continue }
+
+            let fieldId = block.field_id ?? block.id
+            let isRequired = block.field_required ?? false
+
+            if isRequired {
+                let value = inputValues[fieldId]
+                if value == nil || "\(value ?? "")" == "" {
+                    // Field required but empty — validation fails
+                    return false
+                }
+            }
+
+            // Pattern validation (AC-131)
+            if let config = block.field_config as? [String: Any],
+               let pattern = config["pattern"] as? String,
+               let value = inputValues[fieldId] as? String,
+               !value.isEmpty {
+                if let regex = try? NSRegularExpression(pattern: pattern) {
+                    let range = NSRange(value.startIndex..., in: value)
+                    if regex.firstMatch(in: value, range: range) == nil {
+                        return false
+                    }
+                }
+            }
+        }
+        return true
+    }
+
     private func handleBlockAction(_ action: String, value: String?) {
         switch action {
         case "next":
+            guard validateFormFields() else { return }
             context.onAction(.next)
         case "dismiss":
             context.onAction(.dismiss)

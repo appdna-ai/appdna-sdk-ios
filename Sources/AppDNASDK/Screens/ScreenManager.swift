@@ -132,6 +132,34 @@ internal class ScreenManager {
             return
         }
 
+        // Resolve experiment variants (AC-093, AC-094)
+        var resolvedConfig = config
+        var variantKey: String?
+        if let experimentId = config.experiment_id, let variants = config.variants {
+            // Check experiment bucketing
+            if let bucket = AppDNA.getExperimentVariant(experimentId: experimentId) {
+                variantKey = bucket
+                if let override = variants[bucket] {
+                    // Apply variant overrides
+                    if let overrideSections = override.sections { resolvedConfig = ScreenConfig(
+                        id: config.id, name: config.name, version: config.version,
+                        presentation: override.presentation ?? config.presentation,
+                        transition: config.transition, layout: config.layout,
+                        sections: overrideSections,
+                        background: override.background ?? config.background,
+                        dismiss: config.dismiss, nav_bar: config.nav_bar,
+                        haptic: config.haptic, particle_effect: config.particle_effect,
+                        localizations: config.localizations, default_locale: config.default_locale,
+                        audience_rules: config.audience_rules, trigger_rules: config.trigger_rules,
+                        slot_config: config.slot_config, start_date: config.start_date,
+                        end_date: config.end_date, min_sdk_version: config.min_sdk_version,
+                        experiment_id: config.experiment_id, variants: config.variants,
+                        analytics_name: config.analytics_name
+                    )}
+                }
+            }
+        }
+
         // Build context
         let context = SectionContext(
             screenId: screenId,
@@ -140,16 +168,19 @@ internal class ScreenManager {
             }
         )
 
-        // Track event
-        AppDNA.track("screen_presented", properties: [
+        // Track event (AC-095: include experiment_id and variant_key)
+        var trackProps: [String: Any] = [
             "screen_id": screenId,
-            "screen_name": config.name,
-            "presentation": config.presentation,
-        ])
+            "screen_name": resolvedConfig.name,
+            "presentation": resolvedConfig.presentation,
+        ]
+        if let expId = config.experiment_id { trackProps["experiment_id"] = expId }
+        if let vk = variantKey { trackProps["variant_key"] = vk }
+        AppDNA.track("screen_presented", properties: trackProps)
 
         // Present via PresentationCoordinator
         PresentationCoordinator.shared.requestPresentation(type: .screen) {
-            ScreenPresenter.present(config: config, context: context) { [weak self] in
+            ScreenPresenter.present(config: resolvedConfig, context: context) { [weak self] in
                 let duration = Int(Date().timeIntervalSince(startTime) * 1000)
                 AppDNA.track("screen_dismissed", properties: [
                     "screen_id": screenId,
@@ -306,6 +337,7 @@ internal class ScreenManager {
 
         // Show highest priority match
         if let match = matchingScreens.first {
+            guard PresentationCoordinator.shared.canPresent(type: .screen, isAutoTriggered: true) else { return }
             showScreen(match.id)
         }
     }
