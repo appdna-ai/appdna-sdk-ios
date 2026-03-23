@@ -48,6 +48,13 @@ public class PushNotificationHandler: NSObject, UNUserNotificationCenterDelegate
         let tappedAction = actionIdentifier == UNNotificationDefaultActionIdentifier ? nil : actionIdentifier
         AppDNA.pushDelegate?.onPushTapped(notification: payload, actionId: tappedAction)
 
+        // SPEC-089c: Auto-show server-driven screen from push action (AC-076)
+        if let action = payload.action, action.type == "show_screen" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                AppDNA.showScreen(action.value)
+            }
+        }
+
         completionHandler()
     }
 
