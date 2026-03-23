@@ -48,14 +48,16 @@ internal class ScreenManager {
     // MARK: - Show Screen (Manual API)
 
     func showScreen(_ screenId: String, completion: ((ScreenResult) -> Void)? = nil) {
-        // Check nesting depth (AC-090)
+        // Thread-safe nesting depth check (AC-090)
+        lock.lock()
         guard nestingDepth < maxNestingDepth else {
+            lock.unlock()
             print("[SDUI] Max nesting depth (\(maxNestingDepth)) exceeded for screen: \(screenId)")
             completion?(ScreenResult(screenId: screenId, dismissed: true, error: .nestingDepthExceeded))
             return
         }
-
         nestingDepth += 1
+        lock.unlock()
         let startTime = Date()
 
         // Try cache first
