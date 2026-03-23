@@ -227,8 +227,21 @@ internal class ScreenManager {
 
     private func handleAction(_ action: SectionAction, screenId: String, startTime: Date, completion: ((ScreenResult) -> Void)?) {
         switch action {
+        case .next:
+            // For single screens (not flows), "next" dismisses the screen
+            dismissScreen()
+
+        case .back:
+            // For single screens, "back" dismisses the screen
+            dismissScreen()
+
         case .dismiss:
             dismissScreen()
+
+        case .navigate(let targetScreenId):
+            // Dismiss current and show target screen
+            dismissScreen()
+            showScreen(targetScreenId)
 
         case .openURL(let url):
             if let url = URL(string: url) {
