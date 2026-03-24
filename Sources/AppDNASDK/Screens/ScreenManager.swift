@@ -178,13 +178,13 @@ internal class ScreenManager {
         ]
         if let expId = config.experiment_id { trackProps["experiment_id"] = expId }
         if let vk = variantKey { trackProps["variant_key"] = vk }
-        AppDNA.track("screen_presented", properties: trackProps)
+        AppDNA.track(event:"screen_presented", properties: trackProps)
 
         // Present via PresentationCoordinator
         PresentationCoordinator.shared.requestPresentation(type: .screen) {
             ScreenPresenter.present(config: resolvedConfig, context: context) { [weak self] in
                 let duration = Int(Date().timeIntervalSince(startTime) * 1000)
-                AppDNA.track("screen_dismissed", properties: [
+                AppDNA.track(event:"screen_dismissed", properties: [
                     "screen_id": screenId,
                     "screen_name": config.name,
                     "duration_ms": duration,
@@ -207,7 +207,7 @@ internal class ScreenManager {
         let flowManager = FlowManager(flowConfig: config, screens: screens)
         flowManager.onComplete = { result in
             let eventName = result.completed ? "flow_completed" : "flow_abandoned"
-            AppDNA.track(eventName, properties: [
+            AppDNA.track(event:eventName, properties: [
                 "flow_id": flowId,
                 "flow_name": config.name,
                 "screens_viewed": result.screensViewed,
@@ -216,7 +216,7 @@ internal class ScreenManager {
             completion?(result)
         }
 
-        AppDNA.track("flow_started", properties: [
+        AppDNA.track(event:"flow_started", properties: [
             "flow_id": flowId,
             "flow_name": config.name,
             "start_screen_id": config.start_screen_id,
@@ -289,16 +289,18 @@ internal class ScreenManager {
 
         case .submitForm(let data):
             // Submit form data to backend
-            AppDNA.track("screen_response_submitted", properties: [
+            AppDNA.track(event:"screen_response_submitted", properties: [
                 "screen_id": screenId,
                 "field_count": data.count,
             ])
 
         case .track(let event, let properties):
-            AppDNA.track(event, properties: properties)
+            AppDNA.track(event:event, properties: properties)
 
         case .haptic(let type):
-            HapticEngine.trigger(type)
+            if let hapticType = HapticType(rawValue: type) {
+                HapticEngine.trigger(hapticType)
+            }
 
         case .custom(let type, let value):
             AppDNA.screenDelegate?.onScreenAction(screenId: screenId, action: action)
@@ -308,7 +310,7 @@ internal class ScreenManager {
         }
 
         // Track action
-        AppDNA.track("screen_action", properties: [
+        AppDNA.track(event:"screen_action", properties: [
             "screen_id": screenId,
             "action_type": String(describing: action),
         ])
@@ -439,7 +441,7 @@ internal class ScreenManager {
             }
 
             // Track and show
-            AppDNA.track("interception_triggered", properties: [
+            AppDNA.track(event:"interception_triggered", properties: [
                 "trigger_screen": screenName,
                 "timing": timing,
                 "screen_id": interception.screen_id,

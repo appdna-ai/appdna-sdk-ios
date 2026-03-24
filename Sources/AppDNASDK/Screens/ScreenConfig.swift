@@ -27,7 +27,7 @@ public struct ScreenConfig: Codable {
     public let nav_bar: NavBarConfig?
 
     // Haptic & effects
-    public let haptic: HapticConfig?
+    public let haptic: ScreenHapticConfig?
     public let particle_effect: ParticleEffectConfig?
 
     // Localization
@@ -103,7 +103,7 @@ public struct ScreenSection: Codable, Identifiable {
 
 public struct SectionStyle: Codable {
     public let background_color: String?
-    public let background_gradient: GradientConfig?
+    public let background_gradient: ScreenGradientConfig?
     public let padding_top: Double?
     public let padding_right: Double?
     public let padding_bottom: Double?
@@ -158,12 +158,12 @@ public struct PlaceholderConfig: Codable {
 public struct BackgroundConfig: Codable {
     public let type: String?  // solid, gradient, image
     public let color: String?
-    public let gradient: GradientConfig?
+    public let gradient: ScreenGradientConfig?
     public let image_url: String?
     public let opacity: Double?
 }
 
-public struct GradientConfig: Codable {
+public struct ScreenGradientConfig: Codable {
     public let angle: Double?
     public let start: String?
     public let end: String?
@@ -177,7 +177,7 @@ public struct ShadowConfig: Codable {
     public let color: String?
 }
 
-public struct HapticConfig: Codable {
+public struct ScreenHapticConfig: Codable {
     public let type: String?  // light, medium, heavy, success, warning, error, selection
     public let on_present: Bool?
 }

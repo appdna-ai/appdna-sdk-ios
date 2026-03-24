@@ -6,7 +6,7 @@ import SwiftUI
 internal struct ScreenRenderer: View {
     let config: ScreenConfig
     @ObservedObject var context: ScreenContextHolder
-    @Environment(\.dismiss) private var dismiss
+    @SwiftUI.Environment(\.dismiss) private var dismiss
 
     var body: some View {
         let visibleSections = config.sections.filter { section in
@@ -80,10 +80,12 @@ internal struct ScreenRenderer: View {
 
             // Particle effects
             if let effect = config.particle_effect, effect.on_present == true {
-                ConfettiOverlay(effect: ConfettiEffect(
+                ConfettiOverlay(effect: ParticleEffect(
                     type: effect.type ?? "confetti",
+                    trigger: "on_appear",
+                    duration_ms: effect.duration_ms ?? 3000,
                     intensity: effect.intensity ?? "medium",
-                    duration: Double(effect.duration_ms ?? 3000) / 1000.0
+                    colors: nil
                 ))
             }
         }
@@ -97,8 +99,9 @@ internal struct ScreenRenderer: View {
         .ignoresSafeArea(config.layout.safe_area == false ? .all : [])
         // Haptic on present
         .onAppear {
-            if let haptic = config.haptic, haptic.on_present == true {
-                HapticEngine.trigger(haptic.type ?? "light")
+            if let haptic = config.haptic, haptic.on_present == true,
+               let hapticType = HapticType(rawValue: haptic.type ?? "light") {
+                HapticEngine.trigger(hapticType)
             }
         }
     }
@@ -215,51 +218,52 @@ internal struct ScreenRenderer: View {
 // MARK: - Section Style Modifier
 
 extension View {
+    @ViewBuilder
     func applySectionStyle(_ style: SectionStyle?) -> some View {
-        guard let s = style else { return AnyView(self) }
-
-        return AnyView(
+        if let s = style {
+            let radius = CGFloat(s.border_radius ?? 0)
             self
-                // Margin (outer)
                 .padding(.top, CGFloat(s.margin_top ?? 0))
                 .padding(.bottom, CGFloat(s.margin_bottom ?? 0))
-                // Background
-                .background {
-                    if let gradient = s.background_gradient, let start = gradient.start, let end = gradient.end {
-                        RoundedRectangle(cornerRadius: CGFloat(s.border_radius ?? 0))
-                            .fill(LinearGradient(
-                                colors: [Color(hex: start), Color(hex: end)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ))
-                    } else if let bgColor = s.background_color {
-                        RoundedRectangle(cornerRadius: CGFloat(s.border_radius ?? 0))
-                            .fill(Color(hex: bgColor))
-                    }
-                }
-                // Border
+                .background(sectionBackground(s, radius: radius))
                 .overlay(
-                    RoundedRectangle(cornerRadius: CGFloat(s.border_radius ?? 0))
+                    RoundedRectangle(cornerRadius: radius)
                         .stroke(
                             Color(hex: s.border_color ?? "transparent"),
                             lineWidth: CGFloat(s.border_width ?? 0)
                         )
                 )
-                // Shadow
                 .shadow(
                     color: Color(hex: s.shadow?.color ?? "transparent"),
                     radius: CGFloat(s.shadow?.blur ?? 0) / 2,
                     x: CGFloat(s.shadow?.x ?? 0),
                     y: CGFloat(s.shadow?.y ?? 0)
                 )
-                // Inner padding
                 .padding(.top, CGFloat(s.padding_top ?? 0))
                 .padding(.trailing, CGFloat(s.padding_right ?? 0))
                 .padding(.bottom, CGFloat(s.padding_bottom ?? 0))
                 .padding(.leading, CGFloat(s.padding_left ?? 0))
-                // Opacity
                 .opacity(s.opacity ?? 1.0)
-        )
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    private func sectionBackground(_ s: SectionStyle, radius: CGFloat) -> some View {
+        if let gradient = s.background_gradient, let start = gradient.start, let end = gradient.end {
+            RoundedRectangle(cornerRadius: radius)
+                .fill(LinearGradient(
+                    colors: [Color(hex: start), Color(hex: end)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ))
+        } else if let bgColor = s.background_color {
+            RoundedRectangle(cornerRadius: radius)
+                .fill(Color(hex: bgColor))
+        } else {
+            EmptyView()
+        }
     }
 }
 

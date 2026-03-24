@@ -19,6 +19,9 @@ final class EventTracker {
         analyticsConsent = analytics
     }
 
+    /// Whether analytics consent is currently granted.
+    var isConsentGranted: Bool { analyticsConsent }
+
     /// Track an event. If consent is false, the event is silently dropped.
     func track(event: String, properties: [String: Any]?) {
         guard analyticsConsent else {

@@ -322,7 +322,7 @@ public final class AppDNA: @unchecked Sendable {
 
     /// Get current user traits for audience rule evaluation.
     public static func getUserTraits() -> [String: Any] {
-        shared.identityManager?.traits ?? [:]
+        shared.identityManager?.currentIdentity.traits ?? [:]
     }
 
     /// Shorthand to show a paywall by ID (used by screen action routing).

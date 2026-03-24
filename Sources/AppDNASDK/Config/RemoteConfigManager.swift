@@ -384,6 +384,11 @@ final class RemoteConfigManager {
 
     /// Fetch a single screen config on-demand by ID.
     func fetchScreenConfig(screenId: String, completion: @escaping (ScreenConfig?) -> Void) {
+        guard let firestorePath else {
+            completion(nil)
+            return
+        }
+        let db = AppDNA.firestoreDB
         let basePath = "\(firestorePath)/config"
         db.document("\(basePath)/screens/\(screenId)").getDocument { snapshot, error in
             guard let data = snapshot?.data() else {

@@ -26,8 +26,8 @@ struct OnboardingFlowHost: View {
             Color(.systemBackground).ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Progress bar
-                if flow.settings.show_progress {
+                // Progress bar (hidden per-step via hide_progress while still counting in total)
+                if flow.settings.show_progress && !(currentIndex < flow.steps.count && flow.steps[currentIndex].hide_progress == true) {
                     progressBar
                 }
 

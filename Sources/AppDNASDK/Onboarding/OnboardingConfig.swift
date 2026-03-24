@@ -42,6 +42,8 @@ public struct OnboardingStep: Codable, Identifiable {
     public let type: StepType
     public let config: StepConfig
     public let hook: StepHookConfig?
+    /// When true, the progress indicator is hidden on this step but the step still counts toward total progress.
+    public let hide_progress: Bool?
 
     public enum StepType: String, Codable {
         case welcome

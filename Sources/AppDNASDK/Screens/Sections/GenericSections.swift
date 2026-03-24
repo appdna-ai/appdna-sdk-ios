@@ -46,9 +46,9 @@ private struct ContentBlocksSectionView: View {
                 handleBlockAction(action, value: actionValue)
             },
             toggleValues: $toggleValues,
-            inputValues: $inputValues,
             responses: context.responses,
             hookData: context.hookData,
+            inputValues: $inputValues,
             currentStepIndex: context.currentScreenIndex,
             totalSteps: context.totalScreens
         )
@@ -321,15 +321,17 @@ internal enum VideoSectionRenderer: SectionRenderer {
         return AnyView(
             Group {
                 if let url = videoURL {
-                    VideoBlockView(
-                        videoURL: url,
-                        thumbnailURL: section.data["thumbnail_url"]?.value as? String,
-                        height: height,
-                        cornerRadius: section.data["corner_radius"]?.value as? Double ?? 0,
+                    VideoBlockView(block: VideoBlock(
+                        video_url: url,
+                        video_thumbnail_url: section.data["thumbnail_url"]?.value as? String,
+                        video_height: height,
+                        video_corner_radius: section.data["corner_radius"]?.value as? Double ?? 0,
                         autoplay: section.data["autoplay"]?.value as? Bool ?? false,
                         loop: section.data["loop"]?.value as? Bool ?? false,
-                        muted: section.data["muted"]?.value as? Bool ?? true
-                    )
+                        muted: section.data["muted"]?.value as? Bool ?? true,
+                        controls: nil,
+                        inline_playback: nil
+                    ))
                 }
             }
         )
@@ -343,14 +345,20 @@ internal enum LottieSectionRenderer: SectionRenderer {
 
         return AnyView(
             Group {
-                if let url = lottieURL {
-                    LottieBlockView(
-                        url: url,
+                if lottieURL != nil {
+                    LottieBlockView(block: LottieBlock(
+                        lottie_url: lottieURL,
+                        lottie_json: nil,
                         autoplay: section.data["autoplay"]?.value as? Bool ?? true,
                         loop: section.data["loop"]?.value as? Bool ?? true,
-                        speed: (section.data["speed"]?.value as? Double).map { Float($0) } ?? 1.0
-                    )
-                    .frame(height: CGFloat(height))
+                        speed: section.data["speed"]?.value as? Double ?? 1.0,
+                        width: nil,
+                        height: height,
+                        alignment: "center",
+                        play_on_scroll: nil,
+                        play_on_tap: nil,
+                        color_overrides: nil
+                    ))
                 }
             }
         )
@@ -365,12 +373,16 @@ internal enum RiveSectionRenderer: SectionRenderer {
         return AnyView(
             Group {
                 if let url = riveURL {
-                    RiveBlockView(
-                        url: url,
+                    RiveBlockView(block: RiveBlock(
+                        rive_url: url,
                         artboard: section.data["artboard"]?.value as? String,
-                        stateMachine: section.data["state_machine"]?.value as? String
-                    )
-                    .frame(height: CGFloat(height))
+                        state_machine: section.data["state_machine"]?.value as? String,
+                        autoplay: true,
+                        height: height,
+                        alignment: "center",
+                        inputs: nil,
+                        trigger_on_step_complete: nil
+                    ))
                 }
             }
         )
