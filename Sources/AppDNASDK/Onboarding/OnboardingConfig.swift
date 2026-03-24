@@ -45,7 +45,15 @@ public struct OnboardingStep: Codable, Identifiable {
     /// When true, the progress indicator is hidden on this step but the step still counts toward total progress.
     public let hide_progress: Bool?
 
-    public enum StepType: String, Codable {
+    public init(id: String, type: StepType, config: StepConfig, hook: StepHookConfig? = nil, hide_progress: Bool? = nil) {
+        self.id = id
+        self.type = type
+        self.config = config
+        self.hook = hook
+        self.hide_progress = hide_progress
+    }
+
+    public enum StepType: String, Codable, Equatable {
         case welcome
         case question
         case value_prop
