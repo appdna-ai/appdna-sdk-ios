@@ -21,6 +21,10 @@ struct PaywallLayout: Codable {
     let type: String // "stack", "grid", "carousel"
     let spacing: CGFloat?
     let padding: CGFloat?
+    /// One of 12 plan display styles: vertical_stack, horizontal_scroll, radio_list, pill_selector,
+    /// segmented_toggle, comparison_cards, feature_matrix, pricing_table, timeline, tier_ladder,
+    /// interactive_slider, mini_cards. Falls back to `type` mapping when nil.
+    let plan_display_style: String?
 }
 
 struct PaywallSection: Codable {
@@ -176,6 +180,19 @@ struct PaywallSectionData: Codable {
     let showRatingStars: Bool?
     let starColor: String?
 
+    // Plan card/badge styling (Gap 11)
+    let cardCornerRadius: CGFloat?
+    let cardPadding: CGFloat?
+    let cardGap: CGFloat?
+    let cardShadow: Bool?
+    let badgePosition: String?       // top_left, top_right, inline (default)
+    let badgeStyle: String?          // capsule, rectangle, rounded
+    let badgeBgColor: String?
+    let badgeTextColor: String?
+    let selectedBorderColor: String?
+    let selectedBgColor: String?
+    let selectedScale: CGFloat?
+
     enum CodingKeys: String, CodingKey {
         case title, subtitle, features, plans, cta, rating, testimonial, text, quote, height
         case imageUrl = "image_url"
@@ -268,6 +285,18 @@ struct PaywallSectionData: Codable {
         case reviews
         case showRatingStars = "show_rating_stars"
         case starColor = "star_color"
+        // Plan card/badge styling
+        case cardCornerRadius = "card_corner_radius"
+        case cardPadding = "card_padding"
+        case cardGap = "card_gap"
+        case cardShadow = "card_shadow"
+        case badgePosition = "badge_position"
+        case badgeStyle = "badge_style"
+        case badgeBgColor = "badge_bg_color"
+        case badgeTextColor = "badge_text_color"
+        case selectedBorderColor = "selected_border_color"
+        case selectedBgColor = "selected_bg_color"
+        case selectedScale = "selected_scale"
     }
 }
 

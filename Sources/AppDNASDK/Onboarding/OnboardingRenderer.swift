@@ -82,14 +82,27 @@ struct OnboardingFlowHost: View {
     // MARK: - Progress bar
 
     private var progressBar: some View {
-        GeometryReader { geo in
+        let trackColor: Color = {
+            if let hex = flow.settings.progress_track_color {
+                return Color(hex: hex)
+            }
+            return Color.gray.opacity(0.2)
+        }()
+        let fillColor: Color = {
+            if let hex = flow.settings.progress_color {
+                return Color(hex: hex)
+            }
+            return Color.accentColor
+        }()
+
+        return GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Rectangle()
-                    .fill(Color.gray.opacity(0.2))
+                    .fill(trackColor)
                     .frame(height: 4)
 
                 Rectangle()
-                    .fill(Color.accentColor)
+                    .fill(fillColor)
                     .frame(width: geo.size.width * progress, height: 4)
                     .animation(.easeInOut(duration: 0.3), value: currentIndex)
             }

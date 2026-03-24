@@ -1082,10 +1082,15 @@ struct PaywallRenderer: View {
 
     // SPEC-084: Grid/carousel/stack plan layouts
     private func plansSection(plans: [PaywallPlan], style: SectionStyleConfig? = nil) -> some View {
-        let layoutType = config.layout.type
+        // Gap 10: Read plan_display_style from layout, falling back to layout.type
+        let displayStyle = config.layout.plan_display_style ?? config.layout.type
+        // Gap 11: Build card styling from section data
+        let sectionData = config.sections.first(where: { $0.type == "plans" })?.data
+        let cardStyle = PlanCardStyle(from: sectionData)
+        let cardGap = cardStyle.cardGap ?? 12
 
-        return VStack(spacing: 12) {
-            planLayoutView(plans: plans, layoutType: layoutType, style: style)
+        return VStack(spacing: cardGap) {
+            planLayoutView(plans: plans, displayStyle: displayStyle, style: style, cardStyle: cardStyle)
 
             Button(loc("restore.text", "Restore Purchases")) {
                 onRestore()
@@ -1095,56 +1100,180 @@ struct PaywallRenderer: View {
         }
     }
 
-    /// Type-erased plan layout to avoid @ViewBuilder switch in plansSection.
-    private func planLayoutView(plans: [PaywallPlan], layoutType: String, style: SectionStyleConfig?) -> AnyView {
-        switch layoutType {
+    /// Type-erased plan layout supporting 12 display styles (Gap 10).
+    private func planLayoutView(plans: [PaywallPlan], displayStyle: String, style: SectionStyleConfig?, cardStyle: PlanCardStyle) -> AnyView {
+        switch displayStyle {
+
+        // Grid: 2-column grid
         case "grid":
             let columns = [GridItem(.flexible()), GridItem(.flexible())]
-            return AnyView(LazyVGrid(columns: columns, spacing: 12) {
+            return AnyView(LazyVGrid(columns: columns, spacing: cardStyle.cardGap ?? 12) {
                 ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                    PlanCard(
-                        plan: plan,
-                        isSelected: selectedPlanId == plan.id,
-                        onSelect: { selectedPlanId = plan.id; HapticEngine.triggerIfEnabled(config.haptic?.triggers.on_plan_select, config: config.haptic) },
-                        planIndex: index,
-                        loc: loc,
-                        sectionStyle: style
-                    )
+                    PlanCard(plan: plan, isSelected: selectedPlanId == plan.id,
+                             onSelect: { selectPlan(plan.id) }, planIndex: index,
+                             loc: loc, sectionStyle: style, cardStyle: cardStyle)
                     .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
                 }
             })
 
-        case "carousel":
-            return AnyView(TabView {
-                ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                    PlanCard(
-                        plan: plan,
-                        isSelected: selectedPlanId == plan.id,
-                        onSelect: { selectedPlanId = plan.id; HapticEngine.triggerIfEnabled(config.haptic?.triggers.on_plan_select, config: config.haptic) },
-                        planIndex: index,
-                        loc: loc,
-                        sectionStyle: style
-                    )
-                    .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
-                    .padding(.horizontal, 8)
+        // Carousel / horizontal_scroll: horizontally scrollable plans
+        case "carousel", "horizontal_scroll":
+            return AnyView(ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: cardStyle.cardGap ?? 12) {
+                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                        PlanCard(plan: plan, isSelected: selectedPlanId == plan.id,
+                                 onSelect: { selectPlan(plan.id) }, planIndex: index,
+                                 loc: loc, sectionStyle: style, cardStyle: cardStyle)
+                        .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
+                        .frame(width: 200)
+                    }
                 }
+                .padding(.horizontal, 4)
             }
-            .tabViewStyle(.page(indexDisplayMode: .always))
             .frame(height: 140))
 
-        default: // "stack"
-            return AnyView(ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                PlanCard(
-                    plan: plan,
-                    isSelected: selectedPlanId == plan.id,
-                    onSelect: { selectedPlanId = plan.id; HapticEngine.triggerIfEnabled(config.haptic?.triggers.on_plan_select, config: config.haptic) },
-                    planIndex: index,
-                    loc: loc,
-                    sectionStyle: style
-                )
-                .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
+        // Radio list: compact VStack with radio circles (no full card BG)
+        case "radio_list":
+            return AnyView(VStack(spacing: cardStyle.cardGap ?? 8) {
+                ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                    Button { selectPlan(plan.id) } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: selectedPlanId == plan.id ? "largecircle.fill.circle" : "circle")
+                                .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#3B82F6") : .secondary)
+                                .font(.title3)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(loc("plan.\(index).name", plan.name))
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundColor(.primary)
+                                HStack(spacing: 4) {
+                                    Text(plan.price).font(.caption.bold()).foregroundColor(.primary)
+                                    if let period = plan.period {
+                                        Text("/ \(period)").font(.caption).foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                            Spacer()
+                            if let badge = plan.badge {
+                                Text(badge)
+                                    .font(.caption2.bold())
+                                    .foregroundColor(Color(hex: cardStyle.badgeTextColor ?? "#FFFFFF"))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color(hex: cardStyle.badgeBgColor ?? "#3B82F6"))
+                                    .clipShape(Capsule())
+                            }
+                        }
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 12)
+                    }
+                    .buttonStyle(.plain)
+                }
             })
+
+        // Pill selector: horizontal pill-shaped buttons
+        case "pill_selector":
+            return AnyView(ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: cardStyle.cardGap ?? 8) {
+                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                        Button { selectPlan(plan.id) } label: {
+                            VStack(spacing: 2) {
+                                Text(loc("plan.\(index).name", plan.name))
+                                    .font(.subheadline.weight(.semibold))
+                                Text(plan.price)
+                                    .font(.caption)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .foregroundColor(selectedPlanId == plan.id ? .white : .primary)
+                            .background(
+                                Capsule().fill(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#3B82F6") : Color(.secondarySystemBackground))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 4)
+            })
+
+        // Segmented toggle: iOS native Picker segmented style
+        case "segmented_toggle", "segmented":
+            return AnyView(VStack(spacing: 8) {
+                Picker("Plan", selection: Binding(
+                    get: { selectedPlanId ?? plans.first?.id ?? "" },
+                    set: { selectPlan($0) }
+                )) {
+                    ForEach(plans) { plan in
+                        Text(plan.name).tag(plan.id)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                // Show price for selected plan
+                if let selected = plans.first(where: { $0.id == selectedPlanId }) {
+                    HStack(spacing: 4) {
+                        Text(selected.price).font(.title3.bold())
+                        if let period = selected.period {
+                            Text("/ \(period)").font(.subheadline).foregroundColor(.secondary)
+                        }
+                    }
+                }
+            })
+
+        // Mini cards: compact 2-column grid with minimal info
+        case "mini_cards":
+            let columns = [GridItem(.flexible()), GridItem(.flexible())]
+            return AnyView(LazyVGrid(columns: columns, spacing: cardStyle.cardGap ?? 8) {
+                ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                    Button { selectPlan(plan.id) } label: {
+                        VStack(spacing: 4) {
+                            Text(loc("plan.\(index).name", plan.name))
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.primary)
+                            Text(plan.price)
+                                .font(.subheadline.bold())
+                                .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#3B82F6") : .primary)
+                            if let period = plan.period {
+                                Text("/ \(period)")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(10)
+                        .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
+                            .fill(selectedPlanId == plan.id && cardStyle.selectedBgColor != nil ? Color(hex: cardStyle.selectedBgColor!) : Color(.secondarySystemBackground)))
+                        .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
+                            .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#3B82F6") : Color.clear, lineWidth: 2))
+                    }
+                    .buttonStyle(.plain)
+                }
+            })
+
+        // comparison_cards, feature_matrix, pricing_table, timeline, tier_ladder, interactive_slider
+        // These advanced styles fall back to vertical_stack with full PlanCard
+        case "comparison_cards", "feature_matrix", "pricing_table", "timeline", "tier_ladder", "interactive_slider":
+            return planLayoutFallbackStack(plans: plans, style: style, cardStyle: cardStyle)
+
+        // Default: vertical_stack / stack
+        default:
+            return planLayoutFallbackStack(plans: plans, style: style, cardStyle: cardStyle)
         }
+    }
+
+    /// Fallback vertical stack used by default and unsupported advanced styles.
+    private func planLayoutFallbackStack(plans: [PaywallPlan], style: SectionStyleConfig?, cardStyle: PlanCardStyle) -> AnyView {
+        return AnyView(ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+            PlanCard(plan: plan, isSelected: selectedPlanId == plan.id,
+                     onSelect: { selectPlan(plan.id) }, planIndex: index,
+                     loc: loc, sectionStyle: style, cardStyle: cardStyle)
+            .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
+        })
+    }
+
+    /// Helper to select a plan and trigger haptic.
+    private func selectPlan(_ planId: String) {
+        selectedPlanId = planId
+        HapticEngine.triggerIfEnabled(config.haptic?.triggers.on_plan_select, config: config.haptic)
     }
 
     // MARK: - CTA handler

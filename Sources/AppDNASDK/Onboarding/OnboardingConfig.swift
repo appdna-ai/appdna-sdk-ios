@@ -22,11 +22,17 @@ public struct OnboardingSettings: Codable {
     public let show_progress: Bool
     public let allow_back: Bool
     public let skip_to_step: String?
+    /// Custom progress bar fill color (hex). Falls back to accentColor if nil.
+    public let progress_color: String?
+    /// Custom progress bar track/background color (hex). Falls back to gray if nil.
+    public let progress_track_color: String?
 
-    public init(show_progress: Bool = true, allow_back: Bool = true, skip_to_step: String? = nil) {
+    public init(show_progress: Bool = true, allow_back: Bool = true, skip_to_step: String? = nil, progress_color: String? = nil, progress_track_color: String? = nil) {
         self.show_progress = show_progress
         self.allow_back = allow_back
         self.skip_to_step = skip_to_step
+        self.progress_color = progress_color
+        self.progress_track_color = progress_track_color
     }
 }
 

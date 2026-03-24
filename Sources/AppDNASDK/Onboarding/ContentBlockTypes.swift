@@ -49,6 +49,8 @@ public struct BlockStyle: Codable {
     public var padding_left: Double?
     public var margin_top: Double?
     public var margin_bottom: Double?
+    public var margin_left: Double?
+    public var margin_right: Double?
     public var opacity: Double?
 }
 
@@ -105,6 +107,8 @@ struct BlockStyleModifier: ViewModifier {
                 // Outer margin
                 .padding(.top, CGFloat(s.margin_top ?? 0))
                 .padding(.bottom, CGFloat(s.margin_bottom ?? 0))
+                .padding(.leading, CGFloat(s.margin_left ?? 0))
+                .padding(.trailing, CGFloat(s.margin_right ?? 0))
         } else {
             content
         }
@@ -314,6 +318,7 @@ public struct InputOption: Codable, Identifiable {
     public let label: String
     public let value: String?
     public let icon: String?
+    public let image_url: String?
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -323,13 +328,14 @@ public struct InputOption: Codable, Identifiable {
         self.value = rawValue ?? rawId
         self.label = try container.decode(String.self, forKey: .label)
         self.icon = try container.decodeIfPresent(String.self, forKey: .icon)
+        self.image_url = try container.decodeIfPresent(String.self, forKey: .image_url)
     }
 
     /// Non-optional value — falls back to id if value is nil.
     public var resolvedValue: String { value ?? id }
 
     enum CodingKeys: String, CodingKey {
-        case id, label, value, icon
+        case id, label, value, icon, image_url
     }
 }
 
@@ -875,6 +881,10 @@ public struct ContentBlock: Codable, Identifiable {
     public let wrap: Bool?
     public let justify: String?
     public let align_items: String?
+    // Row layout direction and distribution
+    public let row_direction: String?       // horizontal (default), vertical
+    public let row_distribution: String?    // fill, start, center, end, space_between, space_around
+    public let row_child_fill: Bool?        // true (default) — each child gets maxWidth: .infinity
 
     // SPEC-089d Phase F: custom_view fields
     public let view_key: String?
@@ -975,6 +985,7 @@ public struct ContentBlock: Codable, Identifiable {
         case columns, default_date_value, min_date, max_date
         case highlight_color, haptic_on_scroll
         case children, z_index, gap, wrap, justify, align_items
+        case row_direction, row_distribution, row_child_fill
         case view_key, custom_config, placeholder_image_url, placeholder_text
         case particle_type, density, speed, secondary_color, size_range, fullscreen
         case min_value, max_value_picker, step_value, default_picker_value

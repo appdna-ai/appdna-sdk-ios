@@ -274,25 +274,66 @@ struct ContentBlockRendererView: View {
         let bgColor = Color(hex: block.bg_color ?? "#6366F1")
         let txtColor = Color(hex: block.text_color ?? "#FFFFFF")
         let labelText = loc?("block.\(block.id).text", block.text ?? "Continue") ?? block.text ?? "Continue"
+        let fgColor = btnVariant == "outline" ? bgColor : (btnVariant == "text" ? bgColor : txtColor)
 
         return Button {
             onAction(block.action ?? "next", block.action_value)
         } label: {
-            Text(labelText)
-                .font(.body.weight(.semibold))
-                .foregroundColor(btnVariant == "outline" ? bgColor : (btnVariant == "text" ? bgColor : txtColor))
-                .applyTextStyle(block.style)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(btnVariant == "outline" || btnVariant == "text" ? Color.clear : bgColor)
-                .clipShape(RoundedRectangle(cornerRadius: radius))
-                .overlay(
-                    btnVariant == "outline"
-                        ? RoundedRectangle(cornerRadius: radius).stroke(bgColor, lineWidth: 1.5)
-                        : nil
-                )
+            HStack(spacing: 8) {
+                // Gap 6: icon_emoji
+                if let emoji = block.icon_emoji, !emoji.isEmpty {
+                    Text(emoji)
+                }
+                // Gap 6: image_url icon
+                if let imageUrl = block.image_url, let url = URL(string: imageUrl) {
+                    AsyncImage(url: url) { image in
+                        image.resizable().aspectRatio(contentMode: .fit).frame(width: 20, height: 20)
+                    } placeholder: {
+                        EmptyView()
+                    }
+                }
+                Text(labelText)
+                    .font(.body.weight(.semibold))
+                    .applyTextStyle(block.style)
+            }
+            .foregroundColor(fgColor)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(buttonBackground(block: block, btnVariant: btnVariant, bgColor: bgColor))
+            .clipShape(RoundedRectangle(cornerRadius: radius))
+            .overlay(
+                btnVariant == "outline"
+                    ? RoundedRectangle(cornerRadius: radius).stroke(bgColor, lineWidth: 1.5)
+                    : nil
+            )
         }
         .applyPressedStyle(block.pressed_style)
+    }
+
+    /// Gap 5: Button background — gradient or solid color.
+    @ViewBuilder
+    private func buttonBackground(block: ContentBlock, btnVariant: String, bgColor: Color) -> some View {
+        if btnVariant == "outline" || btnVariant == "text" {
+            Color.clear
+        } else if let grad = block.block_style?.background_gradient {
+            LinearGradient(
+                colors: [Color(hex: grad.start), Color(hex: grad.end)],
+                startPoint: gradientStartPointForButton(angle: grad.angle),
+                endPoint: gradientEndPointForButton(angle: grad.angle)
+            )
+        } else {
+            bgColor
+        }
+    }
+
+    private func gradientStartPointForButton(angle: Double) -> UnitPoint {
+        let rads = angle * .pi / 180
+        return UnitPoint(x: 0.5 - sin(rads) / 2, y: 0.5 + cos(rads) / 2)
+    }
+
+    private func gradientEndPointForButton(angle: Double) -> UnitPoint {
+        let rads = angle * .pi / 180
+        return UnitPoint(x: 0.5 + sin(rads) / 2, y: 0.5 - cos(rads) / 2)
     }
 
     // MARK: - List
@@ -854,6 +895,10 @@ struct ContentBlockRendererView: View {
     private func rowBlock(_ block: ContentBlock) -> some View {
         let childBlocks = block.children ?? []
         let rowGap = CGFloat(block.gap ?? 8)
+        let direction = block.row_direction ?? "horizontal"
+        let childFill = block.row_child_fill ?? true
+
+        // Vertical alignment for HStack, horizontal for VStack
         let vAlign: VerticalAlignment = {
             switch block.align_items {
             case "top": return .top
@@ -861,10 +906,29 @@ struct ContentBlockRendererView: View {
             default: return .center
             }
         }()
+        let hAlign: HorizontalAlignment = {
+            switch block.align_items {
+            case "leading", "start": return .leading
+            case "trailing", "end": return .trailing
+            default: return .center
+            }
+        }()
 
-        HStack(alignment: vAlign, spacing: rowGap) {
-            ForEach(childBlocks) { child in
-                renderBlock(child)
+        Group {
+            if direction == "vertical" {
+                VStack(alignment: hAlign, spacing: rowGap) {
+                    ForEach(childBlocks) { child in
+                        renderBlock(child)
+                            .frame(maxWidth: childFill ? .infinity : nil)
+                    }
+                }
+            } else {
+                HStack(alignment: vAlign, spacing: rowGap) {
+                    ForEach(childBlocks) { child in
+                        renderBlock(child)
+                            .frame(maxWidth: childFill ? .infinity : nil)
+                    }
+                }
             }
         }
     }

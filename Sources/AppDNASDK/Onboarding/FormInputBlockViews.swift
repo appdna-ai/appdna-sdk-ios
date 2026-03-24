@@ -178,12 +178,17 @@ struct FormInputDateBlock: View {
     }
 }
 
-/// Dropdown select input.
+/// Dropdown select input with display_style support (dropdown, stacked, grid).
 struct FormInputSelectBlock: View {
     let block: ContentBlock
     @Binding var inputValues: [String: Any]
 
     @State private var selectedValue: String = ""
+
+    /// Read display_style from field_config; defaults to "dropdown".
+    private var displayStyle: String {
+        (block.field_config?["display_style"]?.value as? String) ?? "dropdown"
+    }
 
     var body: some View {
         let fieldId = block.field_id ?? block.id
@@ -192,26 +197,143 @@ struct FormInputSelectBlock: View {
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
 
-            Picker("", selection: $selectedValue) {
-                Text(block.field_placeholder ?? "Select...").tag("")
-                ForEach(options) { option in
-                    Text(option.label).tag(option.resolvedValue)
-                }
-            }
-            .pickerStyle(.menu)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
-            .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
-            .cornerRadius(CGFloat(block.field_style?.corner_radius ?? 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: CGFloat(block.field_style?.corner_radius ?? 8))
-                    .stroke(Color(hex: block.field_style?.border_color ?? "#D1D5DB"), lineWidth: 1)
-            )
-            .onChange(of: selectedValue) { newValue in
-                inputValues[fieldId] = newValue
+            switch displayStyle {
+            case "stacked":
+                stackedSelectView(options: options, fieldId: fieldId)
+            case "grid":
+                gridSelectView(options: options, fieldId: fieldId)
+            default: // "dropdown"
+                dropdownSelectView(options: options, fieldId: fieldId)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Dropdown (default)
+
+    @ViewBuilder
+    private func dropdownSelectView(options: [InputOption], fieldId: String) -> some View {
+        Picker("", selection: $selectedValue) {
+            Text(block.field_placeholder ?? "Select...").tag("")
+            ForEach(options) { option in
+                Text(option.label).tag(option.resolvedValue)
+            }
+        }
+        .pickerStyle(.menu)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
+        .cornerRadius(CGFloat(block.field_style?.corner_radius ?? 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: CGFloat(block.field_style?.corner_radius ?? 8))
+                .stroke(Color(hex: block.field_style?.border_color ?? "#D1D5DB"), lineWidth: 1)
+        )
+        .onChange(of: selectedValue) { newValue in
+            inputValues[fieldId] = newValue
+        }
+    }
+
+    // MARK: - Stacked (vertical cards with radio indicator)
+
+    @ViewBuilder
+    private func stackedSelectView(options: [InputOption], fieldId: String) -> some View {
+        let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
+        let cornerR = CGFloat(block.field_style?.corner_radius ?? 10)
+
+        VStack(spacing: 8) {
+            ForEach(options) { option in
+                let isSelected = selectedValue == option.resolvedValue
+                Button {
+                    selectedValue = option.resolvedValue
+                    inputValues[fieldId] = option.resolvedValue
+                } label: {
+                    HStack(spacing: 12) {
+                        // Optional image
+                        if let imgUrl = option.image_url, let url = URL(string: imgUrl) {
+                            AsyncImage(url: url) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                Color.gray.opacity(0.2)
+                            }
+                            .frame(width: 32, height: 32)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                        // Optional icon emoji
+                        if let icon = option.icon, !icon.isEmpty {
+                            Text(icon)
+                        }
+                        Text(option.label)
+                            .font(.subheadline)
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                            .foregroundColor(isSelected ? fillCol : .secondary)
+                            .font(.title3)
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: cornerR)
+                            .fill(isSelected ? fillCol.opacity(0.08) : Color(.secondarySystemBackground))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerR)
+                            .stroke(isSelected ? fillCol : Color(hex: block.field_style?.border_color ?? "#D1D5DB"), lineWidth: isSelected ? 2 : 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: - Grid (2-column grid)
+
+    @ViewBuilder
+    private func gridSelectView(options: [InputOption], fieldId: String) -> some View {
+        let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
+        let cornerR = CGFloat(block.field_style?.corner_radius ?? 10)
+        let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(options) { option in
+                let isSelected = selectedValue == option.resolvedValue
+                Button {
+                    selectedValue = option.resolvedValue
+                    inputValues[fieldId] = option.resolvedValue
+                } label: {
+                    VStack(spacing: 6) {
+                        // Optional image
+                        if let imgUrl = option.image_url, let url = URL(string: imgUrl) {
+                            AsyncImage(url: url) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                Color.gray.opacity(0.2)
+                            }
+                            .frame(width: 40, height: 40)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        // Optional icon emoji
+                        if let icon = option.icon, !icon.isEmpty {
+                            Text(icon).font(.title2)
+                        }
+                        Text(option.label)
+                            .font(.subheadline)
+                            .foregroundColor(.primary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 60)
+                    .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: cornerR)
+                            .fill(isSelected ? fillCol.opacity(0.08) : Color(.secondarySystemBackground))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerR)
+                            .stroke(isSelected ? fillCol : Color(hex: block.field_style?.border_color ?? "#D1D5DB"), lineWidth: isSelected ? 2 : 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 }
 
