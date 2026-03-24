@@ -235,17 +235,50 @@ struct ContentBlockRendererView: View {
     // MARK: - Image
 
     private func imageBlock(_ block: ContentBlock) -> some View {
-        Group {
+        let cr = CGFloat(block.corner_radius ?? 0)
+        let isCircle = (block.corner_radius ?? 0) >= 9999
+        let isOverflowVisible = block.overflow == "visible"
+
+        return Group {
             if let urlString = block.image_url, let url = URL(string: urlString) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(maxHeight: CGFloat(block.height ?? 200))
-                            .clipShape(RoundedRectangle(cornerRadius: CGFloat(block.corner_radius ?? 0)))
-                            .accessibilityLabel(block.alt ?? "Image")
+                        if isOverflowVisible {
+                            // Don't clip — use mask so corners round but content can overflow parent
+                            if isCircle {
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(maxHeight: CGFloat(block.height ?? 200))
+                                    .mask(Circle())
+                                    .accessibilityLabel(block.alt ?? "Image")
+                            } else {
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(maxHeight: CGFloat(block.height ?? 200))
+                                    .mask(RoundedRectangle(cornerRadius: cr))
+                                    .accessibilityLabel(block.alt ?? "Image")
+                            }
+                        } else {
+                            // Default: clip content (hidden overflow)
+                            if isCircle {
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(maxHeight: CGFloat(block.height ?? 200))
+                                    .clipShape(Circle())
+                                    .accessibilityLabel(block.alt ?? "Image")
+                            } else {
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(maxHeight: CGFloat(block.height ?? 200))
+                                    .clipShape(RoundedRectangle(cornerRadius: cr))
+                                    .accessibilityLabel(block.alt ?? "Image")
+                            }
+                        }
                     case .failure:
                         imagePlaceholder
                     default:
@@ -920,6 +953,7 @@ struct ContentBlockRendererView: View {
                     ForEach(childBlocks) { child in
                         renderBlock(child)
                             .frame(maxWidth: childFill ? .infinity : nil)
+                            .zIndex(child.overflow == "visible" ? 1 : 0)
                     }
                 }
             } else {
@@ -927,6 +961,7 @@ struct ContentBlockRendererView: View {
                     ForEach(childBlocks) { child in
                         renderBlock(child)
                             .frame(maxWidth: childFill ? .infinity : nil)
+                            .zIndex(child.overflow == "visible" ? 1 : 0)
                     }
                 }
             }

@@ -945,6 +945,9 @@ public struct ContentBlock: Codable, Identifiable {
     public let element_width: String?
     public let element_height: String?
 
+    // Overflow control: "visible" disables clipping (e.g. for images that bleed out of rows)
+    public let overflow: String?
+
     enum CodingKeys: String, CodingKey {
         case id, type, text, style, level
         case image_url, alt, corner_radius, height
@@ -996,5 +999,6 @@ public struct ContentBlock: Codable, Identifiable {
         case field_label, field_placeholder, field_required, field_style, field_options, field_config
         case visibility_condition, entrance_animation, pressed_style, bindings
         case element_width, element_height
+        case overflow
     }
 }
