@@ -70,7 +70,7 @@ enum Endpoint {
         let base: String
         switch environment {
         case .production: base = "https://api.appdna.ai"
-        case .sandbox:    base = "https://sandbox-api.appdna.ai"
+        case .sandbox:    base = "https://api.appdna.ai"
         }
         return URL(string: base + path)
     }

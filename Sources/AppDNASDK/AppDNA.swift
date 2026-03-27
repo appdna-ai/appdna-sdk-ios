@@ -115,13 +115,19 @@ public final class AppDNA: @unchecked Sendable {
     // MARK: - Public API: Initialization
 
     /// Configure the SDK. Call once at app launch.
+    /// Firebase is initialized on the main thread first, then the rest runs on a background queue.
     public static func configure(
         apiKey: String,
         environment: Environment = .production,
         options: AppDNAOptions = AppDNAOptions()
     ) {
-        shared.queue.async {
-            shared.performConfigure(apiKey: apiKey, environment: environment, options: options)
+        // Firebase MUST be initialized on the main thread to avoid main-thread checker warnings.
+        DispatchQueue.main.async {
+            shared.initializeFirebase()
+            // Then do the rest on background queue
+            shared.queue.async {
+                shared.performConfigure(apiKey: apiKey, environment: environment, options: options)
+            }
         }
     }
 
@@ -485,6 +491,53 @@ public final class AppDNA: @unchecked Sendable {
         }
     }
 
+    // MARK: - Firebase Initialization (must run on main thread)
+
+    /// Track whether Firebase has been initialized to avoid double-init.
+    private var firebaseInitialized = false
+
+    /// Initialize Firebase on the main thread.
+    /// Priority:
+    /// 1. GoogleService-Info-AppDNA.plist -> create named "appdna" instance
+    /// 2. Default FirebaseApp already exists -> use it
+    /// 3. Standard GoogleService-Info.plist exists -> auto-configure default app
+    /// 4. None available -> log error, SDK works in degraded mode
+    private func initializeFirebase() {
+        guard !firebaseInitialized else { return }
+        firebaseInitialized = true
+
+        // Option 1: Dedicated AppDNA plist for a secondary Firebase app
+        if let appdnaPlistPath = Bundle.main.path(forResource: "GoogleService-Info-AppDNA", ofType: "plist"),
+           let appdnaOptions = FirebaseOptions(contentsOfFile: appdnaPlistPath) {
+            if FirebaseApp.app(name: "appdna") == nil {
+                FirebaseApp.configure(name: "appdna", options: appdnaOptions)
+            }
+            if let secondaryApp = FirebaseApp.app(name: "appdna") {
+                AppDNA.firestoreDB = Firestore.firestore(app: secondaryApp)
+                Log.info("Using secondary Firebase app 'appdna' for Firestore (GoogleService-Info-AppDNA.plist)")
+            }
+            return
+        }
+
+        // Option 2: Host app already configured Firebase
+        if FirebaseApp.app() != nil {
+            AppDNA.firestoreDB = Firestore.firestore()
+            Log.info("Using default Firebase app for Firestore")
+            return
+        }
+
+        // Option 3: Auto-configure from standard GoogleService-Info.plist
+        if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
+            FirebaseApp.configure()
+            AppDNA.firestoreDB = Firestore.firestore()
+            Log.info("Auto-configured Firebase from GoogleService-Info.plist")
+            return
+        }
+
+        // Option 4: No Firebase config available — SDK works in degraded mode
+        Log.error("Firebase not configured. Either add GoogleService-Info-AppDNA.plist, GoogleService-Info.plist, or call FirebaseApp.configure() before AppDNA.configure(). Remote config (paywalls, experiments, flags) will not work. See docs: https://docs.appdna.ai/sdks/ios/installation")
+    }
+
     // MARK: - Internal bootstrap
 
     private func performConfigure(apiKey: String, environment: Environment, options: AppDNAOptions) {
@@ -500,25 +553,7 @@ public final class AppDNA: @unchecked Sendable {
 
         Log.info("Configuring AppDNA SDK v\(AppDNA.sdkVersion) (\(environment.rawValue))")
 
-        // Configure Firebase for Firestore config access.
-        // Priority: secondary app from GoogleService-Info-AppDNA.plist > default FirebaseApp.
-        if let appdnaPlistPath = Bundle.main.path(forResource: "GoogleService-Info-AppDNA", ofType: "plist"),
-           let appdnaOptions = FirebaseOptions(contentsOfFile: appdnaPlistPath) {
-            // Use a dedicated secondary Firebase app so the host app's Firebase is untouched
-            if FirebaseApp.app(name: "appdna") == nil {
-                FirebaseApp.configure(name: "appdna", options: appdnaOptions)
-            }
-            if let secondaryApp = FirebaseApp.app(name: "appdna") {
-                AppDNA.firestoreDB = Firestore.firestore(app: secondaryApp)
-                Log.info("Using secondary Firebase app 'appdna' for Firestore (GoogleService-Info-AppDNA.plist)")
-            }
-        } else if FirebaseApp.app() != nil {
-            // Fall back to the host app's default Firebase instance
-            AppDNA.firestoreDB = Firestore.firestore()
-            Log.info("Using default Firebase app for Firestore")
-        } else {
-            Log.error("Firebase not configured. Either add GoogleService-Info-AppDNA.plist or call FirebaseApp.configure() before AppDNA.configure(). Remote config (paywalls, experiments, flags) will not work. See docs: https://docs.appdna.ai/sdks/ios/installation")
-        }
+        // Firebase already initialized on main thread in initializeFirebase()
 
         // 1. Initialize core managers
         let keychainStore = KeychainStore()
@@ -589,7 +624,10 @@ public final class AppDNA: @unchecked Sendable {
         tracker: EventTracker
     ) async {
         do {
-            let data: BootstrapData = try await client.request(.bootstrap)
+            // Bootstrap with a 5-second timeout to avoid blocking SDK init
+            let data: BootstrapData = try await withTimeout(seconds: 5) {
+                try await client.request(.bootstrap)
+            }
             queue.async { [weak self] in
                 self?.bootstrapData = data
             }
@@ -605,7 +643,7 @@ public final class AppDNA: @unchecked Sendable {
                 )
             }
         } catch {
-            Log.error("Bootstrap failed: \(error.localizedDescription) — using cached config")
+            Log.error("Bootstrap failed: \(error.localizedDescription) — SDK will operate in degraded mode with cached/bundled config")
             queue.async { [weak self] in
                 guard let self else { return }
                 self.initializeManagers(
@@ -615,6 +653,23 @@ public final class AppDNA: @unchecked Sendable {
                     tracker: tracker
                 )
             }
+        }
+    }
+
+    /// Execute an async operation with a timeout. Throws CancellationError if the timeout is reached.
+    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw CancellationError()
+            }
+            // Return whichever finishes first
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
         }
     }
 
@@ -754,6 +809,19 @@ public final class AppDNA: @unchecked Sendable {
     }
 
     internal static func topViewController() -> UIViewController? {
+        // UIApplication.shared must be accessed on the main thread
+        if Thread.isMainThread {
+            return _findTopViewController()
+        } else {
+            var result: UIViewController?
+            DispatchQueue.main.sync {
+                result = _findTopViewController()
+            }
+            return result
+        }
+    }
+
+    private static func _findTopViewController() -> UIViewController? {
         guard let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first,

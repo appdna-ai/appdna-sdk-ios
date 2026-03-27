@@ -86,7 +86,7 @@ final class APIClient {
                 let base: String
                 switch environment {
                 case .production: base = "https://api.appdna.ai"
-                case .sandbox:    base = "https://sandbox-api.appdna.ai"
+                case .sandbox:    base = "https://api.appdna.ai"
                 }
                 guard let url = URL(string: base + path) else {
                     completion?(.failure(APIError.invalidURL))
