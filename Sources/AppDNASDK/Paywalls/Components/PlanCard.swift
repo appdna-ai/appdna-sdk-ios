@@ -102,7 +102,7 @@ struct PlanCard: View {
                 .padding(cardPadding)
                 .background(
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(isSelected && selectedBg != nil ? selectedBg! : Color(.secondarySystemBackground))
+                        .fill(isSelected ? (selectedBg ?? Color(.secondarySystemBackground)) : Color(.secondarySystemBackground))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius)

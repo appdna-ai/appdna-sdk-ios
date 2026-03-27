@@ -193,7 +193,7 @@ internal struct ScreenRenderer: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(navBar.background_color != nil ? Color(hex: navBar.background_color!) : Color.clear)
+        .background(navBar.background_color.flatMap { Color(hex: $0) } ?? Color.clear)
     }
 
     // MARK: - Dismiss Button

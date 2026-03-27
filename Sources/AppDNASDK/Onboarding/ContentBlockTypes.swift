@@ -192,10 +192,10 @@ func evaluateVisibilityCondition(
         return !valuesEqual(resolved, expected)
     case "when_not_empty":
         let resolved = resolveDotPath(cond.variable, responses: responses, hookData: hookData, userTraits: userTraits, sessionData: sessionData)
-        return resolved != nil && "\(resolved!)" != ""
+        return resolved.map { "\($0)" != "" } ?? false
     case "when_empty":
         let resolved = resolveDotPath(cond.variable, responses: responses, hookData: hookData, userTraits: userTraits, sessionData: sessionData)
-        return resolved == nil || "\(resolved!)" == ""
+        return resolved.map { "\($0)" == "" } ?? true
     case "when_gt":
         let resolved = resolveDotPath(cond.variable, responses: responses, hookData: hookData, userTraits: userTraits, sessionData: sessionData)
         return compareNumeric(resolved, cond.value?.value) == .orderedDescending

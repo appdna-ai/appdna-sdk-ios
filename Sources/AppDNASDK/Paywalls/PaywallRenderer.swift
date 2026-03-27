@@ -427,7 +427,7 @@ struct PaywallRenderer: View {
     private func initials(_ name: String) -> String {
         let parts = name.split(separator: " ")
         let first = parts.first.map { String($0.prefix(1)) } ?? ""
-        let last = parts.count > 1 ? String(parts.last!.prefix(1)) : ""
+        let last = parts.count > 1 ? (parts.last.map { String($0.prefix(1)) } ?? "") : ""
         return (first + last).uppercased()
     }
 
@@ -1241,7 +1241,7 @@ struct PaywallRenderer: View {
                         .frame(maxWidth: .infinity)
                         .padding(10)
                         .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
-                            .fill(selectedPlanId == plan.id && cardStyle.selectedBgColor != nil ? Color(hex: cardStyle.selectedBgColor!) : Color(.secondarySystemBackground)))
+                            .fill(selectedPlanId == plan.id ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color(.secondarySystemBackground)) : Color(.secondarySystemBackground)))
                         .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
                             .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#3B82F6") : Color.clear, lineWidth: 2))
                     }

@@ -25,6 +25,7 @@ public enum BillingError: LocalizedError {
     case verificationFailed
     case networkError(Error)
     case serverError(String)
+    case providerNotAvailable(String)
 
     public var errorDescription: String? {
         switch self {
@@ -32,6 +33,7 @@ public enum BillingError: LocalizedError {
         case .verificationFailed: return "Transaction verification failed"
         case .networkError(let error): return "Network error: \(error.localizedDescription)"
         case .serverError(let msg): return "Server error: \(msg)"
+        case .providerNotAvailable(let msg): return msg
         }
     }
 }

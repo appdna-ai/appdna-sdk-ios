@@ -205,7 +205,7 @@ internal enum DividerSectionRenderer: SectionRenderer {
 
         return AnyView(
             Rectangle()
-                .fill(color != nil ? Color(hex: color!) : Color.gray.opacity(0.3))
+                .fill(color.flatMap { Color(hex: $0) } ?? Color.gray.opacity(0.3))
                 .frame(height: CGFloat(thickness))
                 .padding(.leading, CGFloat(insetLeft))
                 .padding(.trailing, CGFloat(insetRight))

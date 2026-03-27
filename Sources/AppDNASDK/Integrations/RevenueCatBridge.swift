@@ -82,11 +82,11 @@ final class RevenueCatBridge: BillingBridgeProtocol {
     }
 
     func purchase(productId: String) async throws -> PurchaseResult {
-        fatalError("RevenueCat is not available. Use StoreKit2Bridge instead.")
+        throw BillingError.providerNotAvailable("RevenueCat is not available. Install the RevenueCat SDK or use native StoreKit.")
     }
 
     func restore() async throws -> [String] {
-        fatalError("RevenueCat is not available. Use StoreKit2Bridge instead.")
+        throw BillingError.providerNotAvailable("RevenueCat is not available. Install the RevenueCat SDK or use native StoreKit.")
     }
 
     func getEntitlements() async -> [String] {
