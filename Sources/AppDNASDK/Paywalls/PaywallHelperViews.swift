@@ -7,6 +7,7 @@ struct CountdownTimerView: View {
     let seconds: Int
     var valueTextStyle: TextStyleConfig? = nil
     @State private var remaining: Int
+    @State private var countdownTimer: Timer?
 
     init(seconds: Int, valueTextStyle: TextStyleConfig? = nil) {
         self.seconds = seconds
@@ -27,13 +28,17 @@ struct CountdownTimerView: View {
             timeUnit(secs, label: "s")
         }
         .onAppear {
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
+            countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
                 if remaining > 0 {
                     remaining -= 1
                 } else {
                     timer.invalidate()
                 }
             }
+        }
+        .onDisappear {
+            countdownTimer?.invalidate()
+            countdownTimer = nil
         }
     }
 
@@ -90,6 +95,7 @@ extension Color {
 struct VideoBackgroundView: View {
     let url: URL
     @State private var player: AVPlayer?
+    @State private var loopObserver: NSObjectProtocol?
 
     var body: some View {
         Group {
@@ -99,14 +105,22 @@ struct VideoBackgroundView: View {
                     .onAppear {
                         player.isMuted = true
                         player.play()
-                        // Loop the video
-                        NotificationCenter.default.addObserver(
-                            forName: .AVPlayerItemDidPlayToEndTime,
-                            object: player.currentItem,
-                            queue: .main
-                        ) { _ in
-                            player.seek(to: .zero)
-                            player.play()
+                        // Loop the video (register observer once)
+                        if loopObserver == nil {
+                            loopObserver = NotificationCenter.default.addObserver(
+                                forName: .AVPlayerItemDidPlayToEndTime,
+                                object: player.currentItem,
+                                queue: .main
+                            ) { _ in
+                                player.seek(to: .zero)
+                                player.play()
+                            }
+                        }
+                    }
+                    .onDisappear {
+                        if let observer = loopObserver {
+                            NotificationCenter.default.removeObserver(observer)
+                            loopObserver = nil
                         }
                     }
             } else {
@@ -153,6 +167,7 @@ struct CarouselView: View {
     let loc: (String, String) -> String
 
     @State private var currentPage = 0
+    @State private var autoScrollTimer: Timer?
 
     var body: some View {
         VStack(spacing: 12) {
@@ -206,11 +221,15 @@ struct CarouselView: View {
         }
         .onAppear {
             guard autoScroll else { return }
-            Timer.scheduledTimer(withTimeInterval: Double(autoScrollIntervalMs) / 1000.0, repeats: true) { _ in
+            autoScrollTimer = Timer.scheduledTimer(withTimeInterval: Double(autoScrollIntervalMs) / 1000.0, repeats: true) { _ in
                 withAnimation {
                     currentPage = (currentPage + 1) % max(pages.count, 1)
                 }
             }
+        }
+        .onDisappear {
+            autoScrollTimer?.invalidate()
+            autoScrollTimer = nil
         }
     }
 }
@@ -229,6 +248,7 @@ struct ReviewsCarouselView: View {
     let loc: (String, String) -> String
 
     @State private var currentReview = 0
+    @State private var autoScrollTimer: Timer?
 
     var body: some View {
         VStack(spacing: 8) {
@@ -304,11 +324,15 @@ struct ReviewsCarouselView: View {
         }
         .onAppear {
             guard autoScroll else { return }
-            Timer.scheduledTimer(withTimeInterval: Double(autoScrollIntervalMs) / 1000.0, repeats: true) { _ in
+            autoScrollTimer = Timer.scheduledTimer(withTimeInterval: Double(autoScrollIntervalMs) / 1000.0, repeats: true) { _ in
                 withAnimation {
                     currentReview = (currentReview + 1) % max(reviews.count, 1)
                 }
             }
+        }
+        .onDisappear {
+            autoScrollTimer?.invalidate()
+            autoScrollTimer = nil
         }
     }
 }

@@ -21,6 +21,11 @@ public final class AppDNA: @unchecked Sendable {
     /// Notification posted when remote config is refreshed.
     public static let configUpdated = Notification.Name("AppDNA.configUpdated")
 
+    /// Observer token for web entitlement changes (registered at most once).
+    private static var webEntitlementObserverToken: NSObjectProtocol?
+    /// Callbacks registered via `onWebEntitlementChanged`.
+    private static var webEntitlementChangeHandlers: [(WebEntitlement?) -> Void] = []
+
     // MARK: - Delegates
 
     /// Delegate for push notification events (taps, receives).
@@ -404,13 +409,21 @@ public final class AppDNA: @unchecked Sendable {
     }
 
     /// Register a callback for when the web entitlement changes.
+    /// Only one NotificationCenter observer is registered; all handlers are dispatched from it.
     public static func onWebEntitlementChanged(_ handler: @escaping (WebEntitlement?) -> Void) {
-        NotificationCenter.default.addObserver(
+        webEntitlementChangeHandlers.append(handler)
+
+        // Register the observer only once (first handler registration)
+        guard webEntitlementObserverToken == nil else { return }
+        webEntitlementObserverToken = NotificationCenter.default.addObserver(
             forName: .webEntitlementChanged,
             object: nil,
             queue: .main
         ) { notification in
-            handler(notification.object as? WebEntitlement)
+            let entitlement = notification.object as? WebEntitlement
+            for h in webEntitlementChangeHandlers {
+                h(entitlement)
+            }
         }
     }
 
@@ -818,6 +831,14 @@ public final class AppDNA: @unchecked Sendable {
             shared.sessionManager = nil
             shared.apiClient = nil
             shared.isConfigured = false
+
+            // Remove web entitlement observer
+            if let token = webEntitlementObserverToken {
+                NotificationCenter.default.removeObserver(token)
+                webEntitlementObserverToken = nil
+            }
+            webEntitlementChangeHandlers.removeAll()
+
             Log.info("AppDNA SDK shut down")
         }
     }

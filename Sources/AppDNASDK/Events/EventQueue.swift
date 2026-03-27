@@ -15,6 +15,7 @@ final class EventQueue {
     private var pendingEvents: [SDKEvent] = []
     private var flushTimer: Timer?
     private var retryCount = 0
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
     /// SPEC-067: Returns the current effective batch size based on network conditions.
     private var effectiveBatchSize: Int {
@@ -93,22 +94,26 @@ final class EventQueue {
     }
 
     @objc private func appDidEnterBackground() {
+        // Guard against duplicate background tasks
+        guard backgroundTask == .invalid else { return }
+
         // Request background time to ensure flush completes before suspension
-        var bgTask: UIBackgroundTaskIdentifier = .invalid
-        bgTask = UIApplication.shared.beginBackgroundTask {
-            UIApplication.shared.endBackgroundTask(bgTask)
-            bgTask = .invalid
+        backgroundTask = UIApplication.shared.beginBackgroundTask { [weak self] in
+            self?.endBackgroundTask()
         }
         flush()
-        // End background task after flush dispatch completes
-        queue.async {
-            if bgTask != .invalid {
-                UIApplication.shared.endBackgroundTask(bgTask)
-                bgTask = .invalid
-            }
+        // End background task after flush dispatch completes on the same serial queue
+        queue.async { [weak self] in
+            self?.endBackgroundTask()
         }
         // SPEC-067: Schedule background upload for remaining events
         BackgroundUploader.shared?.scheduleUploadIfNeeded()
+    }
+
+    private func endBackgroundTask() {
+        guard backgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
     }
 
     private func performFlush() {

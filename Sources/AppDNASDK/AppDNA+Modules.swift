@@ -46,8 +46,15 @@ extension AppDNA {
     public final class BillingModule: @unchecked Sendable {
         internal var bridge: BillingBridgeProtocol?
         private var entitlementChangeHandlers: [([Entitlement]) -> Void] = []
+        private var entitlementObserverToken: NSObjectProtocol?
 
         internal init() {}
+
+        deinit {
+            if let token = entitlementObserverToken {
+                NotificationCenter.default.removeObserver(token)
+            }
+        }
 
         /// Fetch localized product information from the App Store.
         /// Uses StoreKit 2 `Product.products(for:)` directly.
@@ -112,9 +119,13 @@ extension AppDNA {
 
         /// Register a callback that fires when entitlements change.
         /// Listens to the internal `entitlementsChanged` notification.
+        /// Only one NotificationCenter observer is registered; all callbacks are dispatched from it.
         public func onEntitlementsChanged(_ callback: @escaping ([Entitlement]) -> Void) {
             entitlementChangeHandlers.append(callback)
-            NotificationCenter.default.addObserver(
+
+            // Register the observer only once (first callback registration)
+            guard entitlementObserverToken == nil else { return }
+            entitlementObserverToken = NotificationCenter.default.addObserver(
                 forName: .entitlementsChanged,
                 object: nil,
                 queue: .main
@@ -129,7 +140,9 @@ extension AppDNA {
                             productId: e.productId
                         )
                     }
-                    callback(infos)
+                    for handler in self.entitlementChangeHandlers {
+                        handler(infos)
+                    }
                 }
             }
         }
@@ -229,9 +242,17 @@ extension AppDNA {
     /// Remote configuration module namespace.
     public final class RemoteConfigModule: @unchecked Sendable {
         internal weak var manager: RemoteConfigManager?
+        private var configObserverToken: NSObjectProtocol?
+        private var configChangeHandlers: [() -> Void] = []
 
         init(manager: RemoteConfigManager?) {
             self.manager = manager
+        }
+
+        deinit {
+            if let token = configObserverToken {
+                NotificationCenter.default.removeObserver(token)
+            }
         }
 
         /// Get a remote config value.
@@ -250,12 +271,22 @@ extension AppDNA {
         }
 
         /// Listen for config changes.
+        /// Only one NotificationCenter observer is registered; all handlers are dispatched from it.
         public func onChanged(_ handler: @escaping () -> Void) {
-            NotificationCenter.default.addObserver(
+            configChangeHandlers.append(handler)
+
+            // Register the observer only once (first handler registration)
+            guard configObserverToken == nil else { return }
+            configObserverToken = NotificationCenter.default.addObserver(
                 forName: AppDNA.configUpdated,
                 object: nil,
                 queue: .main
-            ) { _ in handler() }
+            ) { [weak self] _ in
+                guard let self = self else { return }
+                for h in self.configChangeHandlers {
+                    h()
+                }
+            }
         }
     }
 
@@ -264,9 +295,17 @@ extension AppDNA {
     /// Feature flags module namespace.
     public final class FeaturesModule: @unchecked Sendable {
         internal weak var manager: FeatureFlagManager?
+        private var flagObserverToken: NSObjectProtocol?
+        private var flagChangeHandlers: [() -> Void] = []
 
         init(manager: FeatureFlagManager?) {
             self.manager = manager
+        }
+
+        deinit {
+            if let token = flagObserverToken {
+                NotificationCenter.default.removeObserver(token)
+            }
         }
 
         /// Check if a feature flag is enabled.
@@ -280,12 +319,22 @@ extension AppDNA {
         }
 
         /// Listen for flag changes.
+        /// Only one NotificationCenter observer is registered; all handlers are dispatched from it.
         public func onChanged(_ handler: @escaping () -> Void) {
-            NotificationCenter.default.addObserver(
+            flagChangeHandlers.append(handler)
+
+            // Register the observer only once (first handler registration)
+            guard flagObserverToken == nil else { return }
+            flagObserverToken = NotificationCenter.default.addObserver(
                 forName: AppDNA.configUpdated,
                 object: nil,
                 queue: .main
-            ) { _ in handler() }
+            ) { [weak self] _ in
+                guard let self = self else { return }
+                for h in self.flagChangeHandlers {
+                    h()
+                }
+            }
         }
     }
 
