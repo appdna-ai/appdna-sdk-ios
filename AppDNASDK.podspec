@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'AppDNASDK'
-  s.version          = '1.0.3'
+  s.version          = '1.0.8'
   s.summary          = 'AppDNA iOS SDK — analytics, experiments, paywalls, onboarding, billing, push, and more.'
   s.description      = <<-DESC
 Native iOS SDK for AppDNA providing analytics, remote configuration, feature flags,
@@ -15,7 +15,7 @@ experiments, paywalls, onboarding flows, surveys, web entitlements, and deferred
   s.swift_version    = '5.9'
 
   s.dependency 'KeychainAccess', '~> 4.2'
-  s.dependency 'FirebaseFirestore', '~> 11.0'
+  s.dependency 'FirebaseFirestore', '>= 11.0', '< 13.0'
 
   s.frameworks = 'UIKit', 'StoreKit', 'Foundation'
 end
