@@ -29,7 +29,8 @@ final class BackgroundUploader {
                 forTaskWithIdentifier: Self.taskIdentifier,
                 using: nil
             ) { [weak self] task in
-                self?.handleBackgroundTask(task as! BGProcessingTask)
+                guard let processingTask = task as? BGProcessingTask else { return }
+                self?.handleBackgroundTask(processingTask)
             }
             Log.debug("Registered background upload task: \(Self.taskIdentifier)")
         }

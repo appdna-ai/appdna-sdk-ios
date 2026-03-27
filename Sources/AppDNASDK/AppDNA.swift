@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import SwiftUI
 import UserNotifications
+import os
 import FirebaseCore
 import FirebaseFirestore
 
@@ -493,6 +494,9 @@ public final class AppDNA: @unchecked Sendable {
 
     // MARK: - Firebase Initialization (must run on main thread)
 
+    /// Lock protecting `firebaseInitialized` and `isConfigured` flags against concurrent access.
+    private let initLock = NSLock()
+
     /// Track whether Firebase has been initialized to avoid double-init.
     private var firebaseInitialized = false
 
@@ -503,8 +507,13 @@ public final class AppDNA: @unchecked Sendable {
     /// 3. Standard GoogleService-Info.plist exists -> auto-configure default app
     /// 4. None available -> log error, SDK works in degraded mode
     private func initializeFirebase() {
-        guard !firebaseInitialized else { return }
+        initLock.lock()
+        guard !firebaseInitialized else {
+            initLock.unlock()
+            return
+        }
         firebaseInitialized = true
+        initLock.unlock()
 
         // Option 1: Dedicated AppDNA plist for a secondary Firebase app
         if let appdnaPlistPath = Bundle.main.path(forResource: "GoogleService-Info-AppDNA", ofType: "plist"),
@@ -541,10 +550,13 @@ public final class AppDNA: @unchecked Sendable {
     // MARK: - Internal bootstrap
 
     private func performConfigure(apiKey: String, environment: Environment, options: AppDNAOptions) {
+        initLock.lock()
         guard !isConfigured else {
+            initLock.unlock()
             Log.warning("AppDNA.configure() called multiple times — ignoring")
             return
         }
+        initLock.unlock()
 
         self.apiKey = apiKey
         self.environment = environment
@@ -667,7 +679,9 @@ public final class AppDNA: @unchecked Sendable {
                 throw CancellationError()
             }
             // Return whichever finishes first
-            let result = try await group.next()!
+            guard let result = try await group.next() else {
+                throw CancellationError()
+            }
             group.cancelAll()
             return result
         }

@@ -197,7 +197,9 @@ final class MessageManager {
             break // dismiss handled by caller
         case .deep_link, .open_url:
             if let urlString = action.url, let url = URL(string: urlString) {
-                UIApplication.shared.open(url)
+                DispatchQueue.main.async {
+                    UIApplication.shared.open(url)
+                }
             }
         }
     }

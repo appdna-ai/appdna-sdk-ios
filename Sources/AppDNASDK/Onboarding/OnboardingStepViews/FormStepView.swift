@@ -87,9 +87,11 @@ struct FormStepView: View {
             let depValue = values[dep.field_id]
             switch dep.operator_type {
             case "not_empty", "is_set":
-                return depValue != nil && "\(depValue!)" != ""
+                guard let val = depValue else { return false }
+                return "\(val)" != ""
             case "empty":
-                return depValue == nil || "\(depValue!)" == ""
+                guard let val = depValue else { return true }
+                return "\(val)" == ""
             case "equals":
                 guard let expected = dep.value?.value else { return false }
                 return "\(depValue ?? "")" == "\(expected)"
@@ -399,7 +401,7 @@ struct FormStepView: View {
         for field in visibleFields {
             if field.required {
                 let val = values[field.id]
-                if val == nil || (val is String && (val as! String).isEmpty) {
+                if val == nil || (val as? String)?.isEmpty == true {
                     errors[field.id] = "\(field.label) is required"
                 }
             }

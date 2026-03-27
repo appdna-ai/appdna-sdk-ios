@@ -749,7 +749,9 @@ struct OnboardingStepRouter: View {
             onSkip()
         case "link":
             if let urlString = actionValue, let url = URL(string: urlString) {
-                UIApplication.shared.open(url)
+                DispatchQueue.main.async {
+                    UIApplication.shared.open(url)
+                }
             }
             onNext(nil)
         case "social_login":

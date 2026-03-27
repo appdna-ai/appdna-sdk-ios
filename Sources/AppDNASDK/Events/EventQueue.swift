@@ -93,7 +93,20 @@ final class EventQueue {
     }
 
     @objc private func appDidEnterBackground() {
+        // Request background time to ensure flush completes before suspension
+        var bgTask: UIBackgroundTaskIdentifier = .invalid
+        bgTask = UIApplication.shared.beginBackgroundTask {
+            UIApplication.shared.endBackgroundTask(bgTask)
+            bgTask = .invalid
+        }
         flush()
+        // End background task after flush dispatch completes
+        queue.async {
+            if bgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTask)
+                bgTask = .invalid
+            }
+        }
         // SPEC-067: Schedule background upload for remaining events
         BackgroundUploader.shared?.scheduleUploadIfNeeded()
     }

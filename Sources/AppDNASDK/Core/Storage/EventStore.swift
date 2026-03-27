@@ -11,7 +11,13 @@ final class EventStore {
     static let maxDiskBytes = 5 * 1024 * 1024
 
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            // Fallback to temp directory if Application Support is unavailable
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ai.appdna.sdk", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            self.fileURL = dir.appendingPathComponent("pending_events.json")
+            return
+        }
         let dir = appSupport.appendingPathComponent("ai.appdna.sdk", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         self.fileURL = dir.appendingPathComponent("pending_events.json")

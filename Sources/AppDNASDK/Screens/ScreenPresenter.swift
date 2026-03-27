@@ -43,8 +43,15 @@ internal class ScreenPresenter {
             hostingController.modalPresentationStyle = .fullScreen
         }
 
-        let presenter = viewController ?? UIApplication.shared.topViewController
-        presenter?.present(hostingController, animated: true)
+        let presentBlock = {
+            let presenter = viewController ?? UIApplication.shared.topViewController
+            presenter?.present(hostingController, animated: true)
+        }
+        if Thread.isMainThread {
+            presentBlock()
+        } else {
+            DispatchQueue.main.async { presentBlock() }
+        }
     }
 
     static func presentFlow(
