@@ -144,11 +144,22 @@ final class APIClient {
                 Log.warning("Compression failed, sending uncompressed")
             }
 
-            let (_, response) = try await session.data(for: urlRequest)
+            let (responseData, response) = try await session.data(for: urlRequest)
             guard let httpResponse = response as? HTTPURLResponse else { return false }
-            return (200..<300).contains(httpResponse.statusCode)
+            let statusCode = httpResponse.statusCode
+            if (200..<300).contains(statusCode) {
+                return true
+            }
+            // Log the failure reason so we can diagnose
+            let body = String(data: responseData.prefix(500), encoding: .utf8) ?? "no body"
+            if statusCode == 401 {
+                Log.error("Event upload rejected: HTTP 401 — Invalid API key. Check your key in Console → Settings → SDK.")
+            } else {
+                Log.error("Event upload failed: HTTP \(statusCode) — \(body)")
+            }
+            return false
         } catch {
-            Log.error("Failed to send events: \(error.localizedDescription)")
+            Log.error("Event upload network error: \(error.localizedDescription)")
             return false
         }
     }
