@@ -106,7 +106,7 @@ final class BackgroundUploader {
 
             let result = await apiClient.sendEvents(bodyData)
 
-            if result == .success {
+            if case .success = result {
                 let eventIds = Set(batch.map(\.event_id))
                 self.eventStore.removeSent(eventIds: eventIds)
                 self.retryCount = 0
