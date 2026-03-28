@@ -163,25 +163,22 @@ final class EventQueue {
 
         Task { [weak self] in
             guard let self else { return }
-            let result = await self.apiClient.sendEvents(bodyData)
+            let success = await self.apiClient.sendEvents(bodyData)
 
             self.queue.async {
-                switch result {
-                case .success:
+                if success {
                     // Remove sent events from memory and disk
                     self.pendingEvents.removeAll { eventIds.contains($0.event_id) }
                     self.eventStore.removeSent(eventIds: eventIds)
                     self.retryCount = 0
                     self.consecutiveFailures = 0
                     Log.debug("Flush successful: \(batch.count) events delivered")
-
-                case .permanent:
+                } else if self.apiClient.eventUploadPermanentlyFailed {
                     // 401/400 — retrying won't help. Pause immediately.
                     self.consecutiveFailures = self.maxConsecutiveFailures
                     self.retryCount = 0
                     Log.error("Event uploads permanently failed (invalid key or payload). Paused until next session.")
-
-                case .retryable:
+                } else {
                     if self.retryCount < self.maxRetries {
                         let delay = self.retryDelays[min(self.retryCount, self.retryDelays.count - 1)]
                         self.retryCount += 1

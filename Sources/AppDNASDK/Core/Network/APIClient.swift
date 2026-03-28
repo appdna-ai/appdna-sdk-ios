@@ -27,13 +27,6 @@ enum APIError: Error, LocalizedError {
     }
 }
 
-/// Result of an event upload attempt.
-enum EventSendResult {
-    case success
-    case retryable    // 5xx, network error — worth retrying
-    case permanent    // 401, 400 — retrying won't help
-}
-
 /// URLSession-based HTTP client with retry and auth headers.
 final class APIClient {
     let apiKey: String
@@ -41,6 +34,9 @@ final class APIClient {
     private let session: URLSession
     private let maxRetries = 3
     private let retryDelays: [TimeInterval] = [1, 2, 4]
+
+    /// Set to true when event upload gets a 4xx (retrying won't help).
+    private(set) var eventUploadPermanentlyFailed = false
 
     init(apiKey: String, environment: Environment) {
         self.apiKey = apiKey
@@ -136,8 +132,8 @@ final class APIClient {
         }
     }
 
-    /// POST event batch with gzip compression. Returns whether to retry.
-    func sendEvents(_ data: Data) async -> EventSendResult {
+    /// Fire-and-forget POST for event batches with gzip compression. Returns success status.
+    func sendEvents(_ data: Data) async -> Bool {
         do {
             var urlRequest = try buildRequest(for: .ingestEvents)
 
@@ -152,26 +148,27 @@ final class APIClient {
             }
 
             let (responseData, response) = try await session.data(for: urlRequest)
-            guard let httpResponse = response as? HTTPURLResponse else { return .retryable }
+            guard let httpResponse = response as? HTTPURLResponse else { return false }
             let statusCode = httpResponse.statusCode
             if (200..<300).contains(statusCode) {
-                return .success
+                eventUploadPermanentlyFailed = false
+                return true
             }
             // Log the failure reason
             let body = String(data: responseData.prefix(500), encoding: .utf8) ?? "no body"
             if statusCode == 401 {
                 Log.error("Event upload rejected: HTTP 401 — Invalid API key. Check your key in Console → Settings → SDK. Retrying won't help.")
-                return .permanent
+                eventUploadPermanentlyFailed = true
             } else if (400..<500).contains(statusCode) {
                 Log.error("Event upload rejected: HTTP \(statusCode) — \(body). Retrying won't help.")
-                return .permanent
+                eventUploadPermanentlyFailed = true
             } else {
                 Log.warning("Event upload failed: HTTP \(statusCode) — \(body). Will retry.")
-                return .retryable
             }
+            return false
         } catch {
             Log.error("Event upload network error: \(error.localizedDescription). Will retry.")
-            return .retryable
+            return false
         }
     }
 
