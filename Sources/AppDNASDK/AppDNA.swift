@@ -537,8 +537,9 @@ public final class AppDNA: @unchecked Sendable {
             }
             lines.append("╚══════════════════════════════════════════")
 
+            // Always print regardless of log level — diagnose() is an explicit developer call
             for line in lines {
-                Log.info(line)
+                print("[AppDNA] \(line)")
             }
         }
     }
