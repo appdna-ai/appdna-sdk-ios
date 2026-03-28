@@ -649,8 +649,8 @@ public final class AppDNA: @unchecked Sendable {
         tracker: EventTracker
     ) async {
         do {
-            // Bootstrap with a 5-second timeout to avoid blocking SDK init
-            let data: BootstrapData = try await withTimeout(seconds: 5) {
+            // Bootstrap with a 15-second timeout (allows 1 retry cycle: initial + 1s + retry = ~5-10s)
+            let data: BootstrapData = try await withTimeout(seconds: 15) {
                 try await client.request(.bootstrap)
             }
             queue.async { [weak self] in
