@@ -517,7 +517,7 @@ public final class AppDNA: @unchecked Sendable {
     /// Priority:
     /// 1. GoogleService-Info-AppDNA.plist -> create named "appdna" instance
     /// 2. Default FirebaseApp already exists -> use it
-    /// 3. Standard GoogleService-Info.plist exists -> auto-configure default app
+    /// 3. Standard GoogleService-Info.plist (only if no existing Firebase app) -> auto-configure
     /// 4. None available -> log error, SDK works in degraded mode
     private func initializeFirebase() {
         initLock.lock()
@@ -528,7 +528,8 @@ public final class AppDNA: @unchecked Sendable {
         firebaseInitialized = true
         initLock.unlock()
 
-        // Option 1: Dedicated AppDNA plist for a secondary Firebase app
+        // Option 1 (RECOMMENDED): Dedicated AppDNA plist → separate named Firebase app
+        // This is the correct path when the host app has its own Firebase project.
         if let appdnaPlistPath = Bundle.main.path(forResource: "GoogleService-Info-AppDNA", ofType: "plist"),
            let appdnaOptions = FirebaseOptions(contentsOfFile: appdnaPlistPath) {
             if FirebaseApp.app(name: "appdna") == nil {
@@ -536,28 +537,47 @@ public final class AppDNA: @unchecked Sendable {
             }
             if let secondaryApp = FirebaseApp.app(name: "appdna") {
                 AppDNA.firestoreDB = Firestore.firestore(app: secondaryApp)
-                Log.info("Using secondary Firebase app 'appdna' for Firestore (GoogleService-Info-AppDNA.plist)")
+                Log.info("✅ Firebase: Using secondary app 'appdna' (GoogleService-Info-AppDNA.plist)")
+            } else {
+                Log.error("❌ Firebase: GoogleService-Info-AppDNA.plist found but failed to create secondary app. Check the plist content is valid.")
             }
             return
         }
 
-        // Option 2: Host app already configured Firebase
+        // Option 2: No AppDNA plist, but standard plist exists and NO existing Firebase app
+        // This only works if the standard plist points to the AppDNA Firebase project.
+        if FirebaseApp.app() == nil {
+            if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
+                FirebaseApp.configure()
+                AppDNA.firestoreDB = Firestore.firestore()
+                Log.info("✅ Firebase: Auto-configured from GoogleService-Info.plist (make sure this is the AppDNA Firebase config)")
+                return
+            }
+        }
+
+        // Option 3: Host app already has Firebase, but no AppDNA plist
+        // ⚠️ We CANNOT use the host's Firebase — it points to a different project
+        // and Firestore reads will fail with "Missing or insufficient permissions".
         if FirebaseApp.app() != nil {
-            AppDNA.firestoreDB = Firestore.firestore()
-            Log.info("Using default Firebase app for Firestore")
+            Log.error("""
+            ❌ Firebase: Your app already has Firebase configured (its own project), \
+            but GoogleService-Info-AppDNA.plist was NOT found. \
+            AppDNA needs its own Firebase config to access Firestore. \
+            \n→ Download GoogleService-Info-AppDNA.plist from Console → Settings → SDK \
+            \n→ Add it to your Xcode project (drag into navigator, check 'Copy items if needed', select your app target) \
+            \n→ See: https://docs.appdna.ai/sdks/ios/installation#firebase-configuration \
+            \nRemote config (paywalls, experiments, flags, onboarding) will NOT work without this file.
+            """)
             return
         }
 
-        // Option 3: Auto-configure from standard GoogleService-Info.plist
-        if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
-            FirebaseApp.configure()
-            AppDNA.firestoreDB = Firestore.firestore()
-            Log.info("Auto-configured Firebase from GoogleService-Info.plist")
-            return
-        }
-
-        // Option 4: No Firebase config available — SDK works in degraded mode
-        Log.error("Firebase not configured. Either add GoogleService-Info-AppDNA.plist, GoogleService-Info.plist, or call FirebaseApp.configure() before AppDNA.configure(). Remote config (paywalls, experiments, flags) will not work. See docs: https://docs.appdna.ai/sdks/ios/installation")
+        // Option 4: No Firebase config at all
+        Log.error("""
+        ❌ Firebase: No Firebase configuration found. AppDNA requires Firebase Firestore for remote config. \
+        \n→ Download GoogleService-Info-AppDNA.plist from Console → Settings → SDK \
+        \n→ Add it to your Xcode project \
+        \n→ See: https://docs.appdna.ai/sdks/ios/installation#firebase-configuration
+        """)
     }
 
     // MARK: - Internal bootstrap
@@ -577,6 +597,14 @@ public final class AppDNA: @unchecked Sendable {
         Log.level = options.logLevel
 
         Log.info("Configuring AppDNA SDK v\(AppDNA.sdkVersion) (\(environment.rawValue))")
+
+        // Validate API key format
+        if !apiKey.hasPrefix("adn_live_") && !apiKey.hasPrefix("adn_test_") {
+            Log.error("❌ API key format invalid. Keys must start with 'adn_live_' (production) or 'adn_test_' (sandbox). Got: \(String(apiKey.prefix(10)))...")
+        }
+        if apiKey.count < 20 {
+            Log.error("❌ API key too short (\(apiKey.count) chars). Check you're passing the full key from Console → Settings → SDK → API Keys.")
+        }
 
         // Firebase already initialized on main thread in initializeFirebase()
 
@@ -668,7 +696,14 @@ public final class AppDNA: @unchecked Sendable {
                 )
             }
         } catch {
-            Log.error("Bootstrap failed: \(error.localizedDescription) — SDK will operate in degraded mode with cached/bundled config")
+            let desc = error.localizedDescription
+            if desc.contains("401") || desc.contains("UNAUTHORIZED") || desc.contains("Invalid API key") {
+                Log.error("❌ Bootstrap failed: Invalid API key. Check your key in Console → Settings → SDK → API Keys. Make sure it starts with 'adn_live_' or 'adn_test_'.")
+            } else if desc.contains("Network error") || desc.contains("not connected") || desc.contains("timed out") {
+                Log.error("❌ Bootstrap failed: Network error (\(desc)). Check your device has internet access and can reach api.appdna.ai")
+            } else {
+                Log.error("❌ Bootstrap failed: \(desc) — SDK will operate in degraded mode with cached/bundled config")
+            }
             queue.async { [weak self] in
                 guard let self else { return }
                 self.initializeManagers(
