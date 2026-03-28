@@ -15,6 +15,8 @@ final class EventQueue {
     private var pendingEvents: [SDKEvent] = []
     private var flushTimer: Timer?
     private var retryCount = 0
+    private var consecutiveFailures = 0
+    private let maxConsecutiveFailures = 5
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
     /// SPEC-067: Returns the current effective batch size based on network conditions.
@@ -60,10 +62,18 @@ final class EventQueue {
         NotificationCenter.default.removeObserver(self)
     }
 
+    /// Maximum in-memory events. Beyond this, oldest events are dropped (still on disk).
+    private let maxInMemoryEvents = 1000
+
     /// Add an event to the queue. Triggers threshold flush if adaptive batch size reached.
     func enqueue(_ event: SDKEvent) {
         queue.async { [weak self] in
             guard let self else { return }
+
+            // Cap in-memory events to prevent memory pressure
+            if self.pendingEvents.count >= self.maxInMemoryEvents {
+                self.pendingEvents.removeFirst(self.pendingEvents.count - self.maxInMemoryEvents + 1)
+            }
             self.pendingEvents.append(event)
 
             // Persist to disk immediately
@@ -120,6 +130,12 @@ final class EventQueue {
         // Already on queue
         guard !pendingEvents.isEmpty else { return }
 
+        // Stop hammering the server after repeated failures — wait for next app session
+        if consecutiveFailures >= maxConsecutiveFailures {
+            Log.debug("Paused event flush after \(consecutiveFailures) consecutive failures. Events saved to disk.")
+            return
+        }
+
         // SPEC-067: Skip flush if no network
         let currentBatchSize = effectiveBatchSize
         guard currentBatchSize > 0 else {
@@ -155,6 +171,7 @@ final class EventQueue {
                     self.pendingEvents.removeAll { eventIds.contains($0.event_id) }
                     self.eventStore.removeSent(eventIds: eventIds)
                     self.retryCount = 0
+                    self.consecutiveFailures = 0
                     Log.debug("Flush successful: \(batch.count) events delivered")
                 } else {
                     if self.retryCount < self.maxRetries {
@@ -165,8 +182,13 @@ final class EventQueue {
                             self?.flush()
                         }
                     } else {
-                        Log.warning("Max retries reached (\(self.maxRetries)). Events kept on disk for next session.")
+                        self.consecutiveFailures += 1
                         self.retryCount = 0
+                        if self.consecutiveFailures >= self.maxConsecutiveFailures {
+                            Log.warning("Too many consecutive flush failures (\(self.consecutiveFailures)). Event uploads paused until next session.")
+                        } else {
+                            Log.warning("Max retries reached (\(self.maxRetries)). Will try again on next flush cycle.")
+                        }
                     }
                 }
             }

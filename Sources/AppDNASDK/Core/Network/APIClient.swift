@@ -3,12 +3,28 @@ import Compression
 import UIKit
 
 /// URL request errors.
-enum APIError: Error {
+enum APIError: Error, LocalizedError {
     case invalidURL
     case httpError(statusCode: Int, data: Data?)
     case networkError(Error)
     case decodingError(Error)
     case compressionError
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "Invalid URL"
+        case .httpError(let statusCode, let data):
+            let body = data.flatMap { String(data: $0, encoding: .utf8) } ?? "no body"
+            return "HTTP \(statusCode): \(body)"
+        case .networkError(let error):
+            return "Network error: \(error.localizedDescription)"
+        case .decodingError(let error):
+            return "Decoding error: \(error.localizedDescription)"
+        case .compressionError:
+            return "Compression error"
+        }
+    }
 }
 
 /// URLSession-based HTTP client with retry and auth headers.
