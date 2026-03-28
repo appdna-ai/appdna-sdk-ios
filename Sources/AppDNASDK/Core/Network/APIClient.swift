@@ -129,8 +129,15 @@ final class APIClient {
         }
     }
 
-    /// Fire-and-forget POST for event batches with gzip compression. Returns success status.
-    func sendEvents(_ data: Data) async -> Bool {
+    /// Result of an event upload attempt.
+    enum SendResult {
+        case success
+        case retryable    // 5xx, network error — worth retrying
+        case permanent    // 401, 400 — retrying won't help
+    }
+
+    /// POST event batch with gzip compression. Returns whether to retry.
+    func sendEvents(_ data: Data) async -> SendResult {
         do {
             var urlRequest = try buildRequest(for: .ingestEvents)
 
@@ -145,22 +152,26 @@ final class APIClient {
             }
 
             let (responseData, response) = try await session.data(for: urlRequest)
-            guard let httpResponse = response as? HTTPURLResponse else { return false }
+            guard let httpResponse = response as? HTTPURLResponse else { return .retryable }
             let statusCode = httpResponse.statusCode
             if (200..<300).contains(statusCode) {
-                return true
+                return .success
             }
-            // Log the failure reason so we can diagnose
+            // Log the failure reason
             let body = String(data: responseData.prefix(500), encoding: .utf8) ?? "no body"
             if statusCode == 401 {
-                Log.error("Event upload rejected: HTTP 401 — Invalid API key. Check your key in Console → Settings → SDK.")
+                Log.error("Event upload rejected: HTTP 401 — Invalid API key. Check your key in Console → Settings → SDK. Retrying won't help.")
+                return .permanent
+            } else if (400..<500).contains(statusCode) {
+                Log.error("Event upload rejected: HTTP \(statusCode) — \(body). Retrying won't help.")
+                return .permanent
             } else {
-                Log.error("Event upload failed: HTTP \(statusCode) — \(body)")
+                Log.warning("Event upload failed: HTTP \(statusCode) — \(body). Will retry.")
+                return .retryable
             }
-            return false
         } catch {
-            Log.error("Event upload network error: \(error.localizedDescription)")
-            return false
+            Log.error("Event upload network error: \(error.localizedDescription). Will retry.")
+            return .retryable
         }
     }
 

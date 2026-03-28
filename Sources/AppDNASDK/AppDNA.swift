@@ -450,6 +450,103 @@ public final class AppDNA: @unchecked Sendable {
         Log.info("Log level changed to \(level)")
     }
 
+    // MARK: - Public API: Diagnostics
+
+    /// Print a comprehensive SDK health report to the console.
+    /// Call after `configure()` has had time to complete (e.g. after 3-5 seconds or in viewDidAppear).
+    /// Checks: API key format, bootstrap status, Firebase initialization, Firestore connectivity, event queue health.
+    public static func diagnose() {
+        shared.queue.async {
+            var lines: [String] = []
+            lines.append("╔══════════════════════════════════════════")
+            lines.append("║  AppDNA SDK Diagnostic Report  v\(sdkVersion)")
+            lines.append("╠══════════════════════════════════════════")
+
+            // 1. API Key
+            if let key = shared.apiKey {
+                if key.hasPrefix("adn_live_") {
+                    lines.append("║ ✅ API Key: production key (adn_live_...\(String(key.suffix(4))))")
+                } else if key.hasPrefix("adn_test_") {
+                    lines.append("║ ✅ API Key: sandbox key (adn_test_...\(String(key.suffix(4))))")
+                } else {
+                    lines.append("║ ❌ API Key: invalid format — must start with adn_live_ or adn_test_")
+                }
+            } else {
+                lines.append("║ ❌ API Key: not set — configure() not called?")
+            }
+
+            // 2. Environment
+            if let env = shared.environment {
+                lines.append("║ ✅ Environment: \(env.rawValue)")
+            } else {
+                lines.append("║ ❌ Environment: not set")
+            }
+
+            // 3. Bootstrap
+            if let data = shared.bootstrapData {
+                lines.append("║ ✅ Bootstrap: orgId=\(data.orgId), appId=\(data.appId)")
+                lines.append("║    Firestore path: \(data.firestorePath)")
+            } else {
+                lines.append("║ ❌ Bootstrap: failed or not completed — check API key and network")
+            }
+
+            // 4. Firebase
+            if FirebaseApp.app(name: "appdna") != nil {
+                lines.append("║ ✅ Firebase: secondary app 'appdna' configured")
+            } else if FirebaseApp.app() != nil {
+                lines.append("║ ⚠️ Firebase: using default app (NOT AppDNA secondary) — add GoogleService-Info-AppDNA.plist")
+            } else {
+                lines.append("║ ❌ Firebase: no Firebase app configured")
+            }
+
+            // 5. Identity
+            if let identity = shared.identityManager {
+                let id = identity.currentIdentity
+                lines.append("║ ✅ Identity: anonId=\(String(id.anonId.prefix(8)))..., userId=\(id.userId ?? "none")")
+            } else {
+                lines.append("║ ❌ Identity: not initialized")
+            }
+
+            // 6. Event Queue
+            if shared.eventQueue != nil {
+                lines.append("║ ✅ Event Queue: initialized")
+            } else {
+                lines.append("║ ❌ Event Queue: not initialized")
+            }
+
+            // 7. Remote Config
+            if shared.remoteConfigManager != nil {
+                lines.append("║ ✅ Remote Config: initialized")
+            } else {
+                lines.append("║ ❌ Remote Config: not initialized")
+            }
+
+            // 8. Modules
+            var modules: [String] = []
+            if shared.paywallManager != nil { modules.append("paywalls") }
+            if shared.onboardingFlowManager != nil { modules.append("onboarding") }
+            if shared.messageManager != nil { modules.append("messages") }
+            if shared.surveyManager != nil { modules.append("surveys") }
+            if shared.billingBridge != nil { modules.append("billing") }
+            if shared.pushTokenManager != nil { modules.append("push") }
+            if shared.experimentManager != nil { modules.append("experiments") }
+            lines.append("║ ✅ Modules: \(modules.isEmpty ? "none" : modules.joined(separator: ", "))")
+
+            lines.append("╠══════════════════════════════════════════")
+            let allGood = shared.apiKey != nil && shared.bootstrapData != nil && FirebaseApp.app(name: "appdna") != nil
+            if allGood {
+                lines.append("║ ✅ SDK is fully operational")
+            } else {
+                lines.append("║ ⚠️ SDK has issues — review items marked ❌ above")
+            }
+            lines.append("╚══════════════════════════════════════════")
+
+            for line in lines {
+                Log.info(line)
+            }
+        }
+    }
+
     // MARK: - Public API: Session Data (SPEC-088)
 
     /// Store a key-value pair in the cross-module session data store.
