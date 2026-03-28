@@ -53,7 +53,8 @@ final class DeferredDeepLinkManager {
         let path = "orgs/\(orgId)/apps/\(appId)/config/deferred_deep_links/\(visitorId)"
         Log.debug("DeferredDeepLink: checking \(path)")
 
-        AppDNA.firestoreDB.document(path).getDocument { [weak self] snapshot, error in
+        guard let db = AppDNA.firestoreDB else { completion(nil); return }
+        db.document(path).getDocument { [weak self] snapshot, error in
             guard let self else {
                 completion(nil)
                 return

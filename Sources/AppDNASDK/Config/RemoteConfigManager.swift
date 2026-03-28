@@ -112,7 +112,10 @@ final class RemoteConfigManager {
             return
         }
 
-        let db = AppDNA.firestoreDB
+        guard let db = AppDNA.firestoreDB else {
+            Log.warning("Firestore not initialized — serving cached config only")
+            return
+        }
         let basePath = "\(firestorePath)/config"
 
         // Fetch all 6 config documents in parallel
@@ -388,7 +391,7 @@ final class RemoteConfigManager {
             completion(nil)
             return
         }
-        let db = AppDNA.firestoreDB
+        guard let db = AppDNA.firestoreDB else { completion(nil); return }
         let basePath = "\(firestorePath)/config"
         db.document("\(basePath)/screens/\(screenId)").getDocument { snapshot, error in
             guard let data = snapshot?.data() else {

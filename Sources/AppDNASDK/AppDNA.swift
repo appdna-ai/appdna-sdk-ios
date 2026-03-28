@@ -16,7 +16,9 @@ public final class AppDNA: @unchecked Sendable {
     /// Firestore instance used by the SDK.
     /// Uses a secondary Firebase app ("appdna") if GoogleService-Info-AppDNA.plist is found,
     /// otherwise falls back to the default Firebase app's Firestore instance.
-    internal static var firestoreDB: Firestore = Firestore.firestore()
+    /// NOTE: Must NOT have a default value — Swift evaluates the default on first access
+    /// (even writes), and Firestore.firestore() crashes if no default Firebase app exists.
+    internal static var firestoreDB: Firestore?
 
     /// Notification posted when remote config is refreshed.
     public static let configUpdated = Notification.Name("AppDNA.configUpdated")
