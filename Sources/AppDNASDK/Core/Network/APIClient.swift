@@ -27,6 +27,13 @@ enum APIError: Error, LocalizedError {
     }
 }
 
+/// Result of an event upload attempt.
+enum EventSendResult {
+    case success
+    case retryable    // 5xx, network error — worth retrying
+    case permanent    // 401, 400 — retrying won't help
+}
+
 /// URLSession-based HTTP client with retry and auth headers.
 final class APIClient {
     let apiKey: String
@@ -129,15 +136,8 @@ final class APIClient {
         }
     }
 
-    /// Result of an event upload attempt.
-    enum SendResult {
-        case success
-        case retryable    // 5xx, network error — worth retrying
-        case permanent    // 401, 400 — retrying won't help
-    }
-
     /// POST event batch with gzip compression. Returns whether to retry.
-    func sendEvents(_ data: Data) async -> SendResult {
+    func sendEvents(_ data: Data) async -> EventSendResult {
         do {
             var urlRequest = try buildRequest(for: .ingestEvents)
 
