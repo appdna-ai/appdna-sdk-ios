@@ -476,11 +476,7 @@ public final class AppDNA: @unchecked Sendable {
             }
 
             // 2. Environment
-            if let env = shared.environment {
-                lines.append("║ ✅ Environment: \(env.rawValue)")
-            } else {
-                lines.append("║ ❌ Environment: not set")
-            }
+            lines.append("║ ✅ Environment: \(shared.environment.rawValue)")
 
             // 3. Bootstrap
             if let data = shared.bootstrapData {
