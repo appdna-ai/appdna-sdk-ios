@@ -10,20 +10,42 @@ struct OnboardingFlowRoot: Codable {
 
 /// A single onboarding flow definition.
 public struct OnboardingFlowConfig: Codable {
-    public let id: String?
+    public let id: String
     public let name: String?
     public let version: Int?
-    public let steps: [OnboardingStep]?
-    public let settings: OnboardingSettings?
+    private let _steps: [OnboardingStep]?
+    private let _settings: OnboardingSettings?
     public let status: String?
     public let graph_layout: AnyCodable?
     public let audience_rules: AnyCodable?
+
+    /// Non-optional steps for renderer compatibility
+    public var steps: [OnboardingStep] { _steps ?? [] }
+    /// Non-optional settings for renderer compatibility
+    public var settings: OnboardingSettings { _settings ?? OnboardingSettings() }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, version, _steps = "steps", _settings = "settings"
+        case status, graph_layout, audience_rules
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        self.name = try c.decodeIfPresent(String.self, forKey: .name)
+        self.version = try c.decodeIfPresent(Int.self, forKey: .version)
+        self._steps = try c.decodeIfPresent([OnboardingStep].self, forKey: ._steps)
+        self._settings = try c.decodeIfPresent(OnboardingSettings.self, forKey: ._settings)
+        self.status = try c.decodeIfPresent(String.self, forKey: .status)
+        self.graph_layout = try c.decodeIfPresent(AnyCodable.self, forKey: .graph_layout)
+        self.audience_rules = try c.decodeIfPresent(AnyCodable.self, forKey: .audience_rules)
+    }
 }
 
 /// Flow-level settings.
 public struct OnboardingSettings: Codable {
-    public let show_progress: Bool?
-    public let allow_back: Bool?
+    public let show_progress: Bool
+    public let allow_back: Bool
     public let skip_to_step: String?
     /// Custom progress bar fill color (hex). Falls back to accentColor if nil.
     public let progress_color: String?
@@ -36,6 +58,19 @@ public struct OnboardingSettings: Codable {
         self.skip_to_step = skip_to_step
         self.progress_color = progress_color
         self.progress_track_color = progress_track_color
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.show_progress = try c.decodeIfPresent(Bool.self, forKey: .show_progress) ?? true
+        self.allow_back = try c.decodeIfPresent(Bool.self, forKey: .allow_back) ?? true
+        self.skip_to_step = try c.decodeIfPresent(String.self, forKey: .skip_to_step)
+        self.progress_color = try c.decodeIfPresent(String.self, forKey: .progress_color)
+        self.progress_track_color = try c.decodeIfPresent(String.self, forKey: .progress_track_color)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case show_progress, allow_back, skip_to_step, progress_color, progress_track_color
     }
 }
 

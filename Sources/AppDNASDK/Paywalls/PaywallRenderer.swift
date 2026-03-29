@@ -45,12 +45,12 @@ struct PaywallRenderer: View {
 
             VStack(spacing: 0) {
                 ScrollView {
-                    VStack(spacing: config.layout.spacing ?? 16) {
+                    VStack(spacing: config.layout?.spacing ?? 16) {
                         ForEach(Array(config.sections.enumerated()), id: \.offset) { _, section in
                             sectionView(for: section)
                         }
                     }
-                    .padding(config.layout.padding ?? 20)
+                    .padding(config.layout?.padding ?? 20)
                 }
 
                 // SPEC-089d: Sticky footer pinned to bottom
@@ -1083,7 +1083,7 @@ struct PaywallRenderer: View {
     // SPEC-084: Grid/carousel/stack plan layouts
     private func plansSection(plans: [PaywallPlan], style: SectionStyleConfig? = nil) -> some View {
         // Gap 10: Read plan_display_style from layout, falling back to layout.type
-        let displayStyle = config.layout.plan_display_style ?? config.layout.type
+        let displayStyle = config.layout?.plan_display_style ?? config.layout?.type ?? "stack"
         // Gap 11: Build card styling from section data
         let sectionData = config.sections.first(where: { $0.type == "plans" })?.data
         let cardStyle = PlanCardStyle(from: sectionData)
