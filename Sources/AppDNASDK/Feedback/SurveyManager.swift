@@ -38,29 +38,29 @@ final class SurveyManager {
 
         for (surveyId, config) in surveyConfigs {
             // 1. Event name match
-            guard config.trigger_rules.event == eventName else { continue }
+            guard config.trigger_rules?.event == eventName else { continue }
 
             // 2. Conditions evaluation
-            guard evaluateConditions(config.trigger_rules.conditions, properties: properties ?? [:]) else { continue }
+            guard evaluateConditions(config.trigger_rules?.conditions, properties: properties ?? [:]) else { continue }
 
             // 3. Frequency check
             guard frequencyTracker.canShow(
                 surveyId: surveyId,
-                frequency: config.trigger_rules.frequency,
-                maxDisplays: config.trigger_rules.max_displays
+                frequency: config.trigger_rules?.frequency ?? .once,
+                maxDisplays: config.trigger_rules?.max_displays
             ) else { continue }
 
             // 4. Love score range check
-            if let range = config.trigger_rules.love_score_range {
+            if let range = config.trigger_rules?.love_score_range {
                 let loveScore = UserDefaults.standard.integer(forKey: "ai.appdna.sdk.love_score")
-                guard loveScore >= range.min && loveScore <= range.max else { continue }
+                guard loveScore >= (range.min ?? 0) && loveScore <= (range.max ?? 100) else { continue }
             }
 
             // 5. Min sessions check
-            guard meetsMinSessions(config.trigger_rules.min_sessions) else { continue }
+            guard meetsMinSessions(config.trigger_rules?.min_sessions) else { continue }
 
             // 5. Present with optional delay
-            let delay = config.trigger_rules.delay_seconds ?? 0
+            let delay = config.trigger_rules?.delay_seconds ?? 0
             if delay > 0 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + Double(delay)) { [weak self] in
                     self?.presentSurvey(surveyId: surveyId, config: config, triggerEvent: eventName)
@@ -88,15 +88,15 @@ final class SurveyManager {
         // Track survey shown
         eventTracker.track(event: "survey_shown", properties: [
             "survey_id": surveyId,
-            "survey_type": config.survey_type,
+            "survey_type": config.survey_type ?? "",
             "trigger_event": triggerEvent,
         ])
 
         renderer.present(config: config, onQuestionAnswered: { [weak self] surveyName, question, answer in
             self?.eventTracker.track(event: "survey_question_answered", properties: [
                 "survey_id": surveyId,
-                "question_id": question.id,
-                "question_type": question.type,
+                "question_id": question.id ?? "",
+                "question_type": question.type ?? "",
                 "answer": answer.answer,
             ])
         }) { [weak self] result in
@@ -126,7 +126,7 @@ final class SurveyManager {
         let answersArray = answers.map { $0.asDictionary }
         eventTracker.track(event: "survey_completed", properties: [
             "survey_id": surveyId,
-            "survey_type": config.survey_type,
+            "survey_type": config.survey_type ?? "",
             "answers": answersArray,
         ])
     }
@@ -136,7 +136,7 @@ final class SurveyManager {
     private func submitResponse(surveyId: String, config: SurveyConfig, answers: [SurveyAnswer]) {
         let body: [String: Any] = [
             "survey_id": surveyId,
-            "survey_type": config.survey_type,
+            "survey_type": config.survey_type ?? "",
             "answers": answers.map { $0.asDictionary },
             "context": [
                 "sdk_version": AppDNA.sdkVersion,
@@ -215,21 +215,21 @@ final class SurveyManager {
 
     private func determineSentiment(config: SurveyConfig, answers: [SurveyAnswer]) -> SurveySentiment {
         // NPS: 9-10 = positive, 0-6 = negative, 7-8 = neutral
-        if config.survey_type == "nps", let first = answers.first, let score = first.answer as? Int {
+        if (config.survey_type ?? "") == "nps", let first = answers.first, let score = first.answer as? Int {
             if score >= 9 { return .positive }
             if score <= 6 { return .negative }
             return .neutral
         }
 
         // CSAT/Rating: >= 4 (out of 5) = positive, <= 2 = negative
-        if ["csat", "rating"].contains(config.survey_type), let first = answers.first, let rating = first.answer as? Int {
+        if ["csat", "rating"].contains(config.survey_type ?? ""), let first = answers.first, let rating = first.answer as? Int {
             if rating >= 4 { return .positive }
             if rating <= 2 { return .negative }
             return .neutral
         }
 
         // Emoji: last 2 = positive, first 2 = negative
-        if config.survey_type == "emoji_scale" || answers.first?.answer is String {
+        if (config.survey_type ?? "") == "emoji_scale" || answers.first?.answer is String {
             let emojis = ["😡", "😕", "😐", "😊", "😍"]
             if let first = answers.first, let emoji = first.answer as? String,
                let idx = emojis.firstIndex(of: emoji) {
@@ -248,8 +248,10 @@ final class SurveyManager {
         guard let conditions, !conditions.isEmpty else { return true }
 
         return conditions.allSatisfy { condition in
-            guard let propValue = properties[condition.field] else { return false }
-            return evaluateOperator(condition.operator, propValue: propValue, condValue: condition.value.value)
+            guard let field = condition.field, let propValue = properties[field] else { return false }
+            guard let op = condition.`operator` else { return false }
+            guard let condValue = condition.value?.value else { return false }
+            return evaluateOperator(op, propValue: propValue, condValue: condValue)
         }
     }
 

@@ -81,7 +81,7 @@ struct FullscreenView: View {
                 // CTA — SPEC-084: apply button_color, corner_radius
                 if let ctaText = content.cta_text {
                     Button {
-                        HapticEngine.triggerIfEnabled(content.haptic?.triggers.on_button_tap, config: content.haptic)
+                        HapticEngine.triggerIfEnabled(content.haptic?.triggers?.on_button_tap, config: content.haptic)
                         onCTATap()
                     } label: {
                         HStack(spacing: 6) {
@@ -143,7 +143,7 @@ struct FullscreenView: View {
         }
         .onAppear {
             // SPEC-085: Haptic on appear
-            HapticEngine.triggerIfEnabled(content.haptic?.triggers.on_button_tap, config: content.haptic)
+            HapticEngine.triggerIfEnabled(content.haptic?.triggers?.on_button_tap, config: content.haptic)
             // SPEC-085: Particle effect on appear
             if let effect = content.particle_effect, effect.trigger == "on_appear" {
                 showConfetti = true

@@ -83,9 +83,9 @@ struct FormStepView: View {
 
     private var visibleFields: [FormField] {
         fields.filter { field in
-            guard let dep = field.depends_on else { return true }
-            let depValue = values[dep.field_id]
-            switch dep.operator_type {
+            guard let dep = field.depends_on, let depFieldId = dep.field_id else { return true }
+            let depValue = values[depFieldId]
+            switch dep.operator_type ?? "" {
             case "not_empty", "is_set":
                 guard let val = depValue else { return false }
                 return "\(val)" != ""
@@ -149,7 +149,7 @@ struct FormStepView: View {
 
     private func fieldLabel(_ field: FormField) -> some View {
         HStack(spacing: 2) {
-            Text(field.label.interpolated())
+            Text((field.label ?? "").interpolated())
                 .font(.subheadline.weight(.medium))
             if field.required {
                 Text("*")
@@ -304,7 +304,7 @@ struct FormStepView: View {
         return Picker((field.placeholder ?? "Select").interpolated(), selection: binding) {
             Text((field.placeholder ?? "Select...").interpolated()).tag("")
             ForEach(options) { opt in
-                Text(opt.label.interpolated()).tag(opt.id)
+                Text((opt.label ?? "").interpolated()).tag(opt.id)
             }
         }
         .pickerStyle(.menu)
@@ -349,7 +349,7 @@ struct FormStepView: View {
             get: { values[field.id] as? Bool ?? false },
             set: { values[field.id] = $0 }
         )
-        return Toggle(field.label.interpolated(), isOn: binding)
+        return Toggle((field.label ?? "").interpolated(), isOn: binding)
     }
 
     // MARK: - Stepper
@@ -387,7 +387,7 @@ struct FormStepView: View {
         )
         return Picker("", selection: binding) {
             ForEach(options) { opt in
-                Text(opt.label.interpolated()).tag(opt.id)
+                Text((opt.label ?? "").interpolated()).tag(opt.id)
             }
         }
         .pickerStyle(.segmented)

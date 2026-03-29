@@ -25,18 +25,19 @@ internal class AutoTriggerEngine {
 
         let matching = entries
             .filter { entry in
-                evaluateEntry(entry, event: event, properties: properties, userTraits: userTraits,
+                guard entry.id != nil else { return false }
+                return evaluateEntry(entry, event: event, properties: properties, userTraits: userTraits,
                              sessionCount: sessionCount, daysSinceInstall: daysSinceInstall,
                              currentScreenName: currentScreenName, now: now)
             }
             .sorted { ($0.priority ?? 0) > ($1.priority ?? 0) }
 
-        if let best = matching.first {
+        if let best = matching.first, let bestId = best.id {
             // Mark as shown
-            impressionCounts[best.id, default: 0] += 1
-            lastShownTimes[best.id] = now
-            shownThisSession.insert(best.id)
-            return best.id
+            impressionCounts[bestId, default: 0] += 1
+            lastShownTimes[bestId] = now
+            shownThisSession.insert(bestId)
+            return bestId
         }
 
         return nil
@@ -70,16 +71,17 @@ internal class AutoTriggerEngine {
         guard let triggerRules = entry.trigger_rules else { return false }
 
         // Check frequency
+        let entryId = entry.id ?? ""
         if let frequency = triggerRules.frequency {
             if let maxImpressions = frequency.max_impressions,
-               (impressionCounts[entry.id] ?? 0) >= maxImpressions {
+               (impressionCounts[entryId] ?? 0) >= maxImpressions {
                 return false
             }
-            if frequency.once_per_session == true, shownThisSession.contains(entry.id) {
+            if frequency.once_per_session == true, shownThisSession.contains(entryId) {
                 return false
             }
             if let cooldownHours = frequency.cooldown_hours,
-               let lastShown = lastShownTimes[entry.id] {
+               let lastShown = lastShownTimes[entryId] {
                 let cooldownSeconds = Double(cooldownHours) * 3600
                 if now.timeIntervalSince(lastShown) < cooldownSeconds {
                     return false
@@ -95,7 +97,8 @@ internal class AutoTriggerEngine {
                 if trigger.event_name == event {
                     if let conditions = trigger.conditions, let props = properties {
                         let allMatch = conditions.allSatisfy { cond in
-                            ConditionEvaluator.valuesEqual(props[cond.field], cond.value?.value)
+                            guard let field = cond.field else { return false }
+                            return ConditionEvaluator.valuesEqual(props[field], cond.value?.value)
                         }
                         if allMatch { anyTriggerMatched = true }
                     } else {
@@ -135,8 +138,9 @@ internal class AutoTriggerEngine {
         // User trait triggers
         if let traitConditions = triggerRules.user_traits, !traitConditions.isEmpty {
             let allTraitsMatch = traitConditions.allSatisfy { cond in
-                let traitValue = userTraits[cond.trait]
-                switch cond.operator {
+                guard let trait = cond.trait else { return true }
+                let traitValue = userTraits[trait]
+                switch cond.`operator` ?? "" {
                 case "equals", "eq": return ConditionEvaluator.valuesEqual(traitValue, cond.value?.value)
                 case "not_equals", "neq": return !ConditionEvaluator.valuesEqual(traitValue, cond.value?.value)
                 case "exists": return traitValue != nil

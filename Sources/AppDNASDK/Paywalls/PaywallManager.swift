@@ -79,7 +79,7 @@ final class PaywallManager {
             return
         }
 
-        delegate?.onPaywallPurchaseStarted(paywallId: paywallId, productId: plan.productId)
+        delegate?.onPaywallPurchaseStarted(paywallId: paywallId, productId: plan.productId ?? "")
         // AC-038: Include toggle states and promo code in purchase event
         var purchaseProps: [String: Any] = [
             "paywall_id": paywallId,
@@ -92,7 +92,7 @@ final class PaywallManager {
 
         Task {
             do {
-                let result = try await bridge.purchase(productId: plan.productId)
+                let result = try await bridge.purchase(productId: plan.productId ?? "")
                 eventTracker.track(event: "purchase_completed", properties: [
                     "paywall_id": paywallId,
                     "product_id": result.productId,

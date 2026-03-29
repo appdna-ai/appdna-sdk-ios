@@ -216,7 +216,7 @@ struct FormInputSelectBlock: View {
         Picker("", selection: $selectedValue) {
             Text(block.field_placeholder ?? "Select...").tag("")
             ForEach(options) { option in
-                Text(option.label).tag(option.resolvedValue)
+                Text(option.label ?? "").tag(option.resolvedValue)
             }
         }
         .pickerStyle(.menu)
@@ -262,7 +262,7 @@ struct FormInputSelectBlock: View {
                         if let icon = option.icon, !icon.isEmpty {
                             Text(icon)
                         }
-                        Text(option.label)
+                        Text(option.label ?? "")
                             .font(.subheadline)
                             .foregroundColor(.primary)
                         Spacer()
@@ -315,7 +315,7 @@ struct FormInputSelectBlock: View {
                         if let icon = option.icon, !icon.isEmpty {
                             Text(icon).font(.title2)
                         }
-                        Text(option.label)
+                        Text(option.label ?? "")
                             .font(.subheadline)
                             .foregroundColor(.primary)
                             .multilineTextAlignment(.center)
@@ -460,7 +460,7 @@ struct FormInputSegmentedBlock: View {
 
             Picker("", selection: $selectedValue) {
                 ForEach(options) { option in
-                    Text(option.label).tag(option.resolvedValue)
+                    Text(option.label ?? "").tag(option.resolvedValue)
                 }
             }
             .pickerStyle(.segmented)
@@ -603,7 +603,7 @@ struct FormInputChipsBlock: View {
                         }
                         inputValues[fieldId] = Array(selectedValues)
                     } label: {
-                        Text(option.label)
+                        Text(option.label ?? "")
                             .font(.subheadline)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)

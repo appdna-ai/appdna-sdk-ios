@@ -46,10 +46,10 @@ struct PlanCard: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             if let ts = planNameTextStyle {
-                                Text(loc?("plan.\(planIndex).name", plan.name) ?? plan.name)
+                                Text(loc?("plan.\(planIndex).name", plan.name ?? "") ?? plan.name ?? "")
                                     .applyTextStyle(ts)
                             } else {
-                                Text(loc?("plan.\(planIndex).name", plan.name) ?? plan.name)
+                                Text(loc?("plan.\(planIndex).name", plan.name ?? "") ?? plan.name ?? "")
                                     .font(.headline)
                                     .foregroundColor(.primary)
                             }
@@ -62,10 +62,10 @@ struct PlanCard: View {
 
                         HStack(spacing: 4) {
                             if let ts = priceTextStyle {
-                                Text(loc?("plan.\(planIndex).price", plan.price) ?? plan.price)
+                                Text(loc?("plan.\(planIndex).price", plan.price ?? "") ?? plan.price ?? "")
                                     .applyTextStyle(ts)
                             } else {
-                                Text(loc?("plan.\(planIndex).price", plan.price) ?? plan.price)
+                                Text(loc?("plan.\(planIndex).price", plan.price ?? "") ?? plan.price ?? "")
                                     .font(.subheadline.bold())
                                     .foregroundColor(.primary)
                             }

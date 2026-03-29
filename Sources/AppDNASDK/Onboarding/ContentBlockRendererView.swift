@@ -350,9 +350,9 @@ struct ContentBlockRendererView: View {
             Color.clear
         } else if let grad = block.block_style?.background_gradient {
             LinearGradient(
-                colors: [Color(hex: grad.start), Color(hex: grad.end)],
-                startPoint: gradientStartPointForButton(angle: grad.angle),
-                endPoint: gradientEndPointForButton(angle: grad.angle)
+                colors: [Color(hex: grad.start ?? "#000000"), Color(hex: grad.end ?? "#FFFFFF")],
+                startPoint: gradientStartPointForButton(angle: grad.angle ?? 0),
+                endPoint: gradientEndPointForButton(angle: grad.angle ?? 0)
             )
         } else {
             bgColor
@@ -612,22 +612,23 @@ struct ContentBlockRendererView: View {
 
         return VStack(spacing: btnSpacing) {
             ForEach(Array(providerList.enumerated()), id: \.offset) { _, provider in
+                let providerType = provider.type ?? ""
                 Button {
-                    onAction("social_login", provider.type)
+                    onAction("social_login", providerType)
                 } label: {
                     HStack(spacing: 10) {
-                        socialLoginIcon(provider.type)
-                        Text(provider.label ?? socialLoginDefaultLabel(provider.type))
+                        socialLoginIcon(providerType)
+                        Text(provider.label ?? socialLoginDefaultLabel(providerType))
                             .font(.body.weight(.semibold))
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: btnHeight)
-                    .foregroundColor(socialLoginTextColor(provider.type, style: btnStyle))
-                    .background(socialLoginBgColor(provider.type, style: btnStyle))
+                    .foregroundColor(socialLoginTextColor(providerType, style: btnStyle))
+                    .background(socialLoginBgColor(providerType, style: btnStyle))
                     .clipShape(RoundedRectangle(cornerRadius: btnRadius))
                     .overlay(
                         RoundedRectangle(cornerRadius: btnRadius)
-                            .stroke(socialLoginBorderColor(provider.type, style: btnStyle), lineWidth: btnStyle == "outlined" ? 1.5 : 0)
+                            .stroke(socialLoginBorderColor(providerType, style: btnStyle), lineWidth: btnStyle == "outlined" ? 1.5 : 0)
                     )
                 }
             }
@@ -730,7 +731,7 @@ struct ContentBlockRendererView: View {
                     VStack(spacing: 0) {
                         ZStack {
                             Circle()
-                                .fill(timelineStatusColor(item.status, completed: completedCol, current: currentCol, upcoming: upcomingCol))
+                                .fill(timelineStatusColor(item.status ?? "upcoming", completed: completedCol, current: currentCol, upcoming: upcomingCol))
                                 .frame(width: 28, height: 28)
 
                             if item.status == "completed" {
@@ -754,7 +755,7 @@ struct ContentBlockRendererView: View {
 
                     // Right column: title + subtitle
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(item.title)
+                        Text(item.title ?? "")
                             .font(.subheadline.weight(.semibold))
                             .applyTextStyle(block.title_style)
                             .foregroundColor(item.status == "upcoming" ? .secondary : .primary)

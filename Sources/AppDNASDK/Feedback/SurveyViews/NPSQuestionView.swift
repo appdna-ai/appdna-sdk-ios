@@ -11,7 +11,7 @@ struct NPSQuestionView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Text(question.text)
+            Text(question.text ?? "")
                 .font(.headline)
                 .multilineTextAlignment(.center)
 
@@ -19,7 +19,7 @@ struct NPSQuestionView: View {
             HStack(spacing: 4) {
                 ForEach(0...10, id: \.self) { score in
                     Button("\(score)") {
-                        answer = SurveyAnswer(question_id: question.id, answer: score)
+                        answer = SurveyAnswer(question_id: question.id ?? "", answer: score)
                     }
                     .frame(width: 30, height: 40)
                     .background(selectedScore == score ? Color.accentColor : Color.gray.opacity(0.1))

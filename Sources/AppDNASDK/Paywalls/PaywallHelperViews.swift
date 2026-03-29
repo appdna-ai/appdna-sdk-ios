@@ -268,11 +268,11 @@ struct ReviewsCarouselView: View {
 
                         // Quote text
                         if let ts = textStyle {
-                            Text("\u{201C}\(review.text)\u{201D}")
+                            Text("\u{201C}\(review.text ?? "")\u{201D}")
                                 .applyTextStyle(ts)
                                 .multilineTextAlignment(.center)
                         } else {
-                            Text("\u{201C}\(review.text)\u{201D}")
+                            Text("\u{201C}\(review.text ?? "")\u{201D}")
                                 .font(.subheadline)
                                 .foregroundColor(.white.opacity(0.9))
                                 .multilineTextAlignment(.center)
@@ -292,9 +292,9 @@ struct ReviewsCarouselView: View {
                             }
 
                             if let as_ = authorStyle {
-                                Text(review.author).applyTextStyle(as_)
+                                Text(review.author ?? "").applyTextStyle(as_)
                             } else {
-                                Text(review.author)
+                                Text(review.author ?? "")
                                     .font(.caption.weight(.medium))
                                     .foregroundColor(.white.opacity(0.7))
                             }

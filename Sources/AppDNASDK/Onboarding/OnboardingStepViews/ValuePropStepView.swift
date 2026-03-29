@@ -20,15 +20,15 @@ struct ValuePropStepView: View {
                 VStack(spacing: 20) {
                     ForEach(config.items ?? []) { item in
                         HStack(spacing: 16) {
-                            Text(item.icon)
+                            Text(item.icon ?? "")
                                 .font(.system(size: 36))
                                 .frame(width: 48, height: 48)
 
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(item.title.interpolated())
+                                Text((item.title ?? "").interpolated())
                                     .font(.headline)
 
-                                Text(item.subtitle.interpolated())
+                                Text((item.subtitle ?? "").interpolated())
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }

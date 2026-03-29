@@ -16,7 +16,7 @@ struct FreeTextView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(question.text)
+            Text(question.text ?? "")
                 .font(.headline)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
@@ -36,7 +36,7 @@ struct FreeTextView: View {
                         if newValue.count > maxLength {
                             text = String(newValue.prefix(maxLength))
                         }
-                        answer = SurveyAnswer(question_id: question.id, answer: text)
+                        answer = SurveyAnswer(question_id: question.id ?? "", answer: text)
                     }
             }
             .overlay(

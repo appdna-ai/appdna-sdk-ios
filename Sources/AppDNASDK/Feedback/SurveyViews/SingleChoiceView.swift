@@ -13,14 +13,14 @@ struct SingleChoiceView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(question.text)
+            Text(question.text ?? "")
                 .font(.headline)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
 
             ForEach(question.options ?? [], id: \.id) { option in
                 Button {
-                    answer = SurveyAnswer(question_id: question.id, answer: option.id)
+                    answer = SurveyAnswer(question_id: question.id ?? "", answer: option.id ?? "")
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: selectedId == option.id ? "circle.inset.filled" : "circle")
@@ -30,7 +30,7 @@ struct SingleChoiceView: View {
                             Text(icon)
                         }
 
-                        Text(option.text)
+                        Text(option.text ?? "")
                             .foregroundColor(.primary)
 
                         Spacer()

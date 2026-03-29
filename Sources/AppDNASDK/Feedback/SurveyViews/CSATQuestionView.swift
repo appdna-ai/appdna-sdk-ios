@@ -19,14 +19,14 @@ struct CSATQuestionView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Text(question.text)
+            Text(question.text ?? "")
                 .font(.headline)
                 .multilineTextAlignment(.center)
 
             HStack(spacing: 8) {
                 ForEach(1...maxRating, id: \.self) { rating in
                     Button {
-                        answer = SurveyAnswer(question_id: question.id, answer: rating)
+                        answer = SurveyAnswer(question_id: question.id ?? "", answer: rating)
                     } label: {
                         if style == "emoji" {
                             Text(emojiFor(rating: rating, max: maxRating))

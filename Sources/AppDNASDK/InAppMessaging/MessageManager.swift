@@ -33,16 +33,16 @@ final class MessageManager {
 
         for (id, config) in messages {
             // 1. Event name match
-            guard config.trigger_rules.event == eventName else { continue }
+            guard config.trigger_rules?.event == eventName else { continue }
 
             // 2. Conditions evaluation
-            guard evaluateConditions(config.trigger_rules.conditions, properties: properties ?? [:]) else { continue }
+            guard evaluateConditions(config.trigger_rules?.conditions, properties: properties ?? [:]) else { continue }
 
             // 3. Frequency check
             guard frequencyTracker.canShow(
                 messageId: id,
-                frequency: config.trigger_rules.frequency,
-                maxDisplays: config.trigger_rules.max_displays
+                frequency: config.trigger_rules?.frequency ?? .once,
+                maxDisplays: config.trigger_rules?.max_displays
             ) else { continue }
 
             // 4. Date range check
@@ -52,12 +52,12 @@ final class MessageManager {
         }
 
         // 5. Sort by priority (highest first)
-        guard let winner = candidates.sorted(by: { $0.config.priority > $1.config.priority }).first else {
+        guard let winner = candidates.sorted(by: { ($0.config.priority ?? 0) > ($1.config.priority ?? 0) }).first else {
             return
         }
 
         // 6. Present with optional delay
-        let delay = winner.config.trigger_rules.delay_seconds ?? 0
+        let delay = winner.config.trigger_rules?.delay_seconds ?? 0
         if delay > 0 {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(delay)) { [weak self] in
                 self?.present(messageId: winner.id, config: winner.config, triggerEvent: eventName)
@@ -93,12 +93,12 @@ final class MessageManager {
         }
 
         isPresenting = true
-        frequencyTracker.recordShown(messageId: messageId, frequency: config.trigger_rules.frequency)
+        frequencyTracker.recordShown(messageId: messageId, frequency: config.trigger_rules?.frequency ?? .once)
 
         // Track shown
         eventTracker.track(event: "in_app_message_shown", properties: [
             "message_id": messageId,
-            "message_type": config.message_type.rawValue,
+            "message_type": config.message_type?.rawValue ?? "modal",
             "trigger_event": triggerEvent,
         ])
 
@@ -108,9 +108,9 @@ final class MessageManager {
             onCTATap: { [weak self] in
                 self?.eventTracker.track(event: "in_app_message_clicked", properties: [
                     "message_id": messageId,
-                    "cta_action": config.content.cta_action?.type.rawValue ?? "dismiss",
+                    "cta_action": config.content?.cta_action?.type?.rawValue ?? "dismiss",
                 ])
-                self?.handleCTAAction(config.content.cta_action)
+                self?.handleCTAAction(config.content?.cta_action)
                 topVC.dismiss(animated: true) {
                     self?.isPresenting = false
                 }
@@ -138,8 +138,10 @@ final class MessageManager {
         guard let conditions, !conditions.isEmpty else { return true }
 
         return conditions.allSatisfy { condition in
-            guard let propValue = properties[condition.field] else { return false }
-            return evaluateOperator(condition.operator, propValue: propValue, condValue: condition.value.value)
+            guard let field = condition.field, let propValue = properties[field] else { return false }
+            guard let op = condition.`operator` else { return false }
+            guard let condValue = condition.value?.value else { return false }
+            return evaluateOperator(op, propValue: propValue, condValue: condValue)
         }
     }
 
@@ -191,9 +193,9 @@ final class MessageManager {
     // MARK: - CTA actions
 
     private func handleCTAAction(_ action: CTAAction?) {
-        guard let action else { return }
-        switch action.type {
-        case .dismiss:
+        guard let action, let actionType = action.type else { return }
+        switch actionType {
+        case .dismiss, .unknown:
             break // dismiss handled by caller
         case .deep_link, .open_url:
             if let urlString = action.url, let url = URL(string: urlString) {

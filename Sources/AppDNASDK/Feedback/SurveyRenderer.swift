@@ -23,7 +23,7 @@ final class SurveyRenderer {
             view.onQuestionAnswered = onQuestionAnswered
             let hostingVC = UIHostingController(rootView: view)
 
-            switch config.appearance.presentation {
+            switch config.appearance?.presentation ?? "modal" {
             case "fullscreen":
                 hostingVC.modalPresentationStyle = .fullScreen
             case "modal":
@@ -63,24 +63,24 @@ struct SurveyContainerView: View {
     @State private var showConfetti = false
 
     private var backgroundColor: Color {
-        Color(hex: config.appearance.theme?.background_color ?? "#FFFFFF")
+        Color(hex: config.appearance?.theme?.background_color ?? "#FFFFFF")
     }
 
     private var textColor: Color {
-        Color(hex: config.appearance.theme?.text_color ?? "#1a1a1a")
+        Color(hex: config.appearance?.theme?.text_color ?? "#1a1a1a")
     }
 
     private var accentColor: Color {
-        Color(hex: config.appearance.theme?.accent_color ?? "#6366f1")
+        Color(hex: config.appearance?.theme?.accent_color ?? "#6366f1")
     }
 
     private var buttonColor: Color {
-        Color(hex: config.appearance.theme?.button_color ?? "#6366f1")
+        Color(hex: config.appearance?.theme?.button_color ?? "#6366f1")
     }
 
     /// SPEC-084: Resolve font from theme
     private var themeFont: Font? {
-        guard let fontFamily = config.appearance.theme?.font_family else { return nil }
+        guard let fontFamily = config.appearance?.theme?.font_family else { return nil }
         return FontResolver.font(family: fontFamily, size: nil, weight: nil)
     }
 
@@ -88,7 +88,7 @@ struct SurveyContainerView: View {
         ZStack {
             VStack(spacing: 16) {
                 // SPEC-085: Intro Lottie animation
-                if showIntro, let introUrl = config.appearance.theme?.intro_lottie_url {
+                if showIntro, let introUrl = config.appearance?.theme?.intro_lottie_url {
                     LottieBlockView(block: LottieBlock(
                         lottie_url: introUrl, lottie_json: nil,
                         autoplay: true, loop: false, speed: 1.0,
@@ -105,7 +105,7 @@ struct SurveyContainerView: View {
                 // SPEC-085: Thank-you screen with Lottie + confetti
                 if showThankYou {
                     VStack(spacing: 16) {
-                        if let thankUrl = config.appearance.theme?.thankyou_lottie_url {
+                        if let thankUrl = config.appearance?.theme?.thankyou_lottie_url {
                             LottieBlockView(block: LottieBlock(
                                 lottie_url: thankUrl, lottie_json: nil,
                                 autoplay: true, loop: false, speed: 1.0,
@@ -115,15 +115,15 @@ struct SurveyContainerView: View {
                         }
                         // SPEC-088: Interpolate thank-you text
                         Text(TemplateEngine.shared.interpolate(
-                            config.appearance.theme?.thank_you_text ?? "Thank you!",
+                            config.appearance?.theme?.thank_you_text ?? "Thank you!",
                             context: TemplateEngine.shared.buildContext()
                         ))
                             .font(.title2.bold())
                             .foregroundColor(textColor)
                     }
-                } else if !showIntro || config.appearance.theme?.intro_lottie_url == nil {
+                } else if !showIntro || config.appearance?.theme?.intro_lottie_url == nil {
                     // Progress indicator
-                    if config.appearance.show_progress && !visibleQuestions.isEmpty {
+                    if (config.appearance?.show_progress ?? false) && !visibleQuestions.isEmpty {
                         ProgressView(value: Double(currentQuestionIndex + 1), total: Double(visibleQuestions.count))
                             .tint(accentColor)
                     }
@@ -140,7 +140,7 @@ struct SurveyContainerView: View {
                     // Current question — SPEC-084: apply style engine + theme font
                     if currentQuestionIndex < visibleQuestions.count {
                         questionView(for: visibleQuestions[currentQuestionIndex])
-                            .applyTextStyle(config.appearance.question_text_style)
+                            .applyTextStyle(config.appearance?.question_text_style)
                             .font(themeFont)
                             .foregroundColor(textColor)
                     }
@@ -163,8 +163,8 @@ struct SurveyContainerView: View {
                                 advanceQuestion()
                                 // SPEC-085: Haptic on step advance
                                 HapticEngine.triggerIfEnabled(
-                                    config.appearance.theme?.haptic?.triggers.on_step_advance,
-                                    config: config.appearance.theme?.haptic
+                                    config.appearance?.theme?.haptic?.triggers?.on_step_advance,
+                                    config: config.appearance?.theme?.haptic
                                 )
                             }
                             .padding(.horizontal, 24)
@@ -187,7 +187,7 @@ struct SurveyContainerView: View {
                     }
 
                     // Dismiss button
-                    if config.appearance.dismiss_allowed {
+                    if config.appearance?.dismiss_allowed ?? true {
                         Button("Not now") {
                             let answered = answers.count
                             dismiss()
@@ -200,18 +200,18 @@ struct SurveyContainerView: View {
             }
             .padding()
             .background(backgroundColor)
-            .applyBlurBackdrop(config.appearance.theme?.blur_backdrop)
+            .applyBlurBackdrop(config.appearance?.theme?.blur_backdrop)
             .accentColor(accentColor)
             .onAppear {
                 computeVisibleQuestions()
                 // Skip intro if no lottie URL
-                if config.appearance.theme?.intro_lottie_url == nil {
+                if config.appearance?.theme?.intro_lottie_url == nil {
                     showIntro = false
                 }
             }
 
             // SPEC-085: Confetti overlay on completion
-            if showConfetti, let effect = config.appearance.theme?.thankyou_particle_effect {
+            if showConfetti, let effect = config.appearance?.theme?.thankyou_particle_effect {
                 ConfettiOverlay(effect: effect)
             }
         }
@@ -225,7 +225,7 @@ struct SurveyContainerView: View {
         // SPEC-088: Interpolate question text, option text, and NPS labels
         let q = interpolatedQuestion(question)
 
-        switch q.type {
+        switch q.type ?? "" {
         case "nps":
             NPSQuestionView(question: q, answer: binding)
         case "csat":
@@ -234,10 +234,10 @@ struct SurveyContainerView: View {
             RatingQuestionView(question: q, answer: binding)
         case "single_choice":
             // SPEC-084: Gap #19 — pass option_style from appearance to option card views
-            SingleChoiceView(question: q, answer: binding, optionStyle: config.appearance.option_style)
+            SingleChoiceView(question: q, answer: binding, optionStyle: config.appearance?.option_style)
         case "multi_choice":
             // SPEC-084: Gap #19 — pass option_style from appearance to option card views
-            MultiChoiceView(question: q, answer: binding, optionStyle: config.appearance.option_style)
+            MultiChoiceView(question: q, answer: binding, optionStyle: config.appearance?.option_style)
         case "free_text":
             FreeTextView(question: q, answer: binding)
         case "yes_no":
@@ -256,7 +256,7 @@ struct SurveyContainerView: View {
         return SurveyQuestion(
             id: question.id,
             type: question.type,
-            text: e.interpolate(question.text, context: ctx),
+            text: e.interpolate(question.text ?? "", context: ctx),
             required: question.required,
             show_if: question.show_if,
             nps_config: question.nps_config.map { nps in
@@ -270,7 +270,7 @@ struct SurveyContainerView: View {
             options: question.options?.map { opt in
                 SurveyQuestionOption(
                     id: opt.id,
-                    text: e.interpolate(opt.text, context: ctx),
+                    text: e.interpolate(opt.text ?? "", context: ctx),
                     icon: opt.icon
                 )
             },
@@ -285,8 +285,8 @@ struct SurveyContainerView: View {
     private var canAdvance: Bool {
         guard currentQuestionIndex < visibleQuestions.count else { return false }
         let q = visibleQuestions[currentQuestionIndex]
-        if q.required {
-            return answers[q.id] != nil
+        if q.required ?? false {
+            return answers[q.id ?? ""] != nil
         }
         return true
     }
@@ -301,18 +301,18 @@ struct SurveyContainerView: View {
     private func submitSurvey() {
         // SPEC-085: Haptic on submit
         HapticEngine.triggerIfEnabled(
-            config.appearance.theme?.haptic?.triggers.on_form_submit,
-            config: config.appearance.theme?.haptic
+            config.appearance?.theme?.haptic?.triggers?.on_form_submit,
+            config: config.appearance?.theme?.haptic
         )
 
-        let allAnswers = visibleQuestions.compactMap { answers[$0.id] }
+        let allAnswers = visibleQuestions.compactMap { answers[$0.id ?? ""] }
 
         // SPEC-085: Show thank-you animation + confetti if configured
-        if config.appearance.theme?.thankyou_lottie_url != nil || config.appearance.theme?.thankyou_particle_effect != nil {
+        if config.appearance?.theme?.thankyou_lottie_url != nil || config.appearance?.theme?.thankyou_particle_effect != nil {
             withAnimation { showThankYou = true }
-            if config.appearance.theme?.thankyou_particle_effect != nil {
+            if config.appearance?.theme?.thankyou_particle_effect != nil {
                 showConfetti = true
-                HapticEngine.triggerIfEnabled(.success, config: config.appearance.theme?.haptic)
+                HapticEngine.triggerIfEnabled(.success, config: config.appearance?.theme?.haptic)
             }
             // Dismiss after thank-you animation
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
@@ -326,11 +326,11 @@ struct SurveyContainerView: View {
     }
 
     func computeVisibleQuestions() {
-        visibleQuestions = config.questions.filter { question in
+        visibleQuestions = (config.questions ?? []).filter { question in
             guard let showIf = question.show_if else { return true }
-            guard let prevAnswer = answers[showIf.question_id] else { return false }
+            guard let questionId = showIf.question_id, let prevAnswer = answers[questionId] else { return false }
 
-            return showIf.answer_in.contains(where: { condValue in
+            return (showIf.answer_in ?? []).contains(where: { condValue in
                 matches(prevAnswer.answer, condValue.value)
             })
         }
@@ -341,13 +341,14 @@ struct SurveyContainerView: View {
     }
 
     private func answerBinding(for question: SurveyQuestion) -> Binding<SurveyAnswer?> {
-        Binding(
-            get: { answers[question.id] },
+        let qId = question.id ?? ""
+        return Binding(
+            get: { answers[qId] },
             set: { newValue in
-                answers[question.id] = newValue
+                answers[qId] = newValue
                 // Track individual question answer
                 if let answer = newValue {
-                    onQuestionAnswered?(config.name, question, answer)
+                    onQuestionAnswered?(config.name ?? "", question, answer)
                 }
                 // Recompute visible questions when answers change (for conditional show_if)
                 computeVisibleQuestions()

@@ -264,7 +264,7 @@ struct AnimatedLoadingBlockView: View {
                             .frame(width: 28, height: 28)
                             .animation(.easeInOut(duration: 0.3), value: completedCount)
 
-                            Text(item.label)
+                            Text(item.label ?? "")
                                 .font(.subheadline)
                                 .foregroundColor(index <= completedCount ? .primary : .secondary)
                         }
@@ -695,15 +695,15 @@ struct PricingCardBlockView: View {
                         .clipShape(Capsule())
                 }
 
-                Text(plan.label)
+                Text(plan.label ?? "")
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(.primary)
 
-                Text(plan.price)
+                Text(plan.price ?? "")
                     .font(.title2.weight(.bold))
                     .foregroundColor(.primary)
 
-                Text(plan.period)
+                Text(plan.period ?? "")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

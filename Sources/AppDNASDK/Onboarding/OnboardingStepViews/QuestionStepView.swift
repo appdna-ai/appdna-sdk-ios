@@ -61,17 +61,18 @@ struct QuestionStepView: View {
     // MARK: - Option card
 
     private func optionCard(_ option: QuestionOption) -> some View {
-        let isSelected = selectedIds.contains(option.id)
+        let optId = option.id ?? UUID().uuidString
+        let isSelected = selectedIds.contains(optId)
 
         return Button {
             if isMultiSelect {
                 if isSelected {
-                    selectedIds.remove(option.id)
+                    selectedIds.remove(optId)
                 } else {
-                    selectedIds.insert(option.id)
+                    selectedIds.insert(optId)
                 }
             } else {
-                selectedIds = [option.id]
+                selectedIds = [optId]
             }
         } label: {
             VStack(spacing: 8) {
@@ -80,7 +81,7 @@ struct QuestionStepView: View {
                         .font(.system(size: 32))
                 }
 
-                Text(option.label.interpolated())
+                Text((option.label ?? "").interpolated())
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(.primary)
                     .multilineTextAlignment(.center)

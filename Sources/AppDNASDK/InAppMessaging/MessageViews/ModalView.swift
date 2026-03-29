@@ -15,7 +15,7 @@ struct ModalView: View {
                 Color.black.opacity(0.3)
                     .ignoresSafeArea()
                     .background(.ultraThinMaterial)
-                    .blur(radius: CGFloat(blurConfig.radius) / 3)
+                    .blur(radius: CGFloat(blurConfig.radius ?? 0) / 3)
                     .onTapGesture { onDismiss() }
             } else {
                 Color.black.opacity(0.5)
@@ -89,7 +89,7 @@ struct ModalView: View {
                 // CTA button — SPEC-084: apply button_color, corner_radius
                 if let ctaText = content.cta_text {
                     Button {
-                        HapticEngine.triggerIfEnabled(content.haptic?.triggers.on_button_tap, config: content.haptic)
+                        HapticEngine.triggerIfEnabled(content.haptic?.triggers?.on_button_tap, config: content.haptic)
                         onCTATap()
                     } label: {
                         HStack(spacing: 6) {
@@ -144,7 +144,7 @@ struct ModalView: View {
         }
         .onAppear {
             // SPEC-085: Haptic on appear
-            HapticEngine.triggerIfEnabled(content.haptic?.triggers.on_button_tap, config: content.haptic)
+            HapticEngine.triggerIfEnabled(content.haptic?.triggers?.on_button_tap, config: content.haptic)
             // SPEC-085: Particle effect on appear
             if let effect = content.particle_effect, effect.trigger == "on_appear" {
                 showConfetti = true

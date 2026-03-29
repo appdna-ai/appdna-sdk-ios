@@ -350,7 +350,7 @@ struct OnboardingFlowHost: View {
         hookConfig: StepHookConfig,
         attempt: Int
     ) async -> StepAdvanceResult {
-        guard let url = URL(string: hookConfig.webhook_url) else {
+        guard let webhookUrl = hookConfig.webhook_url, let url = URL(string: webhookUrl) else {
             return .block(message: hookConfig.error_text ?? "Invalid webhook URL.")
         }
 
@@ -369,7 +369,7 @@ struct OnboardingFlowHost: View {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = TimeInterval(hookConfig.timeout_ms) / 1000.0
+        request.timeoutInterval = TimeInterval(hookConfig.timeout_ms ?? 10000) / 1000.0
 
         // Apply custom headers with variable interpolation
         if let headers = hookConfig.headers {
@@ -383,7 +383,7 @@ struct OnboardingFlowHost: View {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
             let config = URLSessionConfiguration.default
-            config.timeoutIntervalForRequest = TimeInterval(hookConfig.timeout_ms) / 1000.0
+            config.timeoutIntervalForRequest = TimeInterval(hookConfig.timeout_ms ?? 10000) / 1000.0
             let session = URLSession(configuration: config)
 
             let (responseData, response) = try await session.data(for: request)

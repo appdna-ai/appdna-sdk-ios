@@ -11,13 +11,13 @@ struct YesNoView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Text(question.text)
+            Text(question.text ?? "")
                 .font(.headline)
                 .multilineTextAlignment(.center)
 
             HStack(spacing: 16) {
                 Button {
-                    answer = SurveyAnswer(question_id: question.id, answer: "yes")
+                    answer = SurveyAnswer(question_id: question.id ?? "", answer: "yes")
                 } label: {
                     Text("Yes")
                         .font(.body.weight(.medium))
@@ -29,7 +29,7 @@ struct YesNoView: View {
                 }
 
                 Button {
-                    answer = SurveyAnswer(question_id: question.id, answer: "no")
+                    answer = SurveyAnswer(question_id: question.id ?? "", answer: "no")
                 } label: {
                     Text("No")
                         .font(.body.weight(.medium))

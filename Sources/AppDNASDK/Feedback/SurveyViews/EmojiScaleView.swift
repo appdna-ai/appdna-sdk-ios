@@ -15,14 +15,14 @@ struct EmojiScaleView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Text(question.text)
+            Text(question.text ?? "")
                 .font(.headline)
                 .multilineTextAlignment(.center)
 
             HStack(spacing: 16) {
                 ForEach(emojis, id: \.self) { emoji in
                     Button(emoji) {
-                        answer = SurveyAnswer(question_id: question.id, answer: emoji)
+                        answer = SurveyAnswer(question_id: question.id ?? "", answer: emoji)
                     }
                     .font(.system(size: 36))
                     .scaleEffect(selectedEmoji == emoji ? 1.3 : 1.0)

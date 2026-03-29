@@ -13,24 +13,24 @@ struct MultiChoiceView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(question.text)
+            Text(question.text ?? "")
                 .font(.headline)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
 
             ForEach(question.options ?? [], id: \.id) { option in
                 Button {
-                    toggleOption(option.id)
+                    toggleOption(option.id ?? "")
                 } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: selectedIds.contains(option.id) ? "checkmark.square.fill" : "square")
-                            .foregroundColor(selectedIds.contains(option.id) ? .accentColor : .gray)
+                        Image(systemName: selectedIds.contains(option.id ?? "") ? "checkmark.square.fill" : "square")
+                            .foregroundColor(selectedIds.contains(option.id ?? "") ? .accentColor : .gray)
 
                         if let icon = option.icon {
                             Text(icon)
                         }
 
-                        Text(option.text)
+                        Text(option.text ?? "")
                             .foregroundColor(.primary)
 
                         Spacer()
@@ -38,7 +38,7 @@ struct MultiChoiceView: View {
                     .padding(.vertical, optionStyle == nil ? 8 : 0)
                     .padding(.horizontal, optionStyle == nil ? 12 : 0)
                     // SPEC-084: Apply option_style if provided, otherwise fall back to default card border
-                    .applyContainerStyleOrDefault(optionStyle, isSelected: selectedIds.contains(option.id))
+                    .applyContainerStyleOrDefault(optionStyle, isSelected: selectedIds.contains(option.id ?? ""))
                 }
             }
         }
@@ -51,6 +51,6 @@ struct MultiChoiceView: View {
         } else {
             current.append(id)
         }
-        answer = SurveyAnswer(question_id: question.id, answer: current)
+        answer = SurveyAnswer(question_id: question.id ?? "", answer: current)
     }
 }

@@ -198,9 +198,10 @@ internal class ScreenManager {
     private func presentFlow(_ config: FlowConfig, flowId: String, completion: ((FlowResult) -> Void)?) {
         // Collect screen configs for all screens in the flow
         var screens: [String: ScreenConfig] = [:]
-        for ref in config.screens {
-            if let screenConfig = getCachedScreen(ref.screen_id) {
-                screens[ref.screen_id] = screenConfig
+        for ref in config.screens ?? [] {
+            guard let sid = ref.screen_id else { continue }
+            if let screenConfig = getCachedScreen(sid) {
+                screens[sid] = screenConfig
             }
         }
 
@@ -218,8 +219,8 @@ internal class ScreenManager {
 
         AppDNA.track(event:"flow_started", properties: [
             "flow_id": flowId,
-            "flow_name": config.name,
-            "start_screen_id": config.start_screen_id,
+            "flow_name": config.name ?? "",
+            "start_screen_id": config.start_screen_id ?? "",
         ])
 
         ScreenPresenter.presentFlow(flowManager: flowManager)
@@ -332,9 +333,10 @@ internal class ScreenManager {
         }
 
         // Get screen config
-        guard let config = getCachedScreen(assignment.screen_id) else { return nil }
+        guard let screenId = assignment.screen_id,
+              let config = getCachedScreen(screenId) else { return nil }
 
-        return (assignment.screen_id, config)
+        return (screenId, config)
     }
 
     // MARK: - Trigger Evaluation (Mechanism 1)
@@ -355,7 +357,7 @@ internal class ScreenManager {
         // Show highest priority match
         if let match = matchingScreens.first {
             guard PresentationCoordinator.shared.canPresent(type: .screen, isAutoTriggered: true) else { return }
-            showScreen(match.id)
+            if let matchId = match.id { showScreen(matchId) }
         }
     }
 
@@ -389,7 +391,8 @@ internal class ScreenManager {
                 // Check event property conditions
                 if let conditions = trigger.conditions, let props = properties {
                     return conditions.allSatisfy { cond in
-                        let propValue = props[cond.field]
+                        guard let field = cond.field else { return true }
+                        let propValue = props[field]
                         return ConditionEvaluator.valuesEqual(propValue, cond.value?.value)
                     }
                 }
@@ -430,8 +433,9 @@ internal class ScreenManager {
         let userTraits = AppDNA.getUserTraits()
 
         for interception in interceptions {
-            guard interception.timing == timing else { continue }
-            guard matchGlob(pattern: interception.trigger_screen, string: screenName) else { continue }
+            guard interception.timing ?? "" == timing else { continue }
+            guard let triggerScreen = interception.trigger_screen,
+                  matchGlob(pattern: triggerScreen, string: screenName) else { continue }
 
             // Check audience rules
             if let audienceRules = interception.audience_rules {
@@ -441,13 +445,14 @@ internal class ScreenManager {
             }
 
             // Track and show
+            guard let interceptScreenId = interception.screen_id else { continue }
             AppDNA.track(event:"interception_triggered", properties: [
                 "trigger_screen": screenName,
                 "timing": timing,
-                "screen_id": interception.screen_id,
+                "screen_id": interceptScreenId,
             ])
 
-            showScreen(interception.screen_id)
+            showScreen(interceptScreenId)
             return // Only show one interception per navigation
         }
     }

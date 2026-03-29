@@ -69,7 +69,7 @@ internal class ScreenPresenter {
                 flowManager?.handleAction(action)
             },
             currentScreenIndex: flowManager.currentScreenIndex,
-            totalScreens: flowManager.flowConfig.screens.count
+            totalScreens: flowManager.flowConfig.screens?.count ?? 0
         )
 
         present(config: screenConfig, context: context, from: viewController, onDismiss: onDismiss)

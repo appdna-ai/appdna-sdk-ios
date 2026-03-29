@@ -201,8 +201,8 @@ public struct StepConfig: Codable {
         default_locale = try c.decodeIfPresent(String.self, forKey: .default_locale)
     }
 
-    // Internal memberwise init used by applyOverrides
-    init(
+    // Public memberwise init used by applyOverrides and default construction
+    public init(
         title: String? = nil, subtitle: String? = nil, image_url: String? = nil,
         cta_text: String? = nil, skip_enabled: Bool? = nil,
         options: [QuestionOption]? = nil, selection_mode: SelectionMode? = nil,
