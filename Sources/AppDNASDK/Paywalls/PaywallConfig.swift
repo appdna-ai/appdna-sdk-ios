@@ -387,7 +387,8 @@ struct PaywallDismiss: Codable {
 
 struct PaywallBackground: Codable {
     let type: String? // "color", "gradient", "image", "video"
-    let value: String? // hex color, gradient def, image URL, or video URL
+    let value: String? // hex color, gradient def, image URL, or video URL (legacy)
+    let color: String? // hex color (Firestore format)
     let colors: [String]?
     // SPEC-085: Video background
     let video_url: String?

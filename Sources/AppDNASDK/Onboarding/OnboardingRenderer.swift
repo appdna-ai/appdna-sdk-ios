@@ -547,11 +547,18 @@ struct OnboardingFlowHost: View {
             // Check for special graph nodes
             if target.hasPrefix("paywall_trigger_") {
                 // Extract paywall ID from graph node data and present it
-                if let paywallId = resolvePaywallFromTrigger(target),
-                   let vc = AppDNA.topViewController() {
-                    AppDNA.presentPaywall(id: paywallId, from: vc)
-                    // Flow completes after paywall is dismissed
-                    onFlowCompleted(responses)
+                if let paywallId = resolvePaywallFromTrigger(target) {
+                    // Present paywall after a short delay to ensure the current step animation settles
+                    let completionHandler = onFlowCompleted
+                    let currentResponses = responses
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        guard let vc = AppDNA.topViewController() else {
+                            completionHandler(currentResponses)
+                            return
+                        }
+                        AppDNA.presentPaywall(id: paywallId, from: vc)
+                    }
+                    // Don't complete the flow yet — user stays on last step until paywall is dismissed
                 } else {
                     // No paywall ID found — just complete
                     onFlowCompleted(responses)

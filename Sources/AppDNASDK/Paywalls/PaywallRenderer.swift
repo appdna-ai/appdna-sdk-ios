@@ -53,6 +53,26 @@ struct PaywallRenderer: View {
                     .padding(config.layout?.padding ?? 20)
                 }
 
+                // Top-level CTA button (when no CTA section exists in layout)
+                if !config.sections.contains(where: { $0.type == "cta" }), let cta = config.cta {
+                    Button(action: handleCTATap) {
+                        if isPurchasing {
+                            ProgressView().tint(.white)
+                        } else {
+                            Text(cta.text ?? "Continue")
+                                .font(.headline)
+                                .foregroundColor(Color(hex: (cta.style?.value as? [String: Any])?["text_color"] as? String ?? "#FFFFFF"))
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(Color(hex: (cta.style?.value as? [String: Any])?["bg_color"] as? String ?? "#007AFF"))
+                    .cornerRadius(CGFloat((cta.style?.value as? [String: Any])?["corner_radius"] as? Double ?? 12))
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
+                    .disabled(isPurchasing || selectedPlanId == nil)
+                }
+
                 // SPEC-089d: Sticky footer pinned to bottom
                 if let footer = stickyFooterSection {
                     stickyFooterView(data: footer.data, style: footer.style)
@@ -135,9 +155,11 @@ struct PaywallRenderer: View {
     // MARK: - Background
 
     private var backgroundView: AnyView {
-        switch config.background?.type {
+        // Background can be at top-level or inside layout
+        let bg = config.background ?? config.layout?.background
+        switch bg?.type {
         case "gradient":
-            if let colors = config.background?.colors, colors.count >= 2 {
+            if let colors = bg?.colors, colors.count >= 2 {
                 return AnyView(LinearGradient(
                     colors: colors.map { Color(hex: $0) },
                     startPoint: .top,
@@ -148,7 +170,7 @@ struct PaywallRenderer: View {
                 return AnyView(Color.black.ignoresSafeArea())
             }
         case "image":
-            if let urlString = config.background?.value, let url = URL(string: urlString) {
+            if let urlString = bg?.value, let url = URL(string: urlString) {
                 return AnyView(AsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
@@ -162,14 +184,14 @@ struct PaywallRenderer: View {
             // SPEC-085: Video background
             return AnyView(ZStack {
                 Color.black.ignoresSafeArea()
-                if let videoUrlStr = config.background?.video_url ?? config.background?.value,
+                if let videoUrlStr = bg?.video_url ?? bg?.value,
                    let videoUrl = URL(string: videoUrlStr) {
                     VideoBackgroundView(url: videoUrl)
                         .ignoresSafeArea()
                 }
             })
         case "color":
-            return AnyView(Color(hex: config.background?.value ?? "#000000")
+            return AnyView(Color(hex: bg?.color ?? bg?.value ?? "#FFFFFF")
                 .ignoresSafeArea())
         default:
             return AnyView(Color(.systemBackground).ignoresSafeArea())
@@ -221,7 +243,10 @@ struct PaywallRenderer: View {
             return AnyView(FeatureList(features: (section.data?.features ?? []).enumerated().map { i, f in loc("feature.\(i)", f) }, sectionStyle: section.style)
                 .applyContainerStyle(section.style?.container))
         case "plans":
-            return AnyView(plansSection(plans: section.data?.plans ?? [], style: section.style)
+            // Plans can be in section.data.plans OR top-level config.plans
+            let sectionPlans = section.data?.plans ?? []
+            let effectivePlans = sectionPlans.isEmpty ? (config.plans ?? []) : sectionPlans
+            return AnyView(plansSection(plans: effectivePlans, style: section.style)
                 .applyContainerStyle(section.style?.container))
         case "cta":
             return AnyView(CTAButton(
