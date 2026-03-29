@@ -122,13 +122,23 @@ public final class AppDNA: @unchecked Sendable {
 
     // MARK: - Public API: Initialization
 
-    /// Configure the SDK. Call once at app launch.
+    /// Configure the SDK. Call once at app launch. Subsequent calls are ignored.
     /// Firebase is initialized on the main thread first, then the rest runs on a background queue.
     public static func configure(
         apiKey: String,
         environment: Environment = .production,
         options: AppDNAOptions = AppDNAOptions()
     ) {
+        // Guard against multiple calls — atomic check before async dispatch
+        shared.initLock.lock()
+        guard !shared.isConfigured else {
+            shared.initLock.unlock()
+            Log.warning("AppDNA.configure() called multiple times — ignoring")
+            return
+        }
+        shared.isConfigured = true
+        shared.initLock.unlock()
+
         // Firebase MUST be initialized on the main thread to avoid main-thread checker warnings.
         DispatchQueue.main.async {
             shared.initializeFirebase()
@@ -679,14 +689,6 @@ public final class AppDNA: @unchecked Sendable {
     // MARK: - Internal bootstrap
 
     private func performConfigure(apiKey: String, environment: Environment, options: AppDNAOptions) {
-        initLock.lock()
-        guard !isConfigured else {
-            initLock.unlock()
-            Log.warning("AppDNA.configure() called multiple times — ignoring")
-            return
-        }
-        initLock.unlock()
-
         self.apiKey = apiKey
         self.environment = environment
         self.options = options
