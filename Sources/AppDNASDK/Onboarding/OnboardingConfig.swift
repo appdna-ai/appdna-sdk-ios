@@ -87,16 +87,24 @@ public struct OnboardingSettings: Codable {
 }
 
 /// A single step within a flow.
+/// Next step rule for conditional routing.
+public struct NextStepRule: Codable {
+    public let condition: AnyCodable?  // "always" or {type: "answer_equals", ...}
+    public let target_step_id: String
+}
+
+/// A single step within a flow.
 public struct OnboardingStep: Codable, Identifiable {
     public let id: String
     public let type: StepType
     public let config: StepConfig
     public let hook: StepHookConfig?
+    public let next_step_rules: [NextStepRule]?
     /// When true, the progress indicator is hidden on this step but the step still counts toward total progress.
     public let hide_progress: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, config, layout, hook, hide_progress, content_blocks
+        case id, type, config, layout, hook, hide_progress, content_blocks, next_step_rules
     }
 
     public init(from decoder: Decoder) throws {
@@ -105,6 +113,7 @@ public struct OnboardingStep: Codable, Identifiable {
         self.type = try c.decodeIfPresent(StepType.self, forKey: .type) ?? .custom
         self.hook = try c.decodeIfPresent(StepHookConfig.self, forKey: .hook)
         self.hide_progress = try c.decodeIfPresent(Bool.self, forKey: .hide_progress)
+        self.next_step_rules = try c.decodeIfPresent([NextStepRule].self, forKey: .next_step_rules)
 
         // Server writes step content as "layout" or "config" depending on source.
         // Also, content_blocks may be at step level. Try all locations.
@@ -139,14 +148,16 @@ public struct OnboardingStep: Codable, Identifiable {
         try c.encode(config, forKey: .config)
         try c.encodeIfPresent(hook, forKey: .hook)
         try c.encodeIfPresent(hide_progress, forKey: .hide_progress)
+        try c.encodeIfPresent(next_step_rules, forKey: .next_step_rules)
     }
 
-    public init(id: String = "", type: StepType = .custom, config: StepConfig = StepConfig(), hook: StepHookConfig? = nil, hide_progress: Bool? = nil) {
+    public init(id: String = "", type: StepType = .custom, config: StepConfig = StepConfig(), hook: StepHookConfig? = nil, hide_progress: Bool? = nil, next_step_rules: [NextStepRule]? = nil) {
         self.id = id
         self.type = type
         self.config = config
         self.hook = hook
         self.hide_progress = hide_progress
+        self.next_step_rules = next_step_rules
     }
 
     public enum StepType: String, Codable, Equatable {

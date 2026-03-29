@@ -537,11 +537,52 @@ struct OnboardingFlowHost: View {
     }
 
     private func advanceOrComplete() {
+        let currentStep = flow.steps[currentIndex]
+
+        // Check next_step_rules for branching / paywall triggers / end nodes
+        if let rules = currentStep.next_step_rules,
+           let firstRule = rules.first {
+            let target = firstRule.target_step_id
+
+            // Check for special graph nodes
+            if target.hasPrefix("paywall_trigger_") {
+                // Extract paywall ID from graph node data and present it
+                if let paywallId = resolvePaywallFromTrigger(target),
+                   let vc = AppDNA.topViewController() {
+                    AppDNA.presentPaywall(id: paywallId, from: vc)
+                    // Flow completes after paywall is dismissed
+                    onFlowCompleted(responses)
+                } else {
+                    // No paywall ID found — just complete
+                    onFlowCompleted(responses)
+                }
+                return
+            } else if target.hasPrefix("end_") {
+                onFlowCompleted(responses)
+                return
+            } else if let targetIndex = flow.steps.firstIndex(where: { $0.id == target }) {
+                // Navigate to specific step
+                withAnimation { currentIndex = targetIndex }
+                return
+            }
+        }
+
+        // Default: sequential advance
         if currentIndex + 1 >= flow.steps.count {
             onFlowCompleted(responses)
         } else {
             withAnimation { currentIndex += 1 }
         }
+    }
+
+    /// Resolve paywall ID from a paywall_trigger graph node.
+    /// The graph_layout stores the paywall ID in the node's data.
+    private func resolvePaywallFromTrigger(_ triggerNodeId: String) -> String? {
+        guard let graphLayout = flow.graph_layout?.value as? [String: Any],
+              let nodes = graphLayout["nodes"] as? [[String: Any]] else { return nil }
+        guard let node = nodes.first(where: { ($0["id"] as? String) == triggerNodeId }) else { return nil }
+        guard let data = node["data"] as? [String: Any] else { return nil }
+        return data["paywall_id"] as? String ?? data["paywallId"] as? String
     }
 
     private func skipToStep(_ targetStepId: String) {
