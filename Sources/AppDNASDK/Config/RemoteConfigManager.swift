@@ -10,12 +10,8 @@ final class RemoteConfigManager {
     private let configTTL: TimeInterval
     private weak var eventTracker: EventTracker?
 
-    /// Shared JSON decoder that handles snake_case keys from Firestore.
-    private static let snakeCaseDecoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return decoder
-    }()
+    /// Shared JSON decoder for all config parsing.
+    private static let snakeCaseDecoder = JSONDecoder()
 
     // In-memory caches
     private var paywalls: [String: PaywallConfig] = [:]

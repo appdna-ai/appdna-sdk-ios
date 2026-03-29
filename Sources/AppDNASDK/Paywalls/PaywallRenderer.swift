@@ -828,7 +828,7 @@ struct PaywallRenderer: View {
     @ViewBuilder
     private func iconGridSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
         let items = data?.items ?? []
-        let columnCount = data?.columns ?? 3
+        let columnCount = (data?.columns?.value as? Int) ?? 3
         let gridSpacing = data?.spacing ?? 16
         let iconSz = data?.iconSize ?? 32
         let iconClr = data?.iconColor ?? "#6366F1"

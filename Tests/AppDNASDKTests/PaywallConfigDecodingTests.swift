@@ -684,7 +684,7 @@ final class PaywallConfigDecodingTests: XCTestCase {
         XCTAssertEqual(section.data?.items?[0].icon, "bolt.fill")
         XCTAssertEqual(section.data?.items?[0].label, "Fast")
         XCTAssertEqual(section.data?.items?[0].description, "Lightning-fast performance")
-        XCTAssertEqual(section.data?.columns, 2)
+        XCTAssertEqual(section.data?.columns?.value as? Int, 2)
         XCTAssertEqual(section.data?.iconSize, 32)
         XCTAssertEqual(section.data?.iconColor, "#FF6B35")
         XCTAssertEqual(section.data?.spacing, 12)

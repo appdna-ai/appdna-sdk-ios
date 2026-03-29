@@ -180,8 +180,9 @@ struct PaywallSectionData: Codable {
     let showLine: Bool?
     let compact: Bool?
 
-    // SPEC-089d: Icon grid / comparison table columns (Int for icon_grid, array for comparison)
-    let columns: Int?
+    // SPEC-089d: Icon grid / comparison table columns
+    // Int for icon_grid (column count), [String] for comparison_table (column labels)
+    let columns: AnyCodable?
     let iconSize: CGFloat?
     let iconColor: String?
     let spacing: CGFloat?
@@ -250,7 +251,6 @@ struct PaywallSectionData: Codable {
         case videoHeight = "video_height"
         case riveUrl = "rive_url"
         case riveStateMachine = "rive_state_machine"
-        // SPEC-089d: New section fields
         case variant
         case durationSeconds = "duration_seconds"
         case targetDatetime = "target_datetime"
@@ -264,8 +264,7 @@ struct PaywallSectionData: Codable {
         case accentColor = "accent_color"
         case backgroundColor = "background_color"
         case fontSize = "font_size"
-        case alignment
-        case color, links, thickness
+        case alignment, color, links, thickness
         case lineStyle = "style"
         case marginTop = "margin_top"
         case marginBottom = "margin_bottom"
@@ -295,8 +294,7 @@ struct PaywallSectionData: Codable {
         case currentColor = "current_color"
         case upcomingColor = "upcoming_color"
         case showLine = "show_line"
-        case compact
-        case columns
+        case compact, columns
         case iconSize = "icon_size"
         case iconColor = "icon_color"
         case spacing
@@ -321,7 +319,6 @@ struct PaywallSectionData: Codable {
         case reviews
         case showRatingStars = "show_rating_stars"
         case starColor = "star_color"
-        // Plan card/badge styling
         case cardCornerRadius = "card_corner_radius"
         case cardPadding = "card_padding"
         case cardGap = "card_gap"
@@ -441,6 +438,7 @@ struct PaywallReview: Codable, Identifiable {
     let author: String?
     let rating: Double?
     let avatarUrl: String?
+    let avatarEmoji: String?
     let date: String?
 
     var id: String { (author ?? "unknown") + ((text ?? "").prefix(20).description) }
@@ -448,6 +446,7 @@ struct PaywallReview: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case text, author, rating, date
         case avatarUrl = "avatar_url"
+        case avatarEmoji = "avatar_emoji"
     }
 }
 
