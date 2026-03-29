@@ -34,7 +34,7 @@ struct HeaderSection: View {
                 } else {
                     Text(loc?("section-header.title", title) ?? title)
                         .font(.title.bold())
-                        .foregroundColor(.white)
+                        .foregroundColor(.primary)
                         .multilineTextAlignment(.center)
                 }
             }
@@ -46,7 +46,7 @@ struct HeaderSection: View {
                 } else {
                     Text(loc?("section-header.subtitle", subtitle) ?? subtitle)
                         .font(.body)
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                 }
             }

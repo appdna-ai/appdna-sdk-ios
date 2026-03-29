@@ -22,9 +22,9 @@ struct CountdownTimerView: View {
 
         HStack(spacing: 4) {
             timeUnit(hours, label: "h")
-            Text(":").foregroundColor(.white.opacity(0.6))
+            Text(":").foregroundColor(.secondary)
             timeUnit(minutes, label: "m")
-            Text(":").foregroundColor(.white.opacity(0.6))
+            Text(":").foregroundColor(.secondary)
             timeUnit(secs, label: "s")
         }
         .onAppear {
@@ -51,11 +51,11 @@ struct CountdownTimerView: View {
             } else {
                 Text(String(format: "%02d", value))
                     .font(.title2.monospacedDigit().bold())
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
             }
             Text(label)
                 .font(.caption2)
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(.secondary)
         }
         .frame(minWidth: 40)
         .padding(.vertical, 6)
@@ -180,12 +180,12 @@ struct CarouselView: View {
                                 if let title = child.data?.title {
                                     Text(title)
                                         .font(.headline)
-                                        .foregroundColor(.white)
+                                        .foregroundColor(.primary)
                                 }
                                 if let subtitle = child.data?.subtitle {
                                     Text(subtitle)
                                         .font(.subheadline)
-                                        .foregroundColor(.white.opacity(0.8))
+                                        .foregroundColor(.secondary)
                                 }
                                 if let imageUrl = child.data?.imageUrl, let url = URL(string: imageUrl) {
                                     AsyncImage(url: url) { image in
@@ -274,7 +274,7 @@ struct ReviewsCarouselView: View {
                         } else {
                             Text("\u{201C}\(review.text ?? "")\u{201D}")
                                 .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.9))
+                                .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
                                 .italic()
                         }
@@ -296,13 +296,13 @@ struct ReviewsCarouselView: View {
                             } else {
                                 Text(review.author ?? "")
                                     .font(.caption.weight(.medium))
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundColor(.secondary)
                             }
 
                             if let date = review.date {
                                 Text(date)
                                     .font(.caption2)
-                                    .foregroundColor(.white.opacity(0.4))
+                                    .foregroundColor(.secondary)
                             }
                         }
                     }

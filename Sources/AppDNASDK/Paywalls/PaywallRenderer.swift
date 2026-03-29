@@ -96,7 +96,7 @@ struct PaywallRenderer: View {
                         } label: {
                             Text(loc("dismiss.text", config.dismiss?.text ?? "No thanks"))
                                 .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(.secondary)
                         }
                         .padding(.bottom, 24)
                     }
@@ -116,9 +116,10 @@ struct PaywallRenderer: View {
         .dismissAnimation(config.animation?.dismiss_animation, isDismissing: isDismissing)
         .entryAnimation(config.animation?.entry_animation, durationMs: config.animation?.entry_duration_ms)
         .onAppear {
-            // Select default plan
-            if let sections = config.sections.first(where: { $0.type == "plans" }),
-               let plans = sections.data?.plans {
+            // Select default plan — try section.data.plans, then top-level config.plans
+            let sectionPlans = config.sections.first(where: { $0.type == "plans" })?.data?.plans ?? []
+            let plans = sectionPlans.isEmpty ? (config.plans ?? []) : sectionPlans
+            if !plans.isEmpty {
                 selectedPlanId = plans.first(where: { $0.isDefault == true })?.id ?? plans.first?.id
             }
 
@@ -217,7 +218,7 @@ struct PaywallRenderer: View {
         } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
                 .frame(width: 32, height: 32)
                 .background(Color.black.opacity(0.3))
                 .clipShape(Circle())
@@ -397,7 +398,7 @@ struct PaywallRenderer: View {
                 Text(loc("testimonial.quote", data?.quote ?? data?.testimonial ?? ""))
                     .italic()
                     .multilineTextAlignment(.center)
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(.secondary)
             }
 
             HStack(spacing: 12) {
@@ -429,7 +430,7 @@ struct PaywallRenderer: View {
                         } else {
                             Text(interpolatedName)
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(.primary)
                         }
                     }
                     if let role = data?.authorRole {
@@ -440,7 +441,7 @@ struct PaywallRenderer: View {
                         } else {
                             Text(interpolatedRole)
                                 .font(.caption)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(.secondary)
                         }
                     }
                 }
@@ -705,7 +706,7 @@ struct PaywallRenderer: View {
             if let legalText = data?.legalText {
                 Text(loc("sticky_footer.legal", legalText))
                     .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }
         }
@@ -734,20 +735,20 @@ struct PaywallRenderer: View {
             if let title = data?.title {
                 Text(loc("card.title", title))
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
             }
 
             if let subtitle = data?.subtitle {
                 Text(loc("card.subtitle", subtitle))
                     .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.secondary)
             }
 
             // Render child text/body if present
             if let text = data?.text {
                 Text(loc("card.body", text))
                     .font(.body)
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(.secondary)
             }
         }
         .padding(data?.padding ?? 16)
@@ -808,7 +809,7 @@ struct PaywallRenderer: View {
                             if item.status == "completed" {
                                 Image(systemName: "checkmark")
                                     .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.primary)
                             }
                         }
 
@@ -826,12 +827,12 @@ struct PaywallRenderer: View {
                         if let title = item.title {
                             Text(title)
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(.primary)
                         }
                         if let subtitle = item.subtitle {
                             Text(subtitle)
                                 .font(.caption)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(.secondary)
                         }
                     }
                     .padding(.bottom, isCompact ? 0 : 8)
@@ -883,7 +884,7 @@ struct PaywallRenderer: View {
                         } else {
                             Text(label)
                                 .font(.caption.weight(.medium))
-                                .foregroundColor(.white)
+                                .foregroundColor(.primary)
                                 .multilineTextAlignment(.center)
                         }
                     }
@@ -895,7 +896,7 @@ struct PaywallRenderer: View {
                         } else {
                             Text(desc)
                                 .font(.caption2)
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
                         }
                     }
@@ -926,7 +927,7 @@ struct PaywallRenderer: View {
                 ForEach(Array(cols.enumerated()), id: \.offset) { colIdx, col in
                     Text(col.label ?? "")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background(col.highlighted == true ? highlightClr.opacity(0.15) : Color.clear)
@@ -941,7 +942,7 @@ struct PaywallRenderer: View {
                 HStack(spacing: 0) {
                     Text(row.feature ?? "")
                         .font(.caption)
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 8)
 
@@ -963,7 +964,7 @@ struct PaywallRenderer: View {
                             default:
                                 Text(value)
                                     .font(.caption)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.primary)
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -999,7 +1000,7 @@ struct PaywallRenderer: View {
                 .padding(.vertical, 10)
                 .background(Color.white.opacity(0.1))
                 .cornerRadius(8)
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
                 .font(.subheadline)
 
             Button {
@@ -1021,7 +1022,7 @@ struct PaywallRenderer: View {
                 } else {
                     Text(loc("promo.button", data?.buttonText ?? "Apply"))
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.primary)
                 }
             }
             .padding(.horizontal, 16)
@@ -1304,11 +1305,11 @@ struct PaywallRenderer: View {
     // MARK: - CTA handler
 
     private func handleCTATap() {
-        guard let planId = selectedPlanId,
-              let section = config.sections.first(where: { $0.type == "plans" }),
-              let plan = section.data?.plans?.first(where: { $0.id == planId }) else {
-            return
-        }
+        guard let planId = selectedPlanId else { return }
+        // Plans can be in section.data.plans OR top-level config.plans
+        let sectionPlans = config.sections.first(where: { $0.type == "plans" })?.data?.plans ?? []
+        let allPlans = sectionPlans.isEmpty ? (config.plans ?? []) : sectionPlans
+        guard let plan = allPlans.first(where: { $0.id == planId }) else { return }
         // SPEC-085: Haptic on CTA tap
         HapticEngine.triggerIfEnabled(config.haptic?.triggers?.on_button_tap, config: config.haptic)
         // SPEC-085: Trigger particle effect on purchase
