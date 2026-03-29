@@ -43,7 +43,7 @@ final class WebEntitlementManager {
     func startObserving(orgId: String, appId: String, userId: String) {
         stopObserving()
 
-        let path = "orgs/\(orgId)/apps/\(appId)/users/\(userId)/web_entitlements"
+        let path = "orgs/\(orgId)/apps/\(appId)/users/\(userId)/web_entitlements/current"
         Log.debug("WebEntitlementManager: observing \(path)")
 
         guard let db = AppDNA.firestoreDB else { return }
