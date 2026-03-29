@@ -47,25 +47,25 @@ final class MessageConfigDecodingTests: XCTestCase {
 
         XCTAssertEqual(config.name, "Streak Reward")
         XCTAssertEqual(config.message_type, .modal)
-        XCTAssertEqual(config.content.title, "7-Day Streak!")
-        XCTAssertEqual(config.content.body, "Keep it up!")
-        XCTAssertEqual(config.content.image_url, "https://cdn.example.com/streak.png")
-        XCTAssertEqual(config.content.cta_text, "Claim Reward")
-        XCTAssertEqual(config.content.cta_action?.type, .deep_link)
-        XCTAssertEqual(config.content.cta_action?.url, "myapp://rewards")
-        XCTAssertEqual(config.content.dismiss_text, "Later")
-        XCTAssertEqual(config.content.background_color, "#1A1A2E")
-        XCTAssertEqual(config.content.banner_position, .top)
-        XCTAssertEqual(config.content.auto_dismiss_seconds, 5)
-        XCTAssertEqual(config.content.text_color, "#FFFFFF")
-        XCTAssertEqual(config.content.button_color, "#6366F1")
-        XCTAssertEqual(config.content.corner_radius, 16)
-        XCTAssertEqual(config.content.secondary_cta_text, "Learn More")
-        XCTAssertEqual(config.trigger_rules.event, "session_start")
-        XCTAssertEqual(config.trigger_rules.frequency, .once)
-        XCTAssertEqual(config.trigger_rules.max_displays, 1)
-        XCTAssertEqual(config.trigger_rules.delay_seconds, 2)
-        XCTAssertEqual(config.trigger_rules.conditions?.count, 1)
+        XCTAssertEqual(config.content?.title, "7-Day Streak!")
+        XCTAssertEqual(config.content?.body, "Keep it up!")
+        XCTAssertEqual(config.content?.image_url, "https://cdn.example.com/streak.png")
+        XCTAssertEqual(config.content?.cta_text, "Claim Reward")
+        XCTAssertEqual(config.content?.cta_action?.type, .deep_link)
+        XCTAssertEqual(config.content?.cta_action?.url, "myapp://rewards")
+        XCTAssertEqual(config.content?.dismiss_text, "Later")
+        XCTAssertEqual(config.content?.background_color, "#1A1A2E")
+        XCTAssertEqual(config.content?.banner_position, .top)
+        XCTAssertEqual(config.content?.auto_dismiss_seconds, 5)
+        XCTAssertEqual(config.content?.text_color, "#FFFFFF")
+        XCTAssertEqual(config.content?.button_color, "#6366F1")
+        XCTAssertEqual(config.content?.corner_radius, 16)
+        XCTAssertEqual(config.content?.secondary_cta_text, "Learn More")
+        XCTAssertEqual(config.trigger_rules?.event, "session_start")
+        XCTAssertEqual(config.trigger_rules?.frequency, .once)
+        XCTAssertEqual(config.trigger_rules?.max_displays, 1)
+        XCTAssertEqual(config.trigger_rules?.delay_seconds, 2)
+        XCTAssertEqual(config.trigger_rules?.conditions?.count, 1)
         XCTAssertEqual(config.priority, 10)
         XCTAssertEqual(config.start_date, "2026-02-01")
         XCTAssertEqual(config.end_date, "2026-03-01")
@@ -97,9 +97,10 @@ final class MessageConfigDecodingTests: XCTestCase {
         XCTAssertEqual(config.message_type, .tooltip)
     }
 
-    func testDecodeUnknownMessageTypeThrows() {
+    func testDecodeUnknownMessageTypeFallsBackToUnknown() throws {
         let json = messageJSON(type: "popup")
-        XCTAssertThrowsError(try JSONDecoder().decode(MessageConfig.self, from: json))
+        let config = try JSONDecoder().decode(MessageConfig.self, from: json)
+        XCTAssertEqual(config.message_type, .unknown)
     }
 
     // MARK: - MessageContent fields
@@ -243,15 +244,15 @@ final class MessageConfigDecodingTests: XCTestCase {
 
         let content = try JSONDecoder().decode(MessageContent.self, from: json)
         XCTAssertNotNil(content.haptic)
-        XCTAssertTrue(content.haptic!.enabled)
-        XCTAssertEqual(content.haptic?.triggers.on_step_advance, .medium)
-        XCTAssertEqual(content.haptic?.triggers.on_button_tap, .light)
-        XCTAssertEqual(content.haptic?.triggers.on_success, .success)
-        XCTAssertNil(content.haptic?.triggers.on_plan_select)
-        XCTAssertNil(content.haptic?.triggers.on_option_select)
-        XCTAssertNil(content.haptic?.triggers.on_toggle)
-        XCTAssertNil(content.haptic?.triggers.on_form_submit)
-        XCTAssertNil(content.haptic?.triggers.on_error)
+        XCTAssertEqual(content.haptic?.enabled, true)
+        XCTAssertEqual(content.haptic?.triggers?.on_step_advance, .medium)
+        XCTAssertEqual(content.haptic?.triggers?.on_button_tap, .light)
+        XCTAssertEqual(content.haptic?.triggers?.on_success, .success)
+        XCTAssertNil(content.haptic?.triggers?.on_plan_select)
+        XCTAssertNil(content.haptic?.triggers?.on_option_select)
+        XCTAssertNil(content.haptic?.triggers?.on_toggle)
+        XCTAssertNil(content.haptic?.triggers?.on_form_submit)
+        XCTAssertNil(content.haptic?.triggers?.on_error)
     }
 
     func testDecodeRichMediaParticleEffect() throws {
@@ -366,8 +367,8 @@ final class MessageConfigDecodingTests: XCTestCase {
         XCTAssertEqual(content.cta_icon?.library, "emoji")
         XCTAssertEqual(content.secondary_cta_icon?.library, "material")
         XCTAssertEqual(content.secondary_cta_icon?.size, 18)
-        XCTAssertTrue(content.haptic!.enabled)
-        XCTAssertEqual(content.haptic?.triggers.on_button_tap, .heavy)
+        XCTAssertEqual(content.haptic?.enabled, true)
+        XCTAssertEqual(content.haptic?.triggers?.on_button_tap, .heavy)
         XCTAssertEqual(content.particle_effect?.type, "fireworks")
         XCTAssertEqual(content.particle_effect?.colors, ["#FFD700", "#FF4500"])
         XCTAssertEqual(content.blur_backdrop?.radius, 25.0)
@@ -445,7 +446,7 @@ final class MessageConfigDecodingTests: XCTestCase {
         XCTAssertEqual(cond.field, "plan")
         XCTAssertEqual(cond.operator, .eq)
         // AnyCodable wraps the value
-        XCTAssertEqual(cond.value.value as? String, "premium")
+        XCTAssertEqual(cond.value?.value as? String, "premium")
     }
 
     func testDecodeTriggerConditionBoolValue() throws {
@@ -455,7 +456,7 @@ final class MessageConfigDecodingTests: XCTestCase {
 
         let cond = try JSONDecoder().decode(TriggerCondition.self, from: json)
         XCTAssertEqual(cond.field, "is_premium")
-        XCTAssertEqual(cond.value.value as? Bool, true)
+        XCTAssertEqual(cond.value?.value as? Bool, true)
     }
 
     func testDecodeTriggerConditionDoubleValue() throws {
@@ -465,7 +466,7 @@ final class MessageConfigDecodingTests: XCTestCase {
 
         let cond = try JSONDecoder().decode(TriggerCondition.self, from: json)
         XCTAssertEqual(cond.field, "score")
-        XCTAssertEqual(cond.value.value as? Double, 4.5)
+        XCTAssertEqual(cond.value?.value as? Double, 4.5)
     }
 
     // MARK: - CTA Action types
@@ -500,12 +501,13 @@ final class MessageConfigDecodingTests: XCTestCase {
         XCTAssertNil(action.url)
     }
 
-    func testDecodeUnknownCTAActionTypeThrows() {
+    func testDecodeUnknownCTAActionTypeFallsBackToUnknown() throws {
         let json = """
         { "type": "custom_action" }
         """.data(using: .utf8)!
 
-        XCTAssertThrowsError(try JSONDecoder().decode(CTAAction.self, from: json))
+        let action = try JSONDecoder().decode(CTAAction.self, from: json)
+        XCTAssertEqual(action.type, .unknown)
     }
 
     // MARK: - MessageFrequency variants
@@ -594,10 +596,10 @@ final class MessageConfigDecodingTests: XCTestCase {
 
         let root = try JSONDecoder().decode(MessageRoot.self, from: json)
         XCTAssertEqual(root.version, 3)
-        XCTAssertEqual(root.messages.count, 2)
-        XCTAssertEqual(root.messages["msg_streak_reward"]?.message_type, .modal)
-        XCTAssertEqual(root.messages["msg_welcome"]?.message_type, .banner)
-        XCTAssertEqual(root.messages["msg_welcome"]?.content.banner_position, .top)
+        XCTAssertEqual(root.messages?.count, 2)
+        XCTAssertEqual(root.messages?["msg_streak_reward"]?.message_type, .modal)
+        XCTAssertEqual(root.messages?["msg_welcome"]?.message_type, .banner)
+        XCTAssertEqual(root.messages?["msg_welcome"]?.content?.banner_position, .top)
     }
 
     func testDecodeMessageRootEmptyMessages() throws {
@@ -607,7 +609,7 @@ final class MessageConfigDecodingTests: XCTestCase {
 
         let root = try JSONDecoder().decode(MessageRoot.self, from: json)
         XCTAssertEqual(root.version, 1)
-        XCTAssertTrue(root.messages.isEmpty)
+        XCTAssertEqual(root.messages?.isEmpty, true)
     }
 
     // MARK: - Edge cases
@@ -626,8 +628,8 @@ final class MessageConfigDecodingTests: XCTestCase {
         let config = try JSONDecoder().decode(MessageConfig.self, from: json)
         XCTAssertEqual(config.name, "Minimal")
         XCTAssertEqual(config.message_type, .banner)
-        XCTAssertNil(config.content.title)
-        XCTAssertNil(config.content.body)
+        XCTAssertNil(config.content?.title)
+        XCTAssertNil(config.content?.body)
         XCTAssertNil(config.start_date)
         XCTAssertNil(config.end_date)
         XCTAssertEqual(config.priority, 0)
@@ -648,7 +650,7 @@ final class MessageConfigDecodingTests: XCTestCase {
         // Should decode without throwing -- unknown fields are ignored by default Codable
         let config = try JSONDecoder().decode(MessageConfig.self, from: json)
         XCTAssertEqual(config.name, "Forward-Compat")
-        XCTAssertEqual(config.content.title, "Hi")
+        XCTAssertEqual(config.content?.title, "Hi")
     }
 
     func testDecodeMultipleConditions() throws {
@@ -720,12 +722,12 @@ final class MessageConfigDecodingTests: XCTestCase {
 
         XCTAssertEqual(decoded.name, original.name)
         XCTAssertEqual(decoded.message_type, original.message_type)
-        XCTAssertEqual(decoded.content.title, original.content.title)
-        XCTAssertEqual(decoded.content.body, original.content.body)
-        XCTAssertEqual(decoded.content.cta_action?.type, original.content.cta_action?.type)
-        XCTAssertEqual(decoded.content.cta_action?.url, original.content.cta_action?.url)
-        XCTAssertEqual(decoded.trigger_rules.event, original.trigger_rules.event)
-        XCTAssertEqual(decoded.trigger_rules.frequency, original.trigger_rules.frequency)
+        XCTAssertEqual(decoded.content?.title, original.content?.title)
+        XCTAssertEqual(decoded.content?.body, original.content?.body)
+        XCTAssertEqual(decoded.content?.cta_action?.type, original.content?.cta_action?.type)
+        XCTAssertEqual(decoded.content?.cta_action?.url, original.content?.cta_action?.url)
+        XCTAssertEqual(decoded.trigger_rules?.event, original.trigger_rules?.event)
+        XCTAssertEqual(decoded.trigger_rules?.frequency, original.trigger_rules?.frequency)
         XCTAssertEqual(decoded.priority, original.priority)
     }
 
@@ -776,15 +778,15 @@ final class MessageConfigDecodingTests: XCTestCase {
         """.data(using: .utf8)!
 
         let config = try JSONDecoder().decode(HapticConfig.self, from: json)
-        XCTAssertTrue(config.enabled)
-        XCTAssertEqual(config.triggers.on_step_advance, .medium)
-        XCTAssertEqual(config.triggers.on_button_tap, .light)
-        XCTAssertEqual(config.triggers.on_plan_select, .selection)
-        XCTAssertEqual(config.triggers.on_option_select, .selection)
-        XCTAssertEqual(config.triggers.on_toggle, .light)
-        XCTAssertEqual(config.triggers.on_form_submit, .success)
-        XCTAssertEqual(config.triggers.on_error, .error)
-        XCTAssertEqual(config.triggers.on_success, .success)
+        XCTAssertEqual(config.enabled, true)
+        XCTAssertEqual(config.triggers?.on_step_advance, .medium)
+        XCTAssertEqual(config.triggers?.on_button_tap, .light)
+        XCTAssertEqual(config.triggers?.on_plan_select, .selection)
+        XCTAssertEqual(config.triggers?.on_option_select, .selection)
+        XCTAssertEqual(config.triggers?.on_toggle, .light)
+        XCTAssertEqual(config.triggers?.on_form_submit, .success)
+        XCTAssertEqual(config.triggers?.on_error, .error)
+        XCTAssertEqual(config.triggers?.on_success, .success)
     }
 
     func testDecodeHapticConfigDisabled() throws {
@@ -796,8 +798,8 @@ final class MessageConfigDecodingTests: XCTestCase {
         """.data(using: .utf8)!
 
         let config = try JSONDecoder().decode(HapticConfig.self, from: json)
-        XCTAssertFalse(config.enabled)
-        XCTAssertNil(config.triggers.on_button_tap)
+        XCTAssertEqual(config.enabled, false)
+        XCTAssertNil(config.triggers?.on_button_tap)
     }
 
     func testDecodeAllHapticTypes() throws {
@@ -815,7 +817,7 @@ final class MessageConfigDecodingTests: XCTestCase {
             """.data(using: .utf8)!
 
             let config = try JSONDecoder().decode(HapticConfig.self, from: json)
-            XCTAssertEqual(config.triggers.on_button_tap, expected, "Failed for haptic type \(raw)")
+            XCTAssertEqual(config.triggers?.on_button_tap, expected, "Failed for haptic type \(raw)")
         }
     }
 

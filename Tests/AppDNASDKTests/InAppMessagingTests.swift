@@ -151,10 +151,10 @@ final class InAppMessagingTests: XCTestCase {
 
         XCTAssertEqual(config.name, "Streak Reward")
         XCTAssertEqual(config.message_type, .modal)
-        XCTAssertEqual(config.content.title, "🔥 7-Day Streak!")
-        XCTAssertEqual(config.trigger_rules.event, "session_start")
-        XCTAssertEqual(config.trigger_rules.frequency, .once)
-        XCTAssertEqual(config.trigger_rules.delay_seconds, 2)
+        XCTAssertEqual(config.content?.title, "🔥 7-Day Streak!")
+        XCTAssertEqual(config.trigger_rules?.event, "session_start")
+        XCTAssertEqual(config.trigger_rules?.frequency, .once)
+        XCTAssertEqual(config.trigger_rules?.delay_seconds, 2)
         XCTAssertEqual(config.priority, 10)
     }
 
