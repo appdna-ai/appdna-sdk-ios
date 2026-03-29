@@ -10,6 +10,13 @@ final class RemoteConfigManager {
     private let configTTL: TimeInterval
     private weak var eventTracker: EventTracker?
 
+    /// Shared JSON decoder that handles snake_case keys from Firestore.
+    private static let snakeCaseDecoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return decoder
+    }()
+
     // In-memory caches
     private var paywalls: [String: PaywallConfig] = [:]
     private var experiments: [String: ExperimentConfig] = [:]
@@ -276,10 +283,23 @@ final class RemoteConfigManager {
             guard let dict = value as? [String: Any] else { continue }
             do {
                 let jsonData = try JSONSerialization.data(withJSONObject: dict)
-                let config = try JSONDecoder().decode(PaywallConfig.self, from: jsonData)
+                let config = try Self.snakeCaseDecoder.decode(PaywallConfig.self, from: jsonData)
                 parsed[key] = config
+            } catch let decodingError as DecodingError {
+                switch decodingError {
+                case .keyNotFound(let key, let ctx):
+                    Log.error("Paywall '\(key)' decode: missing key '\(key.stringValue)' at \(ctx.codingPath.map(\.stringValue).joined(separator: "."))")
+                case .typeMismatch(let type, let ctx):
+                    Log.error("Paywall '\(key)' decode: type mismatch for \(type) at \(ctx.codingPath.map(\.stringValue).joined(separator: ".")): \(ctx.debugDescription)")
+                case .valueNotFound(let type, let ctx):
+                    Log.error("Paywall '\(key)' decode: null value for \(type) at \(ctx.codingPath.map(\.stringValue).joined(separator: "."))")
+                case .dataCorrupted(let ctx):
+                    Log.error("Paywall '\(key)' decode: corrupted at \(ctx.codingPath.map(\.stringValue).joined(separator: ".")): \(ctx.debugDescription)")
+                @unknown default:
+                    Log.error("Paywall '\(key)' decode: \(decodingError)")
+                }
             } catch {
-                Log.error("Failed to decode paywall '\(key)': \(error.localizedDescription)")
+                Log.error("Failed to decode paywall '\(key)': \(error)")
             }
         }
         queue.async { self.paywalls = parsed }
@@ -297,7 +317,7 @@ final class RemoteConfigManager {
             guard let dict = value as? [String: Any] else { continue }
             do {
                 let jsonData = try JSONSerialization.data(withJSONObject: dict)
-                let config = try JSONDecoder().decode(ExperimentConfig.self, from: jsonData)
+                let config = try Self.snakeCaseDecoder.decode(ExperimentConfig.self, from: jsonData)
                 parsed[key] = config
             } catch {
                 Log.error("Failed to decode experiment '\(key)': \(error.localizedDescription)")
@@ -321,7 +341,7 @@ final class RemoteConfigManager {
                 guard let dict = value as? [String: Any] else { continue }
                 do {
                     let jsonData = try JSONSerialization.data(withJSONObject: dict)
-                    let config = try JSONDecoder().decode(OnboardingFlowConfig.self, from: jsonData)
+                    let config = try Self.snakeCaseDecoder.decode(OnboardingFlowConfig.self, from: jsonData)
                     parsed[key] = config
                 } catch {
                     Log.error("Failed to decode onboarding flow '\(key)': \(error.localizedDescription)")
@@ -347,7 +367,7 @@ final class RemoteConfigManager {
             guard key != "version" else { continue }
             guard let dict = value as? [String: Any],
                   let jsonData = try? JSONSerialization.data(withJSONObject: dict),
-                  let config = try? JSONDecoder().decode(MessageConfig.self, from: jsonData) else {
+                  let config = try? Self.snakeCaseDecoder.decode(MessageConfig.self, from: jsonData) else {
                 continue
             }
             parsed[key] = config
@@ -367,7 +387,7 @@ final class RemoteConfigManager {
             guard key != "version" else { continue }
             guard let dict = value as? [String: Any],
                   let jsonData = try? JSONSerialization.data(withJSONObject: dict),
-                  let config = try? JSONDecoder().decode(SurveyConfig.self, from: jsonData) else {
+                  let config = try? Self.snakeCaseDecoder.decode(SurveyConfig.self, from: jsonData) else {
                 continue
             }
             parsed[key] = config
@@ -388,7 +408,7 @@ final class RemoteConfigManager {
     private func parseScreenIndex(_ data: [String: Any]) {
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: data)
-            let index = try JSONDecoder().decode(ScreenIndex.self, from: jsonData)
+            let index = try Self.snakeCaseDecoder.decode(ScreenIndex.self, from: jsonData)
             ScreenManager.shared.updateIndex(index)
             Log.info("Screen index loaded: \(index.screens?.count ?? 0) screens, \(index.flows?.count ?? 0) flows, \(index.slots?.count ?? 0) slots")
         } catch {
@@ -412,7 +432,7 @@ final class RemoteConfigManager {
             }
             do {
                 let jsonData = try JSONSerialization.data(withJSONObject: data)
-                let wrapper = try JSONDecoder().decode(ScreenFirestoreWrapper.self, from: jsonData)
+                let wrapper = try Self.snakeCaseDecoder.decode(ScreenFirestoreWrapper.self, from: jsonData)
                 let config = wrapper.config
                 ScreenManager.shared.cacheScreen(screenId, config: config)
                 completion(config)
@@ -420,7 +440,7 @@ final class RemoteConfigManager {
                 // Try parsing the data directly as a ScreenConfig
                 do {
                     let jsonData = try JSONSerialization.data(withJSONObject: data)
-                    let config = try JSONDecoder().decode(ScreenConfig.self, from: jsonData)
+                    let config = try Self.snakeCaseDecoder.decode(ScreenConfig.self, from: jsonData)
                     ScreenManager.shared.cacheScreen(screenId, config: config)
                     completion(config)
                 } catch {
