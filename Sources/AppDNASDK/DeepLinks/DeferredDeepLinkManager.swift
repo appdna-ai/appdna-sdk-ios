@@ -50,7 +50,8 @@ final class DeferredDeepLinkManager {
         }
 
         // Check Firestore for deferred context
-        let path = "orgs/\(orgId)/apps/\(appId)/config/deferred_deep_links/\(visitorId)"
+        // Path: config/deferred_deep_links = document, {visitorId} = subcollection doc
+        let path = "orgs/\(orgId)/apps/\(appId)/config/deferred_deep_links/visitors/\(visitorId)"
         Log.debug("DeferredDeepLink: checking \(path)")
 
         guard let db = AppDNA.firestoreDB else { completion(nil); return }

@@ -393,7 +393,8 @@ final class RemoteConfigManager {
         }
         guard let db = AppDNA.firestoreDB else { completion(nil); return }
         let basePath = "\(firestorePath)/config"
-        db.document("\(basePath)/screens/\(screenId)").getDocument { snapshot, error in
+        // screens/{screenId} is a subcollection document under the screen_index doc
+        db.document("\(basePath)/screen_index/screens/\(screenId)").getDocument { snapshot, error in
             guard let data = snapshot?.data() else {
                 completion(nil)
                 return
