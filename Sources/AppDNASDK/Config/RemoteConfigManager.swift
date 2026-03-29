@@ -268,8 +268,11 @@ final class RemoteConfigManager {
     }
 
     private func parsePaywalls(_ data: [String: Any]) {
+        // Firestore doc structure: { "paywalls": { "uuid1": {...}, "uuid2": {...} } }
+        // Unwrap the "paywalls" wrapper if present, otherwise treat data as flat map
+        let paywallMap = (data["paywalls"] as? [String: Any]) ?? data
         var parsed: [String: PaywallConfig] = [:]
-        for (key, value) in data {
+        for (key, value) in paywallMap {
             guard let dict = value as? [String: Any],
                   let jsonData = try? JSONSerialization.data(withJSONObject: dict),
                   let config = try? JSONDecoder().decode(PaywallConfig.self, from: jsonData) else {
@@ -285,8 +288,10 @@ final class RemoteConfigManager {
     }
 
     private func parseExperiments(_ data: [String: Any]) {
+        // Firestore doc structure: { "experiments": { "uuid1": {...}, "uuid2": {...} } }
+        let experimentsMap = (data["experiments"] as? [String: Any]) ?? data
         var parsed: [String: ExperimentConfig] = [:]
-        for (key, value) in data {
+        for (key, value) in experimentsMap {
             guard let dict = value as? [String: Any],
                   let jsonData = try? JSONSerialization.data(withJSONObject: dict),
                   let config = try? JSONDecoder().decode(ExperimentConfig.self, from: jsonData) else {
