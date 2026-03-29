@@ -4,26 +4,26 @@ import Foundation
 
 /// Root config from Firestore `/config/surveys`.
 struct SurveyRoot: Codable {
-    let version: Int
-    let surveys: [String: SurveyConfig]
+    let version: Int?
+    let surveys: [String: SurveyConfig]?
 }
 
 /// A single survey definition.
 public struct SurveyConfig: Codable {
-    public let name: String
-    public let survey_type: String // "nps", "csat", "custom"
-    public let questions: [SurveyQuestion]
-    public let trigger_rules: SurveyTriggerRules
-    public let appearance: SurveyAppearance
+    public let name: String?
+    public let survey_type: String? // "nps", "csat", "custom"
+    public let questions: [SurveyQuestion]?
+    public let trigger_rules: SurveyTriggerRules?
+    public let appearance: SurveyAppearance?
     public let follow_up_actions: SurveyFollowUpActions?
 }
 
 /// A single survey question.
 public struct SurveyQuestion: Codable {
-    public let id: String
-    public let type: String // "nps", "csat", "rating", "single_choice", "multi_choice", "free_text", "yes_no", "emoji_scale"
-    public let text: String
-    public let required: Bool
+    public let id: String?
+    public let type: String? // "nps", "csat", "rating", "single_choice", "multi_choice", "free_text", "yes_no", "emoji_scale"
+    public let text: String?
+    public let required: Bool?
     public let show_if: ShowIfCondition?
 
     // Type-specific configs
@@ -38,8 +38,8 @@ public struct SurveyQuestion: Codable {
 }
 
 public struct ShowIfCondition: Codable {
-    public let question_id: String
-    public let answer_in: [AnyCodable]
+    public let question_id: String?
+    public let answer_in: [AnyCodable]?
 }
 
 public struct NPSConfig: Codable {
@@ -58,8 +58,8 @@ public struct RatingConfig: Codable {
 }
 
 public struct SurveyQuestionOption: Codable {
-    public let id: String
-    public let text: String
+    public let id: String?
+    public let text: String?
     public let icon: String?
 }
 
@@ -74,26 +74,26 @@ public struct FreeTextConfig: Codable {
 
 /// Survey trigger rules.
 public struct SurveyTriggerRules: Codable {
-    public let event: String
+    public let event: String?
     public let conditions: [TriggerCondition]?
     public let love_score_range: ScoreRange?
-    public let frequency: MessageFrequency // reuse from in-app messaging
+    public let frequency: MessageFrequency? // reuse from in-app messaging
     public let max_displays: Int?
     public let delay_seconds: Int?
     public let min_sessions: Int?
 }
 
 public struct ScoreRange: Codable {
-    public let min: Int
-    public let max: Int
+    public let min: Int?
+    public let max: Int?
 }
 
 /// Survey appearance settings.
 public struct SurveyAppearance: Codable {
-    public let presentation: String // "bottom_sheet", "modal", "fullscreen"
+    public let presentation: String? // "bottom_sheet", "modal", "fullscreen"
     public let theme: SurveyTheme?
-    public let dismiss_allowed: Bool
-    public let show_progress: Bool
+    public let dismiss_allowed: Bool?
+    public let show_progress: Bool?
     // SPEC-084: Style engine integration
     public let question_text_style: TextStyleConfig?
     public let option_style: ElementStyleConfig?
@@ -101,7 +101,7 @@ public struct SurveyAppearance: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        presentation = try container.decode(String.self, forKey: .presentation)
+        presentation = try container.decodeIfPresent(String.self, forKey: .presentation) ?? "modal"
         theme = try container.decodeIfPresent(SurveyTheme.self, forKey: .theme)
         dismiss_allowed = try container.decodeIfPresent(Bool.self, forKey: .dismiss_allowed) ?? true
         show_progress = try container.decodeIfPresent(Bool.self, forKey: .show_progress) ?? false
@@ -135,7 +135,7 @@ public struct SurveyFollowUpActions: Codable {
 }
 
 public struct FollowUpAction: Codable {
-    public let action: String // "prompt_review", "show_feedback_form", "dismiss"
+    public let action: String? // "prompt_review", "show_feedback_form", "dismiss"
     public let message: String?
 }
 

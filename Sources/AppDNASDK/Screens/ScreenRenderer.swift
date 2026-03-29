@@ -9,18 +9,18 @@ internal struct ScreenRenderer: View {
     @SwiftUI.Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        let visibleSections = config.sections.filter { section in
+        let visibleSections = (config.sections ?? []).filter { section in
             guard let condition = section.visibility_condition else { return true }
             return ConditionEvaluator.evaluateCondition(
-                type: condition.type,
+                type: condition.type ?? "always",
                 variable: condition.variable,
                 value: condition.value?.value,
                 context: context.sectionContext.buildEvaluationContext()
             )
         }
 
-        let nonStickySections = visibleSections.filter { $0.type != "sticky_footer" && $0.type != "paywall_sticky_footer" }
-        let stickySection = visibleSections.first(where: { $0.type == "sticky_footer" || $0.type == "paywall_sticky_footer" })
+        let nonStickySections = visibleSections.filter { ($0.type ?? "unknown") != "sticky_footer" && ($0.type ?? "unknown") != "paywall_sticky_footer" }
+        let stickySection = visibleSections.first(where: { ($0.type ?? "unknown") == "sticky_footer" || ($0.type ?? "unknown") == "paywall_sticky_footer" })
 
         ZStack(alignment: .bottom) {
             // Background
@@ -33,24 +33,24 @@ internal struct ScreenRenderer: View {
                 }
 
                 // Main content
-                switch config.layout.type {
+                switch config.layout?.type ?? "scroll" {
                 case "scroll":
-                    ScrollView(.vertical, showsIndicators: config.layout.scroll_indicator ?? false) {
-                        VStack(spacing: CGFloat(config.layout.spacing ?? 16)) {
+                    ScrollView(.vertical, showsIndicators: config.layout?.scroll_indicator ?? false) {
+                        VStack(spacing: CGFloat(config.layout?.spacing ?? 16)) {
                             ForEach(nonStickySections) { section in
                                 sectionView(section)
                             }
                         }
-                        .padding(CGFloat(config.layout.padding ?? 0))
+                        .padding(CGFloat(config.layout?.padding ?? 0))
                     }
 
                 case "fixed":
-                    VStack(spacing: CGFloat(config.layout.spacing ?? 16)) {
+                    VStack(spacing: CGFloat(config.layout?.spacing ?? 16)) {
                         ForEach(nonStickySections) { section in
                             sectionView(section)
                         }
                     }
-                    .padding(CGFloat(config.layout.padding ?? 0))
+                    .padding(CGFloat(config.layout?.padding ?? 0))
 
                 case "pager":
                     TabView {
@@ -62,12 +62,12 @@ internal struct ScreenRenderer: View {
 
                 default:
                     ScrollView {
-                        VStack(spacing: CGFloat(config.layout.spacing ?? 16)) {
+                        VStack(spacing: CGFloat(config.layout?.spacing ?? 16)) {
                             ForEach(nonStickySections) { section in
                                 sectionView(section)
                             }
                         }
-                        .padding(CGFloat(config.layout.padding ?? 0))
+                        .padding(CGFloat(config.layout?.padding ?? 0))
                     }
                 }
 
@@ -96,7 +96,7 @@ internal struct ScreenRenderer: View {
             }
         }
         // Safe area
-        .ignoresSafeArea(config.layout.safe_area == false ? .all : [])
+        .ignoresSafeArea(config.layout?.safe_area == false ? .all : [])
         // Haptic on present
         .onAppear {
             if let haptic = config.haptic, haptic.on_present == true,
@@ -113,7 +113,7 @@ internal struct ScreenRenderer: View {
         let content = SectionRegistry.shared.render(section: section, context: context.sectionContext)
             .applySectionStyle(section.style)
 
-        if let anim = section.entrance_animation, anim.type != "none" {
+        if let anim = section.entrance_animation, (anim.type ?? "none") != "none" {
             EntranceAnimationWrapper(animation: EntranceAnimation(
                 type: anim.type,
                 duration_ms: anim.duration_ms,

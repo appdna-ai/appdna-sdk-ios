@@ -30,12 +30,12 @@ internal class SectionRegistry {
     }
 
     func render(section: ScreenSection, context: SectionContext) -> AnyView {
-        if let renderer = renderers[section.type] {
+        if let sectionType = section.type, let renderer = renderers[sectionType] {
             return renderer.render(section, context)
         }
 
         // Fallback: if section has "blocks" in data, try content_blocks renderer
-        if section.data["blocks"] != nil {
+        if section.data?["blocks"] != nil {
             if let cbRenderer = renderers["content_blocks"] {
                 return cbRenderer.render(section, context)
             }

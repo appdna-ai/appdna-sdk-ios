@@ -440,17 +440,17 @@ private struct ScreenFirestoreWrapper: Codable {
 // MARK: - Experiment config model
 
 struct ExperimentConfig: Codable {
-    let id: String
-    let name: String
-    let status: String // "running", "paused", "completed"
-    let salt: String
-    let platforms: [String]
-    let variants: [ExperimentVariant]
+    let id: String?
+    let name: String?
+    let status: String? // "running", "paused", "completed"
+    let salt: String?
+    let platforms: [String]?
+    let variants: [ExperimentVariant]?
     let segments: [String]?
 }
 
 public struct ExperimentVariant: Codable {
-    let id: String
-    let weight: Double
+    let id: String?
+    let weight: Double?
     let payload: [String: AnyCodable]?
 }

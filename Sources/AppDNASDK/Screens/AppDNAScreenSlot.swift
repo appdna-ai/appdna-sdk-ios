@@ -68,15 +68,15 @@ public struct AppDNAScreenSlot: View {
         let maxHeight = slotConfig?.max_height
 
         let context = SectionContext(
-            screenId: config.id,
+            screenId: config.id ?? "",
             onAction: { action in
                 handleSlotAction(action, config: config)
             }
         )
         let contextHolder = ScreenContextHolder(context: context)
 
-        VStack(spacing: CGFloat(config.layout.spacing ?? 12)) {
-            ForEach(config.sections) { section in
+        VStack(spacing: CGFloat(config.layout?.spacing ?? 12)) {
+            ForEach(config.sections ?? []) { section in
                 SectionRegistry.shared.render(section: section, context: context)
                     .applySectionStyle(section.style)
             }

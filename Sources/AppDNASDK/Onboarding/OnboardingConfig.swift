@@ -4,7 +4,7 @@ import Foundation
 
 /// Root onboarding config from Firestore `/config/onboarding`.
 struct OnboardingFlowRoot: Codable {
-    let flows: [String: OnboardingFlowConfig]
+    let flows: [String: OnboardingFlowConfig]?
     let active_flow_id: String?
 }
 
@@ -48,7 +48,20 @@ public struct OnboardingStep: Codable, Identifiable {
     /// When true, the progress indicator is hidden on this step but the step still counts toward total progress.
     public let hide_progress: Bool?
 
-    public init(id: String, type: StepType, config: StepConfig, hook: StepHookConfig? = nil, hide_progress: Bool? = nil) {
+    private enum CodingKeys: String, CodingKey {
+        case id, type, config, hook, hide_progress
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        self.type = try c.decodeIfPresent(StepType.self, forKey: .type) ?? .custom
+        self.config = try c.decodeIfPresent(StepConfig.self, forKey: .config) ?? StepConfig()
+        self.hook = try c.decodeIfPresent(StepHookConfig.self, forKey: .hook)
+        self.hide_progress = try c.decodeIfPresent(Bool.self, forKey: .hide_progress)
+    }
+
+    public init(id: String = "", type: StepType = .custom, config: StepConfig = StepConfig(), hook: StepHookConfig? = nil, hide_progress: Bool? = nil) {
         self.id = id
         self.type = type
         self.config = config
@@ -75,9 +88,9 @@ public struct OnboardingStep: Codable, Identifiable {
 
 /// Server-side webhook configuration for a step.
 public struct StepHookConfig: Codable {
-    public let enabled: Bool
-    public let webhook_url: String
-    public let timeout_ms: Int
+    public let enabled: Bool?
+    public let webhook_url: String?
+    public let timeout_ms: Int?
     public let loading_text: String?
     public let error_text: String?
     public let retry_count: Int?
@@ -180,22 +193,28 @@ public struct StepConfig: Codable {
 }
 
 public struct QuestionOption: Codable, Identifiable {
-    public let id: String
-    public let label: String
+    public let id: String?
+    public let label: String?
     public let icon: String?
 }
 
 public enum SelectionMode: String, Codable {
     case single
     case multi
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        self = SelectionMode(rawValue: rawValue) ?? .single
+    }
 }
 
 public struct ValuePropItem: Codable, Identifiable {
-    public let icon: String
-    public let title: String
-    public let subtitle: String
+    public let icon: String?
+    public let title: String?
+    public let subtitle: String?
 
-    public var id: String { title }
+    public var id: String { title ?? UUID().uuidString }
 }
 
 // MARK: - Form Field Types (SPEC-082)
@@ -214,8 +233,8 @@ public enum FormFieldType: String, Codable {
 }
 
 public struct FormFieldOption: Codable, Identifiable {
-    public let id: String
-    public let label: String
+    public let id: String?
+    public let label: String?
     public let icon: String?
     public let value: AnyCodable?
 }
@@ -226,8 +245,8 @@ public struct FormFieldValidation: Codable {
 }
 
 public struct FormFieldDependency: Codable {
-    public let field_id: String
-    public let operator_type: String  // equals, not_equals, contains, not_empty, empty, gt, lt, is_set
+    public let field_id: String?
+    public let operator_type: String?  // equals, not_equals, contains, not_empty, empty, gt, lt, is_set
     public let value: AnyCodable?
 
     private enum CodingKeys: String, CodingKey {
@@ -270,6 +289,23 @@ public struct FormField: Codable, Identifiable {
     public let options: [FormFieldOption]?
     public let config: FormFieldConfig?
     public let depends_on: FormFieldDependency?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, type, label, placeholder, required, validation, options, config, depends_on
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        self.type = try c.decodeIfPresent(FormFieldType.self, forKey: .type) ?? .text
+        self.label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
+        self.placeholder = try c.decodeIfPresent(String.self, forKey: .placeholder)
+        self.required = try c.decodeIfPresent(Bool.self, forKey: .required) ?? false
+        self.validation = try c.decodeIfPresent(FormFieldValidation.self, forKey: .validation)
+        self.options = try c.decodeIfPresent([FormFieldOption].self, forKey: .options)
+        self.config = try c.decodeIfPresent(FormFieldConfig.self, forKey: .config)
+        self.depends_on = try c.decodeIfPresent(FormFieldDependency.self, forKey: .depends_on)
+    }
 }
 
 // MARK: - Async Step Hook Types (SPEC-083)

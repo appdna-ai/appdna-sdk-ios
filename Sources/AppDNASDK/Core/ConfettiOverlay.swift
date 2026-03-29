@@ -1,10 +1,10 @@
 import SwiftUI
 
 public struct ParticleEffect: Codable {
-    public let type: String        // "confetti", "sparkle", "fireworks", "snow", "hearts"
-    public let trigger: String     // "on_appear", "on_step_complete", "on_purchase", "on_flow_complete"
-    public let duration_ms: Int
-    public let intensity: String   // "light", "medium", "heavy"
+    public let type: String?        // "confetti", "sparkle", "fireworks", "snow", "hearts"
+    public let trigger: String?     // "on_appear", "on_step_complete", "on_purchase", "on_flow_complete"
+    public let duration_ms: Int?
+    public let intensity: String?   // "light", "medium", "heavy"
     public let colors: [String]?
 }
 
@@ -14,7 +14,7 @@ public struct ConfettiOverlay: View {
     @State private var particles: [ConfettiParticle] = []
 
     private var particleCount: Int {
-        switch effect.intensity {
+        switch effect.intensity ?? "medium" {
         case "light": return 30
         case "heavy": return 120
         default: return 60
@@ -25,7 +25,7 @@ public struct ConfettiOverlay: View {
         if let customColors = effect.colors, !customColors.isEmpty {
             return customColors.map { Color(hex: $0) }
         }
-        switch effect.type {
+        switch effect.type ?? "confetti" {
         case "hearts": return [.red, .pink, Color(hex: "#FF6B9D")]
         case "snow": return [.white, Color(white: 0.95), Color(white: 0.9)]
         case "sparkle": return [.yellow, .orange, Color(hex: "#FFD700")]
@@ -35,7 +35,7 @@ public struct ConfettiOverlay: View {
     }
 
     private var particleShape: String {
-        switch effect.type {
+        switch effect.type ?? "confetti" {
         case "hearts": return "\u{2764}\u{FE0F}"
         case "snow": return "\u{2744}\u{FE0F}"
         case "sparkle": return "\u{2728}"
@@ -48,7 +48,7 @@ public struct ConfettiOverlay: View {
         ZStack {
             if isActive {
                 ForEach(particles) { particle in
-                    if effect.type == "confetti" {
+                    if (effect.type ?? "confetti") == "confetti" {
                         Circle()
                             .fill(particle.color)
                             .frame(width: particle.size, height: particle.size)
@@ -65,7 +65,7 @@ public struct ConfettiOverlay: View {
         }
         .allowsHitTesting(false)
         .onAppear {
-            if effect.trigger == "on_appear" {
+            if effect.trigger == "on_appear" || effect.trigger == nil {
                 startAnimation()
             }
         }
@@ -86,7 +86,7 @@ public struct ConfettiOverlay: View {
         }
 
         // Animate particles falling
-        withAnimation(.easeOut(duration: Double(effect.duration_ms) / 1000.0)) {
+        withAnimation(.easeOut(duration: Double(effect.duration_ms ?? 2000) / 1000.0)) {
             particles = particles.map { p in
                 var updated = p
                 updated.position = CGPoint(
@@ -98,7 +98,7 @@ public struct ConfettiOverlay: View {
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + Double(effect.duration_ms) / 1000.0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Double(effect.duration_ms ?? 2000) / 1000.0) {
             isActive = false
         }
     }

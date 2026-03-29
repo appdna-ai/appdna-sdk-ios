@@ -3,19 +3,19 @@ import Foundation
 // MARK: - Screen Config
 
 public struct ScreenConfig: Codable {
-    public let id: String
-    public let name: String
+    public let id: String?
+    public let name: String?
     public let version: Int?
 
     // Presentation
-    public let presentation: String  // fullscreen, modal, bottom_sheet, push
+    public let presentation: String?  // fullscreen, modal, bottom_sheet, push
     public let transition: String?   // slide_up, slide_left, fade, none
 
     // Layout
-    public let layout: ScreenLayout
+    public let layout: ScreenLayout?
 
     // Sections (ordered)
-    public let sections: [ScreenSection]
+    public let sections: [ScreenSection]?
 
     // Background
     public let background: BackgroundConfig?
@@ -57,28 +57,28 @@ public struct ScreenConfig: Codable {
 // MARK: - Flow Config
 
 public struct FlowConfig: Codable {
-    public let id: String
-    public let name: String
+    public let id: String?
+    public let name: String?
     public let version: Int?
 
-    public let screens: [FlowScreenRef]
-    public let start_screen_id: String
-    public let settings: FlowSettings
+    public let screens: [FlowScreenRef]?
+    public let start_screen_id: String?
+    public let settings: FlowSettings?
 
     public let audience_rules: [[String: AnyCodable]]?
     public let trigger_rules: UnifiedTriggerRules?
 }
 
 public struct FlowScreenRef: Codable {
-    public let screen_id: String
-    public let navigation_rules: [NavigationRule]
+    public let screen_id: String?
+    public let navigation_rules: [NavigationRule]?
 }
 
 public struct NavigationRule: Codable {
-    public let condition: String  // always, when_equals, when_not_equals, when_gt, when_lt, when_not_empty
+    public let condition: String?  // always, when_equals, when_not_equals, when_gt, when_lt, when_not_empty
     public let variable: String?
     public let value: AnyCodable?
-    public let target: String     // "next", "end", or screen_id
+    public let target: String?     // "next", "end", or screen_id
     public let transition: String?
 }
 
@@ -92,9 +92,9 @@ public struct FlowSettings: Codable {
 // MARK: - Screen Section
 
 public struct ScreenSection: Codable, Identifiable {
-    public let id: String
-    public let type: String
-    public let data: [String: AnyCodable]
+    public let id: String?
+    public let type: String?
+    public let data: [String: AnyCodable]?
     public let style: SectionStyle?
     public let visibility_condition: VisibilityConditionConfig?
     public let entrance_animation: EntranceAnimationConfig?
@@ -120,7 +120,7 @@ public struct SectionStyle: Codable {
 // MARK: - Layout & Presentation
 
 public struct ScreenLayout: Codable {
-    public let type: String  // scroll, fixed, pager
+    public let type: String?  // scroll, fixed, pager
     public let padding: Double?
     public let spacing: Double?
     public let safe_area: Bool?
@@ -128,7 +128,7 @@ public struct ScreenLayout: Codable {
 }
 
 public struct DismissConfig: Codable {
-    public let enabled: Bool
+    public let enabled: Bool?
     public let style: String?  // x_button, swipe_down, tap_outside, back_button
     public let position: String?  // top_left, top_right
 }
@@ -142,14 +142,14 @@ public struct NavBarConfig: Codable {
 }
 
 public struct SlotConfig: Codable {
-    public let presentation: String  // inline, overlay
+    public let presentation: String?  // inline, overlay
     public let tap_to_expand: Bool?
     public let max_height: Double?
     public let placeholder: PlaceholderConfig?
 }
 
 public struct PlaceholderConfig: Codable {
-    public let type: String  // skeleton, shimmer, none
+    public let type: String?  // skeleton, shimmer, none
     public let height: Double?
 }
 
@@ -190,14 +190,14 @@ public struct ParticleEffectConfig: Codable {
 }
 
 public struct VisibilityConditionConfig: Codable {
-    public let type: String  // always, when_equals, when_not_equals, when_not_empty, when_empty, when_gt, when_lt
+    public let type: String?  // always, when_equals, when_not_equals, when_not_empty, when_empty, when_gt, when_lt
     public let variable: String?
     public let value: AnyCodable?
     public let expression: String?
 }
 
 public struct EntranceAnimationConfig: Codable {
-    public let type: String  // none, fade_in, slide_up, slide_down, slide_left, slide_right, scale_up, bounce, flip
+    public let type: String?  // none, fade_in, slide_up, slide_down, slide_left, slide_right, scale_up, bounce, flip
     public let duration_ms: Int?
     public let delay_ms: Int?
     public let easing: String?  // linear, ease, ease_in, ease_out, ease_in_out, spring
@@ -231,8 +231,8 @@ public struct ScreenIndex: Codable {
 }
 
 public struct ScreenIndexEntry: Codable {
-    public let id: String
-    public let name: String
+    public let id: String?
+    public let name: String?
     public let trigger_rules: UnifiedTriggerRules?
     public let audience_rules: AudienceRuleSet?
     public let priority: Int?
@@ -242,16 +242,16 @@ public struct ScreenIndexEntry: Codable {
 }
 
 public struct SlotAssignment: Codable {
-    public let slot_name: String
-    public let screen_id: String
+    public let slot_name: String?
+    public let screen_id: String?
     public let audience_rules: AudienceRuleSet?
 }
 
 public struct NavigationInterceptionConfig: Codable {
-    public let id: String
-    public let trigger_screen: String
-    public let timing: String  // before, after
-    public let screen_id: String
+    public let id: String?
+    public let trigger_screen: String?
+    public let timing: String?  // before, after
+    public let screen_id: String?
     public let audience_rules: AudienceRuleSet?
     public let user_traits: [TraitCondition]?
     public let frequency: FrequencyConfig?

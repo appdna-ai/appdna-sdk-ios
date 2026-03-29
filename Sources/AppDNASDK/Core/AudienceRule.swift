@@ -3,8 +3,8 @@ import Foundation
 // MARK: - Audience targeting models for SPEC-089c (SDUI engine prerequisite)
 
 public struct AudienceRule: Codable {
-    public let trait: String
-    public let `operator`: String  // "equals", "not_equals", "gt", "lt", "contains", "exists"
+    public let trait: String?
+    public let `operator`: String?  // "equals", "not_equals", "gt", "lt", "contains", "exists"
     public let value: AnyCodable?
 
     enum CodingKeys: String, CodingKey {
@@ -42,9 +42,10 @@ internal enum AudienceRuleEvaluator {
     }
 
     private static func evaluateRule(_ rule: AudienceRule, userTraits: [String: Any]) -> Bool {
-        let traitValue = userTraits[rule.trait]
+        guard let traitKey = rule.trait else { return true }
+        let traitValue = userTraits[traitKey]
 
-        switch rule.operator {
+        switch rule.operator ?? "equals" {
         case "equals", "eq":
             return ConditionEvaluator.valuesEqual(traitValue, rule.value?.value)
         case "not_equals", "neq":

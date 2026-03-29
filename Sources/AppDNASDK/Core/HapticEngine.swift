@@ -5,8 +5,8 @@ public enum HapticType: String, Codable {
 }
 
 public struct HapticConfig: Codable {
-    public let enabled: Bool
-    public let triggers: HapticTriggers
+    public let enabled: Bool?
+    public let triggers: HapticTriggers?
 }
 
 public struct HapticTriggers: Codable {
@@ -41,7 +41,7 @@ public enum HapticEngine {
     }
 
     public static func triggerIfEnabled(_ type: HapticType?, config: HapticConfig?) {
-        guard let config = config, config.enabled, let type = type else { return }
+        guard let config = config, config.enabled == true, let type = type else { return }
         trigger(type)
     }
 }

@@ -56,18 +56,18 @@ public struct BlockStyle: Codable {
 
 /// Shadow definition for block_style.
 public struct BlockShadowStyle: Codable {
-    public var x: Double
-    public var y: Double
-    public var blur: Double
-    public var spread: Double
-    public var color: String
+    public var x: Double?
+    public var y: Double?
+    public var blur: Double?
+    public var spread: Double?
+    public var color: String?
 }
 
 /// Gradient definition for block_style background.
 public struct BlockGradientStyle: Codable {
-    public var angle: Double
-    public var start: String
-    public var end: String
+    public var angle: Double?
+    public var start: String?
+    public var end: String?
 }
 
 // MARK: - Block Style ViewModifier (SPEC-089d §6.1)
@@ -118,9 +118,9 @@ struct BlockStyleModifier: ViewModifier {
     private func backgroundView(_ s: BlockStyle) -> some View {
         if let gradient = s.background_gradient {
             LinearGradient(
-                colors: [Color(hex: gradient.start), Color(hex: gradient.end)],
-                startPoint: gradientStartPoint(angle: gradient.angle),
-                endPoint: gradientEndPoint(angle: gradient.angle)
+                colors: [Color(hex: gradient.start ?? "#000000"), Color(hex: gradient.end ?? "#FFFFFF")],
+                startPoint: gradientStartPoint(angle: gradient.angle ?? 0),
+                endPoint: gradientEndPoint(angle: gradient.angle ?? 0)
             )
         } else if let bgColor = s.background_color {
             Color(hex: bgColor)
@@ -163,7 +163,7 @@ extension View {
 
 /// Condition that determines whether a block should be rendered.
 public struct VisibilityCondition: Codable {
-    public let type: String       // always, when_equals, when_not_equals, when_not_empty, when_empty, when_gt, when_lt, expression
+    public let type: String?       // always, when_equals, when_not_equals, when_not_empty, when_empty, when_gt, when_lt, expression
     public let variable: String?  // dot-path e.g. "responses.step1.age"
     public let value: AnyCodable? // comparison value
     public let expression: String? // for complex expressions
@@ -268,7 +268,7 @@ func toDouble(_ value: Any?) -> Double? {
 
 /// Configuration for entrance animation on a content block.
 public struct EntranceAnimation: Codable {
-    public let type: String       // none, fade_in, slide_up, slide_down, slide_left, slide_right, scale_up, scale_down, bounce, flip
+    public let type: String?       // none, fade_in, slide_up, slide_down, slide_left, slide_right, scale_up, scale_down, bounce, flip
     public let duration_ms: Int?  // 100-2000
     public let delay_ms: Int?     // 0-5000
     public let easing: String?    // linear, ease, ease_in, ease_out, ease_in_out, spring
@@ -314,8 +314,8 @@ public struct FormFieldBlockStyle: Codable {
 /// Option for select, chips, and segmented inputs.
 /// Editor writes "id" + "label"; SDK accepts both "id"/"value" for the identifier.
 public struct InputOption: Codable, Identifiable {
-    public let id: String
-    public let label: String
+    public let id: String?
+    public let label: String?
     public let value: String?
     public let icon: String?
     public let image_url: String?
@@ -326,13 +326,13 @@ public struct InputOption: Codable, Identifiable {
         let rawValue = try container.decodeIfPresent(String.self, forKey: .value)
         self.id = rawId ?? rawValue ?? ""
         self.value = rawValue ?? rawId
-        self.label = try container.decode(String.self, forKey: .label)
+        self.label = try container.decodeIfPresent(String.self, forKey: .label)
         self.icon = try container.decodeIfPresent(String.self, forKey: .icon)
         self.image_url = try container.decodeIfPresent(String.self, forKey: .image_url)
     }
 
     /// Non-optional value — falls back to id if value is nil.
-    public var resolvedValue: String { value ?? id }
+    public var resolvedValue: String { value ?? id ?? "" }
 
     enum CodingKeys: String, CodingKey {
         case id, label, value, icon, image_url
@@ -645,23 +645,23 @@ extension View {
 
 /// A single timeline item for the `timeline` block.
 public struct TimelineItemConfig: Codable, Identifiable {
-    public let id: String
-    public let title: String
+    public let id: String?
+    public let title: String?
     public let subtitle: String?
     public let icon: String?
-    public let status: String  // completed | current | upcoming
+    public let status: String?  // completed | current | upcoming
 }
 
 /// A social login provider entry for the `social_login` block.
 public struct SocialProviderConfig: Codable {
-    public let type: String    // apple, google, email, facebook, github
+    public let type: String?    // apple, google, email, facebook, github
     public let label: String?
     public let enabled: Bool?
 }
 
 /// A single item for the `animated_loading` checklist.
 public struct LoadingItemConfig: Codable {
-    public let label: String
+    public let label: String?
     public let duration_ms: Int?
     public let icon: String?
 }
@@ -676,17 +676,17 @@ public struct CountdownLabelsConfig: Codable {
 
 /// A pricing plan entry for the `pricing_card` block.
 public struct PricingPlanConfig: Codable, Identifiable {
-    public let id: String
-    public let label: String
-    public let price: String
-    public let period: String
+    public let id: String?
+    public let label: String?
+    public let price: String?
+    public let period: String?
     public let badge: String?
     public let is_highlighted: Bool?
 }
 
 /// A date wheel picker column for the `date_wheel_picker` block.
 public struct DateWheelColumnConfig: Codable {
-    public let type: String   // day | month | year | custom
+    public let type: String?   // day | month | year | custom
     public let label: String?
     public let values: [String]?
 }
@@ -1000,5 +1000,188 @@ public struct ContentBlock: Codable, Identifiable {
         case visibility_condition, entrance_animation, pressed_style, bindings
         case element_width, element_height
         case overflow
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // Core fields — provide safe defaults so missing data doesn't crash
+        self.id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        self.type = try c.decodeIfPresent(ContentBlockType.self, forKey: .type) ?? .unknown
+        // All remaining fields are optional — decode normally
+        self.text = try c.decodeIfPresent(String.self, forKey: .text)
+        self.style = try c.decodeIfPresent(TextStyleConfig.self, forKey: .style)
+        self.level = try c.decodeIfPresent(Int.self, forKey: .level)
+        self.image_url = try c.decodeIfPresent(String.self, forKey: .image_url)
+        self.alt = try c.decodeIfPresent(String.self, forKey: .alt)
+        self.corner_radius = try c.decodeIfPresent(Double.self, forKey: .corner_radius)
+        self.height = try c.decodeIfPresent(Double.self, forKey: .height)
+        self.variant = try c.decodeIfPresent(String.self, forKey: .variant)
+        self.action = try c.decodeIfPresent(String.self, forKey: .action)
+        self.action_value = try c.decodeIfPresent(String.self, forKey: .action_value)
+        self.bg_color = try c.decodeIfPresent(String.self, forKey: .bg_color)
+        self.text_color = try c.decodeIfPresent(String.self, forKey: .text_color)
+        self.button_corner_radius = try c.decodeIfPresent(Double.self, forKey: .button_corner_radius)
+        self.spacer_height = try c.decodeIfPresent(Double.self, forKey: .spacer_height)
+        self.items = try c.decodeIfPresent([String].self, forKey: .items)
+        self.list_style = try c.decodeIfPresent(String.self, forKey: .list_style)
+        self.divider_color = try c.decodeIfPresent(String.self, forKey: .divider_color)
+        self.divider_thickness = try c.decodeIfPresent(Double.self, forKey: .divider_thickness)
+        self.divider_margin_y = try c.decodeIfPresent(Double.self, forKey: .divider_margin_y)
+        self.badge_text = try c.decodeIfPresent(String.self, forKey: .badge_text)
+        self.badge_bg_color = try c.decodeIfPresent(String.self, forKey: .badge_bg_color)
+        self.badge_text_color = try c.decodeIfPresent(String.self, forKey: .badge_text_color)
+        self.badge_corner_radius = try c.decodeIfPresent(Double.self, forKey: .badge_corner_radius)
+        self.icon_emoji = try c.decodeIfPresent(String.self, forKey: .icon_emoji)
+        self.icon_size = try c.decodeIfPresent(Double.self, forKey: .icon_size)
+        self.icon_alignment = try c.decodeIfPresent(String.self, forKey: .icon_alignment)
+        self.toggle_label = try c.decodeIfPresent(String.self, forKey: .toggle_label)
+        self.toggle_description = try c.decodeIfPresent(String.self, forKey: .toggle_description)
+        self.toggle_default = try c.decodeIfPresent(Bool.self, forKey: .toggle_default)
+        self.video_url = try c.decodeIfPresent(String.self, forKey: .video_url)
+        self.video_thumbnail_url = try c.decodeIfPresent(String.self, forKey: .video_thumbnail_url)
+        self.video_height = try c.decodeIfPresent(Double.self, forKey: .video_height)
+        self.video_corner_radius = try c.decodeIfPresent(Double.self, forKey: .video_corner_radius)
+        self.autoplay = try c.decodeIfPresent(Bool.self, forKey: .autoplay)
+        self.loop = try c.decodeIfPresent(Bool.self, forKey: .loop)
+        self.muted = try c.decodeIfPresent(Bool.self, forKey: .muted)
+        self.controls = try c.decodeIfPresent(Bool.self, forKey: .controls)
+        self.lottie_url = try c.decodeIfPresent(String.self, forKey: .lottie_url)
+        self.lottie_speed = try c.decodeIfPresent(Double.self, forKey: .lottie_speed)
+        self.lottie_width = try c.decodeIfPresent(Double.self, forKey: .lottie_width)
+        self.lottie_height = try c.decodeIfPresent(Double.self, forKey: .lottie_height)
+        self.play_on_scroll = try c.decodeIfPresent(Bool.self, forKey: .play_on_scroll)
+        self.play_on_tap = try c.decodeIfPresent(Bool.self, forKey: .play_on_tap)
+        self.rive_url = try c.decodeIfPresent(String.self, forKey: .rive_url)
+        self.artboard = try c.decodeIfPresent(String.self, forKey: .artboard)
+        self.state_machine = try c.decodeIfPresent(String.self, forKey: .state_machine)
+        self.trigger_on_step_complete = try c.decodeIfPresent(String.self, forKey: .trigger_on_step_complete)
+        self.icon_ref = try c.decodeIfPresent(IconReference.self, forKey: .icon_ref)
+        self.block_style = try c.decodeIfPresent(BlockStyle.self, forKey: .block_style)
+        self.vertical_align = try c.decodeIfPresent(String.self, forKey: .vertical_align)
+        self.horizontal_align = try c.decodeIfPresent(String.self, forKey: .horizontal_align)
+        self.vertical_offset = try c.decodeIfPresent(Double.self, forKey: .vertical_offset)
+        self.horizontal_offset = try c.decodeIfPresent(Double.self, forKey: .horizontal_offset)
+        self.dot_count = try c.decodeIfPresent(Int.self, forKey: .dot_count)
+        self.active_index = try c.decodeIfPresent(Int.self, forKey: .active_index)
+        self.active_color = try c.decodeIfPresent(String.self, forKey: .active_color)
+        self.inactive_color = try c.decodeIfPresent(String.self, forKey: .inactive_color)
+        self.dot_size = try c.decodeIfPresent(Double.self, forKey: .dot_size)
+        self.dot_spacing = try c.decodeIfPresent(Double.self, forKey: .dot_spacing)
+        self.active_dot_width = try c.decodeIfPresent(Double.self, forKey: .active_dot_width)
+        self.alignment = try c.decodeIfPresent(String.self, forKey: .alignment)
+        self.providers = try c.decodeIfPresent([SocialProviderConfig].self, forKey: .providers)
+        self.button_style = try c.decodeIfPresent(String.self, forKey: .button_style)
+        self.button_height = try c.decodeIfPresent(Double.self, forKey: .button_height)
+        self.spacing = try c.decodeIfPresent(Double.self, forKey: .spacing)
+        self.show_divider = try c.decodeIfPresent(Bool.self, forKey: .show_divider)
+        self.divider_text = try c.decodeIfPresent(String.self, forKey: .divider_text)
+        self.timer_variant = try c.decodeIfPresent(String.self, forKey: .timer_variant)
+        self.duration_seconds = try c.decodeIfPresent(Int.self, forKey: .duration_seconds)
+        self.show_days = try c.decodeIfPresent(Bool.self, forKey: .show_days)
+        self.show_hours = try c.decodeIfPresent(Bool.self, forKey: .show_hours)
+        self.show_minutes = try c.decodeIfPresent(Bool.self, forKey: .show_minutes)
+        self.show_seconds = try c.decodeIfPresent(Bool.self, forKey: .show_seconds)
+        self.labels = try c.decodeIfPresent(CountdownLabelsConfig.self, forKey: .labels)
+        self.on_expire_action = try c.decodeIfPresent(String.self, forKey: .on_expire_action)
+        self.expired_text = try c.decodeIfPresent(String.self, forKey: .expired_text)
+        self.accent_color = try c.decodeIfPresent(String.self, forKey: .accent_color)
+        self.font_size = try c.decodeIfPresent(Double.self, forKey: .font_size)
+        self.max_stars = try c.decodeIfPresent(Int.self, forKey: .max_stars)
+        self.default_rating = try c.decodeIfPresent(Double.self, forKey: .default_rating)
+        self.star_size = try c.decodeIfPresent(Double.self, forKey: .star_size)
+        self.filled_color = try c.decodeIfPresent(String.self, forKey: .filled_color)
+        self.empty_color = try c.decodeIfPresent(String.self, forKey: .empty_color)
+        self.allow_half = try c.decodeIfPresent(Bool.self, forKey: .allow_half)
+        self.field_id = try c.decodeIfPresent(String.self, forKey: .field_id)
+        self.rating_label = try c.decodeIfPresent(String.self, forKey: .rating_label)
+        self.markdown_content = try c.decodeIfPresent(String.self, forKey: .markdown_content)
+        self.rich_text_variant = try c.decodeIfPresent(String.self, forKey: .rich_text_variant)
+        self.base_style = try c.decodeIfPresent(TextStyleConfig.self, forKey: .base_style)
+        self.link_color = try c.decodeIfPresent(String.self, forKey: .link_color)
+        self.progress_variant = try c.decodeIfPresent(String.self, forKey: .progress_variant)
+        self.progress_value = try c.decodeIfPresent(Double.self, forKey: .progress_value)
+        self.total_segments = try c.decodeIfPresent(Int.self, forKey: .total_segments)
+        self.filled_segments = try c.decodeIfPresent(Int.self, forKey: .filled_segments)
+        self.bar_height = try c.decodeIfPresent(Double.self, forKey: .bar_height)
+        self.bar_color = try c.decodeIfPresent(String.self, forKey: .bar_color)
+        self.track_color = try c.decodeIfPresent(String.self, forKey: .track_color)
+        self.show_label = try c.decodeIfPresent(Bool.self, forKey: .show_label)
+        self.segment_gap = try c.decodeIfPresent(Double.self, forKey: .segment_gap)
+        self.timeline_items = try c.decodeIfPresent([TimelineItemConfig].self, forKey: .timeline_items)
+        self.line_color = try c.decodeIfPresent(String.self, forKey: .line_color)
+        self.completed_color = try c.decodeIfPresent(String.self, forKey: .completed_color)
+        self.current_color = try c.decodeIfPresent(String.self, forKey: .current_color)
+        self.upcoming_color = try c.decodeIfPresent(String.self, forKey: .upcoming_color)
+        self.show_line = try c.decodeIfPresent(Bool.self, forKey: .show_line)
+        self.compact = try c.decodeIfPresent(Bool.self, forKey: .compact)
+        self.title_style = try c.decodeIfPresent(TextStyleConfig.self, forKey: .title_style)
+        self.subtitle_style = try c.decodeIfPresent(TextStyleConfig.self, forKey: .subtitle_style)
+        self.loading_variant = try c.decodeIfPresent(String.self, forKey: .loading_variant)
+        self.loading_items = try c.decodeIfPresent([LoadingItemConfig].self, forKey: .loading_items)
+        self.progress_color = try c.decodeIfPresent(String.self, forKey: .progress_color)
+        self.check_color = try c.decodeIfPresent(String.self, forKey: .check_color)
+        self.total_duration_ms = try c.decodeIfPresent(Int.self, forKey: .total_duration_ms)
+        self.auto_advance = try c.decodeIfPresent(Bool.self, forKey: .auto_advance)
+        self.show_percentage = try c.decodeIfPresent(Bool.self, forKey: .show_percentage)
+        self.gauge_value = try c.decodeIfPresent(Double.self, forKey: .gauge_value)
+        self.max_value = try c.decodeIfPresent(Double.self, forKey: .max_value)
+        self.sublabel = try c.decodeIfPresent(String.self, forKey: .sublabel)
+        self.stroke_width = try c.decodeIfPresent(Double.self, forKey: .stroke_width)
+        self.label_color = try c.decodeIfPresent(String.self, forKey: .label_color)
+        self.label_font_size = try c.decodeIfPresent(Double.self, forKey: .label_font_size)
+        self.animate = try c.decodeIfPresent(Bool.self, forKey: .animate)
+        self.animation_duration_ms = try c.decodeIfPresent(Int.self, forKey: .animation_duration_ms)
+        self.columns = try c.decodeIfPresent([DateWheelColumnConfig].self, forKey: .columns)
+        self.default_date_value = try c.decodeIfPresent(String.self, forKey: .default_date_value)
+        self.min_date = try c.decodeIfPresent(String.self, forKey: .min_date)
+        self.max_date = try c.decodeIfPresent(String.self, forKey: .max_date)
+        self.highlight_color = try c.decodeIfPresent(String.self, forKey: .highlight_color)
+        self.haptic_on_scroll = try c.decodeIfPresent(Bool.self, forKey: .haptic_on_scroll)
+        self.children = try c.decodeIfPresent([ContentBlock].self, forKey: .children)
+        self.z_index = try c.decodeIfPresent(Double.self, forKey: .z_index)
+        self.gap = try c.decodeIfPresent(Double.self, forKey: .gap)
+        self.wrap = try c.decodeIfPresent(Bool.self, forKey: .wrap)
+        self.justify = try c.decodeIfPresent(String.self, forKey: .justify)
+        self.align_items = try c.decodeIfPresent(String.self, forKey: .align_items)
+        self.row_direction = try c.decodeIfPresent(String.self, forKey: .row_direction)
+        self.row_distribution = try c.decodeIfPresent(String.self, forKey: .row_distribution)
+        self.row_child_fill = try c.decodeIfPresent(Bool.self, forKey: .row_child_fill)
+        self.view_key = try c.decodeIfPresent(String.self, forKey: .view_key)
+        self.custom_config = try c.decodeIfPresent([String: AnyCodable].self, forKey: .custom_config)
+        self.placeholder_image_url = try c.decodeIfPresent(String.self, forKey: .placeholder_image_url)
+        self.placeholder_text = try c.decodeIfPresent(String.self, forKey: .placeholder_text)
+        self.particle_type = try c.decodeIfPresent(String.self, forKey: .particle_type)
+        self.density = try c.decodeIfPresent(String.self, forKey: .density)
+        self.speed = try c.decodeIfPresent(String.self, forKey: .speed)
+        self.secondary_color = try c.decodeIfPresent(String.self, forKey: .secondary_color)
+        self.size_range = try c.decodeIfPresent([Double].self, forKey: .size_range)
+        self.fullscreen = try c.decodeIfPresent(Bool.self, forKey: .fullscreen)
+        self.min_value = try c.decodeIfPresent(Double.self, forKey: .min_value)
+        self.max_value_picker = try c.decodeIfPresent(Double.self, forKey: .max_value_picker)
+        self.step_value = try c.decodeIfPresent(Double.self, forKey: .step_value)
+        self.default_picker_value = try c.decodeIfPresent(Double.self, forKey: .default_picker_value)
+        self.unit = try c.decodeIfPresent(String.self, forKey: .unit)
+        self.unit_position = try c.decodeIfPresent(String.self, forKey: .unit_position)
+        self.visible_items = try c.decodeIfPresent(Int.self, forKey: .visible_items)
+        self.pulse_color = try c.decodeIfPresent(String.self, forKey: .pulse_color)
+        self.pulse_ring_count = try c.decodeIfPresent(Int.self, forKey: .pulse_ring_count)
+        self.pulse_speed = try c.decodeIfPresent(Double.self, forKey: .pulse_speed)
+        self.border_width = try c.decodeIfPresent(Double.self, forKey: .border_width)
+        self.border_color = try c.decodeIfPresent(String.self, forKey: .border_color)
+        self.pricing_plans = try c.decodeIfPresent([PricingPlanConfig].self, forKey: .pricing_plans)
+        self.pricing_layout = try c.decodeIfPresent(String.self, forKey: .pricing_layout)
+        self.field_label = try c.decodeIfPresent(String.self, forKey: .field_label)
+        self.field_placeholder = try c.decodeIfPresent(String.self, forKey: .field_placeholder)
+        self.field_required = try c.decodeIfPresent(Bool.self, forKey: .field_required)
+        self.field_style = try c.decodeIfPresent(FormFieldBlockStyle.self, forKey: .field_style)
+        self.field_options = try c.decodeIfPresent([InputOption].self, forKey: .field_options)
+        self.field_config = try c.decodeIfPresent([String: AnyCodable].self, forKey: .field_config)
+        self.visibility_condition = try c.decodeIfPresent(VisibilityCondition.self, forKey: .visibility_condition)
+        self.entrance_animation = try c.decodeIfPresent(EntranceAnimation.self, forKey: .entrance_animation)
+        self.pressed_style = try c.decodeIfPresent(PressedStyle.self, forKey: .pressed_style)
+        self.bindings = try c.decodeIfPresent([String: String].self, forKey: .bindings)
+        self.element_width = try c.decodeIfPresent(String.self, forKey: .element_width)
+        self.element_height = try c.decodeIfPresent(String.self, forKey: .element_height)
+        self.overflow = try c.decodeIfPresent(String.self, forKey: .overflow)
     }
 }

@@ -48,10 +48,18 @@ struct PaywallLayout: Codable {
 }
 
 struct PaywallSection: Codable {
-    let type: String // "header", "features", "plans", "cta", "social_proof", "guarantee", "image", "spacer", "testimonial", "lottie", "video", "rive", "countdown", "legal", "divider", "sticky_footer", "card", "carousel", "timeline", "icon_grid", "comparison_table", "promo_input", "toggle", "reviews_carousel"
+    let _type: String?
     let data: PaywallSectionData?
     // SPEC-084: Per-section styling
     let style: SectionStyleConfig?
+
+    /// Non-optional accessor defaulting to "unknown" when Firestore omits the field.
+    var type: String { _type ?? "unknown" }
+
+    enum CodingKeys: String, CodingKey {
+        case _type = "type"
+        case data, style
+    }
 }
 
 struct PaywallSectionData: Codable {
@@ -321,10 +329,10 @@ struct PaywallSectionData: Codable {
 }
 
 struct PaywallPlan: Codable, Identifiable {
-    let id: String
-    let productId: String
-    let name: String
-    let price: String
+    let id: String?
+    let productId: String?
+    let name: String?
+    let price: String?
     let period: String?
     let badge: String?
     let trialDuration: String?
@@ -339,12 +347,12 @@ struct PaywallPlan: Codable, Identifiable {
 }
 
 struct PaywallCTA: Codable {
-    let text: String
+    let text: String?
     let style: String? // "primary", "gradient"
 }
 
 struct PaywallDismiss: Codable {
-    let type: String // "x_button", "swipe", "text_link"
+    let type: String? // "x_button", "swipe", "text_link"
     let delaySeconds: Int?
     let text: String?
 
@@ -355,7 +363,7 @@ struct PaywallDismiss: Codable {
 }
 
 struct PaywallBackground: Codable {
-    let type: String // "color", "gradient", "image", "video"
+    let type: String? // "color", "gradient", "image", "video"
     let value: String? // hex color, gradient def, image URL, or video URL
     let colors: [String]?
     // SPEC-085: Video background
@@ -366,12 +374,12 @@ struct PaywallBackground: Codable {
 // MARK: - SPEC-089d: Codable sub-types for new paywall sections
 
 struct PaywallLink: Codable {
-    let label: String
-    let url: String
+    let label: String?
+    let url: String?
 }
 
 struct PaywallCarouselPage: Codable, Identifiable {
-    let id: String
+    let id: String?
     let children: [PaywallSection]?
 
     enum CodingKeys: String, CodingKey {
@@ -393,23 +401,23 @@ struct PaywallGenericItem: Codable {
 }
 
 struct PaywallTableColumn: Codable {
-    let label: String
+    let label: String?
     let highlighted: Bool?
 }
 
 struct PaywallTableRow: Codable {
-    let feature: String
-    let values: [String]
+    let feature: String?
+    let values: [String]?
 }
 
 struct PaywallReview: Codable, Identifiable {
-    let text: String
-    let author: String
+    let text: String?
+    let author: String?
     let rating: Double?
     let avatarUrl: String?
     let date: String?
 
-    var id: String { author + (text.prefix(20).description) }
+    var id: String { (author ?? "unknown") + ((text ?? "").prefix(20).description) }
 
     enum CodingKeys: String, CodingKey {
         case text, author, rating, date

@@ -1,8 +1,8 @@
 import SwiftUI
 
 public struct IconReference: Codable {
-    public let library: String   // "lucide", "sf-symbols", "material", "emoji"
-    public let name: String
+    public let library: String?   // "lucide", "sf-symbols", "material", "emoji"
+    public let name: String?
     public let color: String?
     public let size: Double?
 }
@@ -27,19 +27,20 @@ public struct IconView: View {
 
     public var body: some View {
         Group {
-            switch ref.library {
+            let iconName = ref.name ?? ""
+            switch ref.library ?? "emoji" {
             case "sf-symbols":
-                Image(systemName: ref.name)
+                Image(systemName: iconName)
                     .font(.system(size: iconSize))
                     .foregroundColor(iconColor)
 
             case "lucide":
                 // Map common Lucide names to SF Symbols
-                if let sfName = IconMapping.lucideToSFSymbol[ref.name] {
+                if let sfName = IconMapping.lucideToSFSymbol[iconName] {
                     Image(systemName: sfName)
                         .font(.system(size: iconSize))
                         .foregroundColor(iconColor)
-                } else if let emoji = IconMapping.lucideToEmoji[ref.name] {
+                } else if let emoji = IconMapping.lucideToEmoji[iconName] {
                     Text(emoji)
                         .font(.system(size: iconSize))
                 } else {
@@ -50,11 +51,11 @@ public struct IconView: View {
 
             case "material":
                 // Map Material Icons to SF Symbols
-                if let sfName = IconMapping.materialToSFSymbol[ref.name] {
+                if let sfName = IconMapping.materialToSFSymbol[iconName] {
                     Image(systemName: sfName)
                         .font(.system(size: iconSize))
                         .foregroundColor(iconColor)
-                } else if let emoji = IconMapping.materialToEmoji[ref.name] {
+                } else if let emoji = IconMapping.materialToEmoji[iconName] {
                     Text(emoji)
                         .font(.system(size: iconSize))
                 } else {
@@ -64,11 +65,11 @@ public struct IconView: View {
                 }
 
             case "emoji":
-                Text(ref.name)
+                Text(iconName)
                     .font(.system(size: iconSize))
 
             default:
-                Text(ref.name)
+                Text(iconName)
                     .font(.system(size: iconSize))
             }
         }

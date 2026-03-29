@@ -267,7 +267,7 @@ struct OnboardingFlowHost: View {
         if delegate != nil {
             // Client-side hook
             executeClientHook(step: step, data: data)
-        } else if let hook = step.hook, hook.enabled {
+        } else if let hook = step.hook, hook.enabled == true {
             // Server-side hook (P1)
             executeServerHook(step: step, data: data, hookConfig: hook)
         } else {

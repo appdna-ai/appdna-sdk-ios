@@ -103,7 +103,7 @@ internal class ScreenManager {
         do {
             let config = try JSONDecoder().decode(ScreenConfig.self, from: data)
             let startTime = Date()
-            presentScreen(config, screenId: config.id, startTime: startTime, completion: completion)
+            presentScreen(config, screenId: config.id ?? "preview", startTime: startTime, completion: completion)
         } catch {
             print("[SDUI] Failed to parse preview JSON: \(error)")
             completion?(ScreenResult(screenId: "preview", dismissed: true, error: .configParseError))
@@ -115,7 +115,7 @@ internal class ScreenManager {
 
     private func presentScreen(_ config: ScreenConfig, screenId: String, startTime: Date, completion: ((ScreenResult) -> Void)?) {
         // Validate config (AC-088, AC-089)
-        let sections = config.sections
+        let sections = config.sections ?? []
         guard !sections.isEmpty else {
             completion?(ScreenResult(screenId: screenId, dismissed: true, error: .configInvalid))
             nestingDepth -= 1

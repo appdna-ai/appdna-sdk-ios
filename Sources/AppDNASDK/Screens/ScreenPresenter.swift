@@ -14,7 +14,7 @@ internal class ScreenPresenter {
         let renderer = ScreenRenderer(config: config, context: contextHolder)
         let hostingController = ScreenHostingController(rootView: AnyView(renderer), onDismiss: onDismiss)
 
-        switch config.presentation {
+        switch config.presentation ?? "modal" {
         case "fullscreen":
             hostingController.modalPresentationStyle = .fullScreen
             hostingController.modalTransitionStyle = transitionStyle(config.transition)

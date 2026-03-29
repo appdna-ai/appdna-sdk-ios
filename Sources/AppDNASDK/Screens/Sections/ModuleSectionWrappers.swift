@@ -9,15 +9,15 @@ internal enum PaywallSectionWrapper: SectionRenderer {
         // The section.data contains PaywallSectionData-compatible JSON
         return AnyView(
             VStack(spacing: 8) {
-                Text("[\(section.type)]")
+                Text("[\(section.type ?? "unknown")]")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 // In production, this would call the actual PaywallRenderer section view
                 // For now, render a placeholder that shows the section type
-                if let title = section.data["title"]?.value as? String {
+                if let title = section.data?["title"]?.value as? String {
                     Text(title).font(.headline)
                 }
-                if let subtitle = section.data["subtitle"]?.value as? String {
+                if let subtitle = section.data?["subtitle"]?.value as? String {
                     Text(subtitle).font(.subheadline).foregroundColor(.secondary)
                 }
             }
@@ -32,12 +32,12 @@ internal enum SurveySectionWrapper: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
         return AnyView(
             VStack(spacing: 8) {
-                if let questionText = section.data["text"]?.value as? String {
+                if let questionText = section.data?["text"]?.value as? String {
                     Text(questionText).font(.body)
                 }
                 // Survey sections capture responses into context.responses
                 // In production, this would render the actual survey question UI
-                Text("[\(section.type) section]")
+                Text("[\(section.type ?? "unknown") section]")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -52,10 +52,10 @@ internal enum MessageSectionWrapper: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
         return AnyView(
             VStack(spacing: 8) {
-                if let title = section.data["title"]?.value as? String {
+                if let title = section.data?["title"]?.value as? String {
                     Text(title).font(.headline)
                 }
-                if let body = section.data["body"]?.value as? String {
+                if let body = section.data?["body"]?.value as? String {
                     Text(body).font(.body)
                 }
             }
@@ -68,16 +68,16 @@ internal enum MessageSectionWrapper: SectionRenderer {
 
 internal enum OnboardingSectionWrapper: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
-        switch section.type {
+        switch section.type ?? "unknown" {
         case "onboarding_step":
             // Render content blocks from step config
-            let blocks = section.data["content_blocks"]?.value
+            let blocks = section.data?["content_blocks"]?.value
             if blocks != nil {
                 return ContentBlocksSectionRenderer.render(
                     section: ScreenSection(
                         id: section.id,
                         type: "content_blocks",
-                        data: ["blocks": section.data["content_blocks"] ?? AnyCodable([])],
+                        data: ["blocks": section.data?["content_blocks"] ?? AnyCodable([])],
                         style: section.style,
                         visibility_condition: section.visibility_condition,
                         entrance_animation: section.entrance_animation,
@@ -89,8 +89,8 @@ internal enum OnboardingSectionWrapper: SectionRenderer {
             return AnyView(EmptyView())
 
         case "progress_indicator":
-            let current = section.data["current"]?.value as? Int ?? context.currentScreenIndex
-            let total = section.data["total"]?.value as? Int ?? context.totalScreens
+            let current = section.data?["current"]?.value as? Int ?? context.currentScreenIndex
+            let total = section.data?["total"]?.value as? Int ?? context.totalScreens
             return AnyView(
                 HStack(spacing: 4) {
                     ForEach(0..<total, id: \.self) { i in
@@ -103,9 +103,9 @@ internal enum OnboardingSectionWrapper: SectionRenderer {
             )
 
         case "navigation_controls":
-            let showBack = section.data["show_back"]?.value as? Bool ?? true
-            let showSkip = section.data["show_skip"]?.value as? Bool ?? false
-            let ctaText = section.data["cta_text"]?.value as? String ?? "Next"
+            let showBack = section.data?["show_back"]?.value as? Bool ?? true
+            let showSkip = section.data?["show_skip"]?.value as? Bool ?? false
+            let ctaText = section.data?["cta_text"]?.value as? String ?? "Next"
 
             return AnyView(
                 HStack {

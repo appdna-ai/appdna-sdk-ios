@@ -4,17 +4,17 @@ import Foundation
 
 /// Root config from Firestore `/config/messages`.
 struct MessageRoot: Codable {
-    let version: Int
-    let messages: [String: MessageConfig]
+    let version: Int?
+    let messages: [String: MessageConfig]?
 }
 
 /// A single in-app message definition.
 public struct MessageConfig: Codable {
-    public let name: String
-    public let message_type: MessageType
-    public let content: MessageContent
-    public let trigger_rules: TriggerRules
-    public let priority: Int
+    public let name: String?
+    public let message_type: MessageType?
+    public let content: MessageContent?
+    public let trigger_rules: TriggerRules?
+    public let priority: Int?
     public let start_date: String?
     public let end_date: String?
 }
@@ -24,6 +24,13 @@ public enum MessageType: String, Codable {
     case modal
     case fullscreen
     case tooltip
+    case unknown
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        self = MessageType(rawValue: rawValue) ?? .unknown
+    }
 }
 
 /// Message display content.
@@ -56,26 +63,39 @@ public struct MessageContent: Codable {
 }
 
 public struct CTAAction: Codable {
-    public let type: CTAActionType
+    public let type: CTAActionType?
     public let url: String?
 
     public enum CTAActionType: String, Codable {
         case dismiss
         case deep_link
         case open_url
+        case unknown
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            let rawValue = try container.decode(String.self)
+            self = CTAActionType(rawValue: rawValue) ?? .unknown
+        }
     }
 }
 
 public enum BannerPosition: String, Codable {
     case top
     case bottom
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        self = BannerPosition(rawValue: rawValue) ?? .bottom
+    }
 }
 
 /// Rules that determine when a message triggers.
 public struct TriggerRules: Codable {
-    public let event: String
+    public let event: String?
     public let conditions: [TriggerCondition]?
-    public let frequency: MessageFrequency
+    public let frequency: MessageFrequency?
     public let max_displays: Int?
     public let delay_seconds: Int?
 }
@@ -85,13 +105,19 @@ public enum MessageFrequency: String, Codable {
     case once_per_session
     case every_time
     case max_times
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        self = MessageFrequency(rawValue: rawValue) ?? .once
+    }
 }
 
 /// A condition that must be met for a message to trigger.
 public struct TriggerCondition: Codable {
-    public let field: String
-    public let `operator`: ConditionOperator
-    public let value: AnyCodable
+    public let field: String?
+    public let `operator`: ConditionOperator?
+    public let value: AnyCodable?
 
     public enum ConditionOperator: String, Codable {
         case eq
@@ -100,5 +126,11 @@ public struct TriggerCondition: Codable {
         case gt
         case lt
         case contains
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            let rawValue = try container.decode(String.self)
+            self = ConditionOperator(rawValue: rawValue) ?? .eq
+        }
     }
 }

@@ -33,8 +33,8 @@ final class ExperimentManager {
         guard let variant = ExperimentBucketer.assignVariant(
             experimentId: experimentId,
             userId: userId,
-            salt: config.salt,
-            variants: config.variants
+            salt: config.salt ?? experimentId,
+            variants: config.variants ?? []
         ) else {
             return nil
         }
@@ -60,8 +60,8 @@ final class ExperimentManager {
         guard let variantId = ExperimentBucketer.assignVariant(
             experimentId: experimentId,
             userId: userId,
-            salt: config.salt,
-            variants: config.variants
+            salt: config.salt ?? experimentId,
+            variants: config.variants ?? []
         ) else {
             return nil
         }
@@ -70,7 +70,7 @@ final class ExperimentManager {
         trackExposure(experimentId: experimentId, variant: variantId)
 
         // Find variant and return config value
-        guard let variant = config.variants.first(where: { $0.id == variantId }),
+        guard let variant = (config.variants ?? []).first(where: { $0.id == variantId }),
               let payload = variant.payload else {
             return nil
         }
@@ -99,11 +99,11 @@ final class ExperimentManager {
         }
 
         guard config.status == "running" else {
-            Log.debug("Experiment '\(experimentId)' is not running (status: \(config.status))")
+            Log.debug("Experiment '\(experimentId)' is not running (status: \(config.status ?? "unknown"))")
             return nil
         }
 
-        guard config.platforms.contains("ios") else {
+        guard (config.platforms ?? []).contains("ios") else {
             Log.debug("Experiment '\(experimentId)' does not target iOS")
             return nil
         }

@@ -15,15 +15,15 @@ public struct UnifiedTriggerRules: Codable {
 }
 
 public struct EventTrigger: Codable {
-    public let event_name: String
+    public let event_name: String?
     public let conditions: [UnifiedTriggerCondition]?
 }
 
 /// Trigger condition for unified rules. Named `UnifiedTriggerCondition` to avoid
 /// collision with the existing `TriggerCondition` in MessageConfig.swift.
 public struct UnifiedTriggerCondition: Codable {
-    public let field: String
-    public let `operator`: String
+    public let field: String?
+    public let `operator`: String?
     public let value: AnyCodable?
 
     enum CodingKeys: String, CodingKey {
@@ -45,8 +45,8 @@ public struct TimeTrigger: Codable {
 }
 
 public struct TraitCondition: Codable {
-    public let trait: String
-    public let `operator`: String
+    public let trait: String?
+    public let `operator`: String?
     public let value: AnyCodable?
 
     enum CodingKeys: String, CodingKey {

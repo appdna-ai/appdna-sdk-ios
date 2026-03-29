@@ -14,15 +14,17 @@ internal class FlowManager: ObservableObject {
 
     var onComplete: ((FlowResult) -> Void)?
 
+    private var flowScreens: [FlowScreenRef] { flowConfig.screens ?? [] }
+
     var currentScreen: ScreenConfig? {
-        guard currentScreenIndex < flowConfig.screens.count else { return nil }
-        let screenId = flowConfig.screens[currentScreenIndex].screen_id
+        guard currentScreenIndex < flowScreens.count else { return nil }
+        guard let screenId = flowScreens[currentScreenIndex].screen_id else { return nil }
         return screens[screenId]
     }
 
     var currentScreenId: String? {
-        guard currentScreenIndex < flowConfig.screens.count else { return nil }
-        return flowConfig.screens[currentScreenIndex].screen_id
+        guard currentScreenIndex < flowScreens.count else { return nil }
+        return flowScreens[currentScreenIndex].screen_id
     }
 
     init(flowConfig: FlowConfig, screens: [String: ScreenConfig]) {
@@ -30,7 +32,7 @@ internal class FlowManager: ObservableObject {
         self.screens = screens
 
         // Start from the configured start screen
-        if let startIdx = flowConfig.screens.firstIndex(where: { $0.screen_id == flowConfig.start_screen_id }) {
+        if let startIdx = flowScreens.firstIndex(where: { $0.screen_id == flowConfig.start_screen_id }) {
             self.currentScreenIndex = startIdx
         }
 
@@ -55,23 +57,23 @@ internal class FlowManager: ObservableObject {
     }
 
     private func advanceToNextScreen() {
-        guard currentScreenIndex < flowConfig.screens.count else {
+        guard currentScreenIndex < flowScreens.count else {
             completeFlow()
             return
         }
 
-        let currentRef = flowConfig.screens[currentScreenIndex]
+        let currentRef = flowScreens[currentScreenIndex]
 
         // Evaluate navigation rules in array order, first match wins (§16.15)
-        for rule in currentRef.navigation_rules {
+        for rule in currentRef.navigation_rules ?? [] {
             if evaluateCondition(rule) {
-                switch rule.target {
+                switch rule.target ?? "next" {
                 case "next":
                     moveToNext()
                 case "end":
                     completeFlow()
                 default:
-                    navigateToScreen(rule.target)
+                    navigateToScreen(rule.target ?? "next")
                 }
                 return
             }
@@ -82,7 +84,7 @@ internal class FlowManager: ObservableObject {
     }
 
     private func moveToNext() {
-        if currentScreenIndex + 1 < flowConfig.screens.count {
+        if currentScreenIndex + 1 < flowScreens.count {
             if let screenId = currentScreenId {
                 navigationStack.append(screenId)
             }
@@ -97,14 +99,14 @@ internal class FlowManager: ObservableObject {
 
     private func navigateBack() {
         if let previousScreenId = navigationStack.popLast() {
-            if let index = flowConfig.screens.firstIndex(where: { $0.screen_id == previousScreenId }) {
+            if let index = flowScreens.firstIndex(where: { $0.screen_id == previousScreenId }) {
                 currentScreenIndex = index
             }
         }
     }
 
     private func navigateToScreen(_ screenId: String) {
-        if let index = flowConfig.screens.firstIndex(where: { $0.screen_id == screenId }) {
+        if let index = flowScreens.firstIndex(where: { $0.screen_id == screenId }) {
             if let currentId = currentScreenId {
                 navigationStack.append(currentId)
             }
@@ -116,7 +118,7 @@ internal class FlowManager: ObservableObject {
     private func completeFlow() {
         let duration = Int(Date().timeIntervalSince(startTime) * 1000)
         let result = FlowResult(
-            flowId: flowConfig.id,
+            flowId: flowConfig.id ?? "",
             completed: true,
             lastScreenId: currentScreenId ?? "",
             responses: responses,
@@ -129,7 +131,7 @@ internal class FlowManager: ObservableObject {
     func dismissFlow() {
         let duration = Int(Date().timeIntervalSince(startTime) * 1000)
         let result = FlowResult(
-            flowId: flowConfig.id,
+            flowId: flowConfig.id ?? "",
             completed: false,
             lastScreenId: currentScreenId ?? "",
             responses: responses,
@@ -142,7 +144,7 @@ internal class FlowManager: ObservableObject {
     private func evaluateCondition(_ rule: NavigationRule) -> Bool {
         let context = ["responses": responses]
         return ConditionEvaluator.evaluateCondition(
-            type: rule.condition,
+            type: rule.condition ?? "always",
             variable: rule.variable,
             value: rule.value?.value,
             context: context

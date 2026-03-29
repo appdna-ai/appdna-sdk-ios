@@ -31,8 +31,8 @@ public struct GradientConfig: Codable {
 }
 
 public struct GradientStopConfig: Codable {
-    public let color: String
-    public let position: Double
+    public let color: String?
+    public let position: Double?
 }
 
 /// Border style.
@@ -233,14 +233,14 @@ enum StyleEngine {
                 switch grad.type {
                 case "radial":
                     RadialGradient(
-                        colors: stops.map { Color(hex: $0.color) },
+                        colors: stops.map { Color(hex: $0.color ?? "#000000") },
                         center: .center,
                         startRadius: 0,
                         endRadius: 300
                     )
                 default: // linear
                     LinearGradient(
-                        colors: stops.map { Color(hex: $0.color) },
+                        colors: stops.map { Color(hex: $0.color ?? "#000000") },
                         startPoint: gradientPoint(angle: grad.angle ?? 180, start: true),
                         endPoint: gradientPoint(angle: grad.angle ?? 180, start: false)
                     )

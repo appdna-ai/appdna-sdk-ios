@@ -5,9 +5,9 @@ import SwiftUI
 /// Bridges to existing ContentBlockRendererView (51 block types).
 internal enum ContentBlocksSectionRenderer: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
-        let blocks = parseBlocks(from: section.data)
-        let layout = section.data["layout"]?.value as? String ?? "vertical"
-        let spacing = section.data["spacing"]?.value as? Double ?? 12
+        let blocks = parseBlocks(from: section.data ?? [:])
+        let layout = section.data?["layout"]?.value as? String ?? "vertical"
+        let spacing = section.data?["spacing"]?.value as? Double ?? 12
 
         return AnyView(
             ContentBlocksSectionView(
@@ -116,11 +116,11 @@ private struct ContentBlocksSectionView: View {
 
 internal enum HeroSectionRenderer: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
-        let imageURL = section.data["image_url"]?.value as? String
-        let videoURL = section.data["video_url"]?.value as? String
-        let lottieURL = section.data["lottie_url"]?.value as? String
-        let height = section.data["height"]?.value as? Double ?? 300
-        let contentPosition = section.data["content_position"]?.value as? String ?? "bottom"
+        let imageURL = section.data?["image_url"]?.value as? String
+        let videoURL = section.data?["video_url"]?.value as? String
+        let lottieURL = section.data?["lottie_url"]?.value as? String
+        let height = section.data?["height"]?.value as? Double ?? 300
+        let contentPosition = section.data?["content_position"]?.value as? String ?? "bottom"
 
         return AnyView(
             ZStack(alignment: verticalAlignment(contentPosition)) {
@@ -140,7 +140,7 @@ internal enum HeroSectionRenderer: SectionRenderer {
                 }
 
                 // Gradient overlay
-                if let gradient = section.data["gradient_overlay"]?.value as? [String: Any],
+                if let gradient = section.data?["gradient_overlay"]?.value as? [String: Any],
                    let start = gradient["start"] as? String,
                    let end = gradient["end"] as? String {
                     LinearGradient(
@@ -151,7 +151,7 @@ internal enum HeroSectionRenderer: SectionRenderer {
                 }
 
                 // Overlay blocks
-                if let overlayData = section.data["overlay_blocks"]?.value {
+                if let overlayData = section.data?["overlay_blocks"]?.value {
                     let blocks = parseOverlayBlocks(overlayData)
                     ContentBlocksSectionView(
                         blocks: blocks,
@@ -189,7 +189,7 @@ internal enum HeroSectionRenderer: SectionRenderer {
 
 internal enum SpacerSectionRenderer: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
-        let height = section.data["height"]?.value as? Double ?? 16
+        let height = section.data?["height"]?.value as? Double ?? 16
         return AnyView(Spacer().frame(height: CGFloat(height)))
     }
 }
@@ -198,10 +198,10 @@ internal enum SpacerSectionRenderer: SectionRenderer {
 
 internal enum DividerSectionRenderer: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
-        let color = section.data["color"]?.value as? String
-        let thickness = section.data["thickness"]?.value as? Double ?? 1
-        let insetLeft = section.data["inset_left"]?.value as? Double ?? 0
-        let insetRight = section.data["inset_right"]?.value as? Double ?? 0
+        let color = section.data?["color"]?.value as? String
+        let thickness = section.data?["thickness"]?.value as? Double ?? 1
+        let insetLeft = section.data?["inset_left"]?.value as? Double ?? 0
+        let insetRight = section.data?["inset_right"]?.value as? Double ?? 0
 
         return AnyView(
             Rectangle()
@@ -217,9 +217,9 @@ internal enum DividerSectionRenderer: SectionRenderer {
 
 internal enum CTAFooterSectionRenderer: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
-        let primaryButton = section.data["primary_button"]?.value as? [String: Any]
-        let secondaryButton = section.data["secondary_button"]?.value as? [String: Any]
-        let disclaimerText = section.data["disclaimer_text"]?.value as? String
+        let primaryButton = section.data?["primary_button"]?.value as? [String: Any]
+        let secondaryButton = section.data?["secondary_button"]?.value as? [String: Any]
+        let disclaimerText = section.data?["disclaimer_text"]?.value as? String
 
         return AnyView(
             VStack(spacing: 12) {
@@ -293,9 +293,9 @@ internal enum StickyFooterSectionRenderer: SectionRenderer {
 
 internal enum ImageSectionRenderer: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
-        let imageURL = section.data["image_url"]?.value as? String
-        let height = section.data["height"]?.value as? Double
-        let cornerRadius = section.data["corner_radius"]?.value as? Double ?? 0
+        let imageURL = section.data?["image_url"]?.value as? String
+        let height = section.data?["height"]?.value as? Double
+        let cornerRadius = section.data?["corner_radius"]?.value as? Double ?? 0
 
         return AnyView(
             Group {
@@ -315,20 +315,20 @@ internal enum ImageSectionRenderer: SectionRenderer {
 
 internal enum VideoSectionRenderer: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
-        let videoURL = section.data["video_url"]?.value as? String
-        let height = section.data["height"]?.value as? Double ?? 200
+        let videoURL = section.data?["video_url"]?.value as? String
+        let height = section.data?["height"]?.value as? Double ?? 200
 
         return AnyView(
             Group {
                 if let url = videoURL {
                     VideoBlockView(block: VideoBlock(
                         video_url: url,
-                        video_thumbnail_url: section.data["thumbnail_url"]?.value as? String,
+                        video_thumbnail_url: section.data?["thumbnail_url"]?.value as? String,
                         video_height: height,
-                        video_corner_radius: section.data["corner_radius"]?.value as? Double ?? 0,
-                        autoplay: section.data["autoplay"]?.value as? Bool ?? false,
-                        loop: section.data["loop"]?.value as? Bool ?? false,
-                        muted: section.data["muted"]?.value as? Bool ?? true,
+                        video_corner_radius: section.data?["corner_radius"]?.value as? Double ?? 0,
+                        autoplay: section.data?["autoplay"]?.value as? Bool ?? false,
+                        loop: section.data?["loop"]?.value as? Bool ?? false,
+                        muted: section.data?["muted"]?.value as? Bool ?? true,
                         controls: nil,
                         inline_playback: nil
                     ))
@@ -340,8 +340,8 @@ internal enum VideoSectionRenderer: SectionRenderer {
 
 internal enum LottieSectionRenderer: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
-        let lottieURL = section.data["lottie_url"]?.value as? String
-        let height = section.data["height"]?.value as? Double ?? 200
+        let lottieURL = section.data?["lottie_url"]?.value as? String
+        let height = section.data?["height"]?.value as? Double ?? 200
 
         return AnyView(
             Group {
@@ -349,9 +349,9 @@ internal enum LottieSectionRenderer: SectionRenderer {
                     LottieBlockView(block: LottieBlock(
                         lottie_url: lottieURL,
                         lottie_json: nil,
-                        autoplay: section.data["autoplay"]?.value as? Bool ?? true,
-                        loop: section.data["loop"]?.value as? Bool ?? true,
-                        speed: section.data["speed"]?.value as? Double ?? 1.0,
+                        autoplay: section.data?["autoplay"]?.value as? Bool ?? true,
+                        loop: section.data?["loop"]?.value as? Bool ?? true,
+                        speed: section.data?["speed"]?.value as? Double ?? 1.0,
                         width: nil,
                         height: height,
                         alignment: "center",
@@ -367,16 +367,16 @@ internal enum LottieSectionRenderer: SectionRenderer {
 
 internal enum RiveSectionRenderer: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
-        let riveURL = section.data["rive_url"]?.value as? String
-        let height = section.data["height"]?.value as? Double ?? 200
+        let riveURL = section.data?["rive_url"]?.value as? String
+        let height = section.data?["height"]?.value as? Double ?? 200
 
         return AnyView(
             Group {
                 if let url = riveURL {
                     RiveBlockView(block: RiveBlock(
                         rive_url: url,
-                        artboard: section.data["artboard"]?.value as? String,
-                        state_machine: section.data["state_machine"]?.value as? String,
+                        artboard: section.data?["artboard"]?.value as? String,
+                        state_machine: section.data?["state_machine"]?.value as? String,
                         autoplay: true,
                         height: height,
                         alignment: "center",

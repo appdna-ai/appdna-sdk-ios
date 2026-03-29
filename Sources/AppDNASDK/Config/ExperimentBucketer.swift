@@ -89,9 +89,9 @@ public enum ExperimentBucketer {
 
         var cumulative: UInt32 = 0
         for variant in variants {
-            cumulative += UInt32(variant.weight * 10000)
+            cumulative += UInt32((variant.weight ?? 0) * 10000)
             if bucket < cumulative {
-                return variant.id
+                return variant.id ?? "unknown"
             }
         }
 
