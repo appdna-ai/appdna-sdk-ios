@@ -40,6 +40,18 @@ public struct OnboardingFlowConfig: Codable {
         self.graph_layout = try c.decodeIfPresent(AnyCodable.self, forKey: .graph_layout)
         self.audience_rules = try c.decodeIfPresent(AnyCodable.self, forKey: .audience_rules)
     }
+
+    /// Convenience memberwise init for tests and manual construction.
+    public init(id: String = "", name: String? = nil, version: Int? = nil, steps: [OnboardingStep] = [], settings: OnboardingSettings = OnboardingSettings()) {
+        self.id = id
+        self.name = name
+        self.version = version
+        self._steps = steps
+        self._settings = settings
+        self.status = nil
+        self.graph_layout = nil
+        self.audience_rules = nil
+    }
 }
 
 /// Flow-level settings.

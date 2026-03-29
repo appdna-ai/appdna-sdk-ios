@@ -88,8 +88,8 @@ final class PaywallConfigDecodingTests: XCTestCase {
 
         XCTAssertEqual(config.id, "annual_promo")
         XCTAssertEqual(config.name, "Annual Promotion")
-        XCTAssertEqual(config.layout.type, "stack")
-        XCTAssertEqual(config.layout.spacing, 16)
+        XCTAssertEqual(config.layout?.type, "stack")
+        XCTAssertEqual(config.layout?.spacing, 16)
         XCTAssertEqual(config.sections.count, 5)
     }
 
@@ -188,7 +188,7 @@ final class PaywallConfigDecodingTests: XCTestCase {
         XCTAssertEqual(config.id, "minimal")
         XCTAssertNil(config.dismiss)
         XCTAssertNil(config.background)
-        XCTAssertNil(config.layout.spacing)
+        XCTAssertNil(config.layout?.spacing)
         XCTAssertTrue(config.sections.isEmpty)
     }
 

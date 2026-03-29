@@ -95,7 +95,7 @@ final class ExperimentManagerTests: XCTestCase {
 
             var cumulative: Double = 0
             for variant in variants {
-                cumulative += variant.weight
+                cumulative += variant.weight ?? 0
                 if bucket < cumulative {
                     if variant.id == "control" {
                         controlCount += 1
@@ -128,9 +128,9 @@ final class ExperimentManagerTests: XCTestCase {
 
             var cumulative: Double = 0
             for variant in variants {
-                cumulative += variant.weight
+                cumulative += variant.weight ?? 0
                 if bucket < cumulative {
-                    counts[variant.id, default: 0] += 1
+                    counts[variant.id ?? "", default: 0] += 1
                     break
                 }
             }

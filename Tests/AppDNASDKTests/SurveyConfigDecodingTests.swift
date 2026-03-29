@@ -84,9 +84,9 @@ final class SurveyConfigDecodingTests: XCTestCase {
 
         XCTAssertEqual(config.name, "Post-Purchase NPS")
         XCTAssertEqual(config.survey_type, "nps")
-        XCTAssertEqual(config.questions.count, 2)
-        XCTAssertEqual(config.trigger_rules.event, "purchase_completed")
-        XCTAssertEqual(config.appearance.presentation, "bottom_sheet")
+        XCTAssertEqual(config.questions?.count, 2)
+        XCTAssertEqual(config.trigger_rules?.event, "purchase_completed")
+        XCTAssertEqual(config.appearance?.presentation, "bottom_sheet")
         XCTAssertNotNil(config.follow_up_actions)
     }
 
@@ -125,9 +125,9 @@ final class SurveyConfigDecodingTests: XCTestCase {
         let root = try JSONDecoder().decode(SurveyRoot.self, from: json)
 
         XCTAssertEqual(root.version, 2)
-        XCTAssertEqual(root.surveys.count, 1)
-        XCTAssertNotNil(root.surveys["survey_nps_1"])
-        XCTAssertEqual(root.surveys["survey_nps_1"]?.name, "NPS Survey")
+        XCTAssertEqual(root.surveys?.count, 1)
+        XCTAssertNotNil(root.surveys?["survey_nps_1"])
+        XCTAssertEqual(root.surveys?["survey_nps_1"]?.name, "NPS Survey")
     }
 
     // MARK: - Question type: NPS
@@ -151,7 +151,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
         XCTAssertEqual(question.id, "nps_q")
         XCTAssertEqual(question.type, "nps")
         XCTAssertEqual(question.text, "How likely are you to recommend us to a friend?")
-        XCTAssertTrue(question.required)
+        XCTAssertTrue(question.required ?? false)
         XCTAssertNotNil(question.nps_config)
         XCTAssertEqual(question.nps_config?.low_label, "Not at all likely")
         XCTAssertEqual(question.nps_config?.high_label, "Extremely likely")
@@ -203,7 +203,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
         XCTAssertEqual(question.id, "csat_q")
         XCTAssertEqual(question.type, "csat")
         XCTAssertEqual(question.text, "How satisfied are you with our service?")
-        XCTAssertTrue(question.required)
+        XCTAssertTrue(question.required ?? false)
         XCTAssertNotNil(question.csat_config)
         XCTAssertEqual(question.csat_config?.max_rating, 5)
         XCTAssertEqual(question.csat_config?.style, "star")
@@ -228,7 +228,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
 
         XCTAssertEqual(question.csat_config?.style, "emoji")
         XCTAssertEqual(question.csat_config?.max_rating, 3)
-        XCTAssertFalse(question.required)
+        XCTAssertFalse(question.required ?? true)
     }
 
     func testDecodeCSATConfigWithNilFields() throws {
@@ -337,7 +337,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
         XCTAssertEqual(question.id, "sc_q")
         XCTAssertEqual(question.type, "single_choice")
         XCTAssertEqual(question.text, "What feature do you use most?")
-        XCTAssertTrue(question.required)
+        XCTAssertTrue(question.required ?? false)
         XCTAssertEqual(question.options?.count, 3)
         XCTAssertEqual(question.options?[0].id, "opt_1")
         XCTAssertEqual(question.options?[0].text, "Dashboard")
@@ -367,7 +367,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
 
         XCTAssertEqual(question.id, "mc_q")
         XCTAssertEqual(question.type, "multi_choice")
-        XCTAssertFalse(question.required)
+        XCTAssertFalse(question.required ?? true)
         XCTAssertEqual(question.options?.count, 4)
         XCTAssertEqual(question.options?[0].id, "opt_a")
         XCTAssertEqual(question.options?[0].text, "Performance")
@@ -396,7 +396,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
         XCTAssertEqual(question.id, "ft_q")
         XCTAssertEqual(question.type, "free_text")
         XCTAssertEqual(question.text, "Any additional comments?")
-        XCTAssertFalse(question.required)
+        XCTAssertFalse(question.required ?? true)
         XCTAssertNotNil(question.free_text_config)
         XCTAssertEqual(question.free_text_config?.placeholder, "Type your feedback here...")
         XCTAssertEqual(question.free_text_config?.max_length, 500)
@@ -438,7 +438,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
         XCTAssertEqual(question.id, "yn_q")
         XCTAssertEqual(question.type, "yes_no")
         XCTAssertEqual(question.text, "Would you recommend us to a friend?")
-        XCTAssertTrue(question.required)
+        XCTAssertTrue(question.required ?? false)
         XCTAssertNil(question.nps_config)
         XCTAssertNil(question.csat_config)
         XCTAssertNil(question.rating_config)
@@ -536,7 +536,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
 
         XCTAssertNotNil(question.show_if)
         XCTAssertEqual(question.show_if?.question_id, "nps_q")
-        XCTAssertEqual(question.show_if?.answer_in.count, 7)
+        XCTAssertEqual(question.show_if?.answer_in?.count, 7)
     }
 
     func testDecodeShowIfConditionWithStringAnswers() throws {
@@ -557,7 +557,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
 
         XCTAssertNotNil(question.show_if)
         XCTAssertEqual(question.show_if?.question_id, "sc_q")
-        XCTAssertEqual(question.show_if?.answer_in.count, 2)
+        XCTAssertEqual(question.show_if?.answer_in?.count, 2)
     }
 
     func testDecodeShowIfConditionWithMixedAnswerTypes() throws {
@@ -571,7 +571,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
         let condition = try JSONDecoder().decode(ShowIfCondition.self, from: json)
 
         XCTAssertEqual(condition.question_id, "rating_q")
-        XCTAssertEqual(condition.answer_in.count, 3)
+        XCTAssertEqual(condition.answer_in?.count, 3)
     }
 
     // MARK: - Trigger rules
@@ -737,8 +737,8 @@ final class SurveyConfigDecodingTests: XCTestCase {
         let appearance = try JSONDecoder().decode(SurveyAppearance.self, from: json)
 
         XCTAssertEqual(appearance.presentation, "modal")
-        XCTAssertFalse(appearance.dismiss_allowed)
-        XCTAssertTrue(appearance.show_progress)
+        XCTAssertEqual(appearance.dismiss_allowed, false)
+        XCTAssertEqual(appearance.show_progress, true)
         XCTAssertEqual(appearance.corner_radius, 20)
 
         // Theme
@@ -775,8 +775,8 @@ final class SurveyConfigDecodingTests: XCTestCase {
         let appearance = try JSONDecoder().decode(SurveyAppearance.self, from: json)
 
         XCTAssertEqual(appearance.presentation, "bottom_sheet")
-        XCTAssertTrue(appearance.dismiss_allowed, "dismiss_allowed should default to true")
-        XCTAssertFalse(appearance.show_progress, "show_progress should default to false")
+        XCTAssertEqual(appearance.dismiss_allowed, true, "dismiss_allowed should default to true")
+        XCTAssertEqual(appearance.show_progress, false, "show_progress should default to false")
         XCTAssertNil(appearance.theme)
         XCTAssertNil(appearance.question_text_style)
         XCTAssertNil(appearance.option_style)
@@ -862,12 +862,12 @@ final class SurveyConfigDecodingTests: XCTestCase {
 
         // Haptic
         XCTAssertNotNil(theme.haptic)
-        XCTAssertTrue(theme.haptic!.enabled)
-        XCTAssertEqual(theme.haptic?.triggers.on_step_advance, .medium)
-        XCTAssertEqual(theme.haptic?.triggers.on_button_tap, .light)
-        XCTAssertEqual(theme.haptic?.triggers.on_option_select, .selection)
-        XCTAssertNil(theme.haptic?.triggers.on_plan_select)
-        XCTAssertNil(theme.haptic?.triggers.on_toggle)
+        XCTAssertEqual(theme.haptic?.enabled, true)
+        XCTAssertEqual(theme.haptic?.triggers?.on_step_advance, .medium)
+        XCTAssertEqual(theme.haptic?.triggers?.on_button_tap, .light)
+        XCTAssertEqual(theme.haptic?.triggers?.on_option_select, .selection)
+        XCTAssertNil(theme.haptic?.triggers?.on_plan_select)
+        XCTAssertNil(theme.haptic?.triggers?.on_toggle)
 
         // SPEC-088: Thank-you text
         XCTAssertEqual(theme.thank_you_text, "Thanks, {{user_name}}! Your feedback means a lot.")
@@ -1016,11 +1016,11 @@ final class SurveyConfigDecodingTests: XCTestCase {
 
         XCTAssertEqual(config.name, "Quick Poll")
         XCTAssertEqual(config.survey_type, "custom")
-        XCTAssertTrue(config.questions.isEmpty)
-        XCTAssertEqual(config.trigger_rules.event, "app_open")
-        XCTAssertEqual(config.appearance.presentation, "bottom_sheet")
-        XCTAssertTrue(config.appearance.dismiss_allowed)
-        XCTAssertFalse(config.appearance.show_progress)
+        XCTAssertEqual(config.questions?.isEmpty, true)
+        XCTAssertEqual(config.trigger_rules?.event, "app_open")
+        XCTAssertEqual(config.appearance?.presentation, "bottom_sheet")
+        XCTAssertEqual(config.appearance?.dismiss_allowed, true)
+        XCTAssertEqual(config.appearance?.show_progress, false)
         XCTAssertNil(config.follow_up_actions)
     }
 
@@ -1039,7 +1039,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
         XCTAssertEqual(question.id, "unknown_q")
         XCTAssertEqual(question.type, "matrix_grid")
         XCTAssertEqual(question.text, "Some unknown question type")
-        XCTAssertFalse(question.required)
+        XCTAssertFalse(question.required ?? true)
         XCTAssertNil(question.nps_config)
         XCTAssertNil(question.csat_config)
         XCTAssertNil(question.rating_config)
@@ -1068,7 +1068,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
 
         let config = try JSONDecoder().decode(SurveyConfig.self, from: json)
 
-        XCTAssertTrue(config.questions.isEmpty)
+        XCTAssertEqual(config.questions?.isEmpty, true)
     }
 
     func testDecodeQuestionWithAllNullOptionals() throws {
@@ -1213,27 +1213,27 @@ final class SurveyConfigDecodingTests: XCTestCase {
         let root = try JSONDecoder().decode(SurveyRoot.self, from: json)
 
         XCTAssertEqual(root.version, 1)
-        XCTAssertEqual(root.surveys.count, 3)
+        XCTAssertEqual(root.surveys?.count, 3)
 
         // NPS survey
-        let nps = root.surveys["nps_v1"]
+        let nps = root.surveys?["nps_v1"]
         XCTAssertNotNil(nps)
         XCTAssertEqual(nps?.survey_type, "nps")
-        XCTAssertEqual(nps?.questions.count, 1)
+        XCTAssertEqual(nps?.questions?.count, 1)
 
         // CSAT survey
-        let csat = root.surveys["csat_v1"]
+        let csat = root.surveys?["csat_v1"]
         XCTAssertNotNil(csat)
         XCTAssertEqual(csat?.survey_type, "csat")
-        XCTAssertEqual(csat?.questions.first?.csat_config?.max_rating, 5)
+        XCTAssertEqual(csat?.questions?.first?.csat_config?.max_rating, 5)
 
         // Feedback survey
-        let feedback = root.surveys["feedback_v1"]
+        let feedback = root.surveys?["feedback_v1"]
         XCTAssertNotNil(feedback)
         XCTAssertEqual(feedback?.survey_type, "custom")
-        XCTAssertEqual(feedback?.questions.count, 2)
-        XCTAssertFalse(feedback!.appearance.dismiss_allowed)
-        XCTAssertTrue(feedback!.appearance.show_progress)
+        XCTAssertEqual(feedback?.questions?.count, 2)
+        XCTAssertEqual(feedback?.appearance?.dismiss_allowed, false)
+        XCTAssertEqual(feedback?.appearance?.show_progress, true)
         XCTAssertNotNil(feedback?.follow_up_actions?.on_positive)
         XCTAssertNil(feedback?.follow_up_actions?.on_negative)
     }
@@ -1381,35 +1381,35 @@ final class SurveyConfigDecodingTests: XCTestCase {
 
         XCTAssertEqual(config.name, "Comprehensive Feedback")
         XCTAssertEqual(config.survey_type, "custom")
-        XCTAssertEqual(config.questions.count, 8)
+        XCTAssertEqual(config.questions?.count, 8)
 
         // Verify each question type decoded correctly
-        XCTAssertEqual(config.questions[0].type, "nps")
-        XCTAssertNotNil(config.questions[0].nps_config)
+        XCTAssertEqual(config.questions?[0].type, "nps")
+        XCTAssertNotNil(config.questions?[0].nps_config)
 
-        XCTAssertEqual(config.questions[1].type, "csat")
-        XCTAssertNotNil(config.questions[1].csat_config)
+        XCTAssertEqual(config.questions?[1].type, "csat")
+        XCTAssertNotNil(config.questions?[1].csat_config)
 
-        XCTAssertEqual(config.questions[2].type, "rating")
-        XCTAssertNotNil(config.questions[2].rating_config)
+        XCTAssertEqual(config.questions?[2].type, "rating")
+        XCTAssertNotNil(config.questions?[2].rating_config)
 
-        XCTAssertEqual(config.questions[3].type, "single_choice")
-        XCTAssertEqual(config.questions[3].options?.count, 2)
+        XCTAssertEqual(config.questions?[3].type, "single_choice")
+        XCTAssertEqual(config.questions?[3].options?.count, 2)
 
-        XCTAssertEqual(config.questions[4].type, "multi_choice")
-        XCTAssertEqual(config.questions[4].options?.count, 3)
+        XCTAssertEqual(config.questions?[4].type, "multi_choice")
+        XCTAssertEqual(config.questions?[4].options?.count, 3)
 
-        XCTAssertEqual(config.questions[5].type, "free_text")
-        XCTAssertNotNil(config.questions[5].show_if)
-        XCTAssertNotNil(config.questions[5].free_text_config)
+        XCTAssertEqual(config.questions?[5].type, "free_text")
+        XCTAssertNotNil(config.questions?[5].show_if)
+        XCTAssertNotNil(config.questions?[5].free_text_config)
 
-        XCTAssertEqual(config.questions[6].type, "yes_no")
+        XCTAssertEqual(config.questions?[6].type, "yes_no")
 
-        XCTAssertEqual(config.questions[7].type, "emoji_scale")
-        XCTAssertNotNil(config.questions[7].emoji_config)
+        XCTAssertEqual(config.questions?[7].type, "emoji_scale")
+        XCTAssertNotNil(config.questions?[7].emoji_config)
 
         // Appearance
-        XCTAssertEqual(config.appearance.corner_radius, 12)
+        XCTAssertEqual(config.appearance?.corner_radius, 12)
 
         // Follow-up actions
         XCTAssertNotNil(config.follow_up_actions?.on_positive)
@@ -1429,7 +1429,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
         let root = try JSONDecoder().decode(SurveyRoot.self, from: json)
 
         XCTAssertEqual(root.version, 1)
-        XCTAssertTrue(root.surveys.isEmpty)
+        XCTAssertEqual(root.surveys?.isEmpty, true)
     }
 
     func testDecodeOptionWithAllFields() throws {

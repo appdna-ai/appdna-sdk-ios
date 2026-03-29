@@ -679,15 +679,15 @@ final class CoreStyleConfigDecodingTests: XCTestCase {
         """.data(using: .utf8)!
 
         let config = try JSONDecoder().decode(HapticConfig.self, from: json)
-        XCTAssertTrue(config.enabled)
-        XCTAssertEqual(config.triggers.on_step_advance, .medium)
-        XCTAssertEqual(config.triggers.on_button_tap, .light)
-        XCTAssertEqual(config.triggers.on_plan_select, .selection)
-        XCTAssertEqual(config.triggers.on_option_select, .selection)
-        XCTAssertEqual(config.triggers.on_toggle, .light)
-        XCTAssertEqual(config.triggers.on_form_submit, .success)
-        XCTAssertEqual(config.triggers.on_error, .error)
-        XCTAssertEqual(config.triggers.on_success, .success)
+        XCTAssertEqual(config.enabled, true)
+        XCTAssertEqual(config.triggers?.on_step_advance, .medium)
+        XCTAssertEqual(config.triggers?.on_button_tap, .light)
+        XCTAssertEqual(config.triggers?.on_plan_select, .selection)
+        XCTAssertEqual(config.triggers?.on_option_select, .selection)
+        XCTAssertEqual(config.triggers?.on_toggle, .light)
+        XCTAssertEqual(config.triggers?.on_form_submit, .success)
+        XCTAssertEqual(config.triggers?.on_error, .error)
+        XCTAssertEqual(config.triggers?.on_success, .success)
     }
 
     func testDecodeHapticConfigMinimalTriggers() throws {
@@ -699,15 +699,15 @@ final class CoreStyleConfigDecodingTests: XCTestCase {
         """.data(using: .utf8)!
 
         let config = try JSONDecoder().decode(HapticConfig.self, from: json)
-        XCTAssertTrue(config.enabled)
-        XCTAssertNil(config.triggers.on_step_advance)
-        XCTAssertNil(config.triggers.on_button_tap)
-        XCTAssertNil(config.triggers.on_plan_select)
-        XCTAssertNil(config.triggers.on_option_select)
-        XCTAssertNil(config.triggers.on_toggle)
-        XCTAssertNil(config.triggers.on_form_submit)
-        XCTAssertNil(config.triggers.on_error)
-        XCTAssertNil(config.triggers.on_success)
+        XCTAssertEqual(config.enabled, true)
+        XCTAssertNil(config.triggers?.on_step_advance)
+        XCTAssertNil(config.triggers?.on_button_tap)
+        XCTAssertNil(config.triggers?.on_plan_select)
+        XCTAssertNil(config.triggers?.on_option_select)
+        XCTAssertNil(config.triggers?.on_toggle)
+        XCTAssertNil(config.triggers?.on_form_submit)
+        XCTAssertNil(config.triggers?.on_error)
+        XCTAssertNil(config.triggers?.on_success)
     }
 
     func testDecodeHapticTypeEnum() throws {
