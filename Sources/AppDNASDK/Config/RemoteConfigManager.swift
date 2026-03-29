@@ -273,12 +273,14 @@ final class RemoteConfigManager {
         let paywallMap = (data["paywalls"] as? [String: Any]) ?? data
         var parsed: [String: PaywallConfig] = [:]
         for (key, value) in paywallMap {
-            guard let dict = value as? [String: Any],
-                  let jsonData = try? JSONSerialization.data(withJSONObject: dict),
-                  let config = try? JSONDecoder().decode(PaywallConfig.self, from: jsonData) else {
-                continue
+            guard let dict = value as? [String: Any] else { continue }
+            do {
+                let jsonData = try JSONSerialization.data(withJSONObject: dict)
+                let config = try JSONDecoder().decode(PaywallConfig.self, from: jsonData)
+                parsed[key] = config
+            } catch {
+                Log.error("Failed to decode paywall '\(key)': \(error.localizedDescription)")
             }
-            parsed[key] = config
         }
         queue.async { self.paywalls = parsed }
 
@@ -292,12 +294,14 @@ final class RemoteConfigManager {
         let experimentsMap = (data["experiments"] as? [String: Any]) ?? data
         var parsed: [String: ExperimentConfig] = [:]
         for (key, value) in experimentsMap {
-            guard let dict = value as? [String: Any],
-                  let jsonData = try? JSONSerialization.data(withJSONObject: dict),
-                  let config = try? JSONDecoder().decode(ExperimentConfig.self, from: jsonData) else {
-                continue
+            guard let dict = value as? [String: Any] else { continue }
+            do {
+                let jsonData = try JSONSerialization.data(withJSONObject: dict)
+                let config = try JSONDecoder().decode(ExperimentConfig.self, from: jsonData)
+                parsed[key] = config
+            } catch {
+                Log.error("Failed to decode experiment '\(key)': \(error.localizedDescription)")
             }
-            parsed[key] = config
         }
         queue.async { self.experiments = parsed }
 
@@ -314,12 +318,14 @@ final class RemoteConfigManager {
         var parsed: [String: OnboardingFlowConfig] = [:]
         if let flowsDict = data["flows"] as? [String: Any] {
             for (key, value) in flowsDict {
-                guard let dict = value as? [String: Any],
-                      let jsonData = try? JSONSerialization.data(withJSONObject: dict),
-                      let config = try? JSONDecoder().decode(OnboardingFlowConfig.self, from: jsonData) else {
-                    continue
+                guard let dict = value as? [String: Any] else { continue }
+                do {
+                    let jsonData = try JSONSerialization.data(withJSONObject: dict)
+                    let config = try JSONDecoder().decode(OnboardingFlowConfig.self, from: jsonData)
+                    parsed[key] = config
+                } catch {
+                    Log.error("Failed to decode onboarding flow '\(key)': \(error.localizedDescription)")
                 }
-                parsed[key] = config
             }
         }
 

@@ -10,17 +10,20 @@ struct OnboardingFlowRoot: Codable {
 
 /// A single onboarding flow definition.
 public struct OnboardingFlowConfig: Codable {
-    public let id: String
-    public let name: String
-    public let version: Int
-    public let steps: [OnboardingStep]
-    public let settings: OnboardingSettings
+    public let id: String?
+    public let name: String?
+    public let version: Int?
+    public let steps: [OnboardingStep]?
+    public let settings: OnboardingSettings?
+    public let status: String?
+    public let graph_layout: AnyCodable?
+    public let audience_rules: AnyCodable?
 }
 
 /// Flow-level settings.
 public struct OnboardingSettings: Codable {
-    public let show_progress: Bool
-    public let allow_back: Bool
+    public let show_progress: Bool?
+    public let allow_back: Bool?
     public let skip_to_step: String?
     /// Custom progress bar fill color (hex). Falls back to accentColor if nil.
     public let progress_color: String?

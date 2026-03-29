@@ -2,12 +2,17 @@ import Foundation
 
 /// Codable structs matching SPEC-002 Firestore PaywallConfig schema.
 struct PaywallConfig: Codable {
-    let id: String
-    let name: String
-    let layout: PaywallLayout
-    let sections: [PaywallSection]
+    let id: String?
+    let name: String?
+    let layout: PaywallLayout?
+    private let _sections: [PaywallSection]?
+    let plans: [PaywallPlan]?
+    let cta: PaywallCTA?
     let dismiss: PaywallDismiss?
     let background: PaywallBackground?
+    let placement: String?
+    let placement_label: String?
+    let version: Int?
     // SPEC-084: Design tokens
     let animation: AnimationConfig?
     let localizations: [String: [String: String]]?
@@ -15,12 +20,27 @@ struct PaywallConfig: Codable {
     // SPEC-085: Rich media
     let haptic: HapticConfig?
     let particle_effect: ParticleEffect?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, layout, _sections = "sections", plans, cta, dismiss, background
+        case placement, placement_label, version
+        case animation, localizations, default_locale
+        case haptic, particle_effect
+    }
+
+    /// Sections resolved from top-level or inside layout (non-optional for renderer compat)
+    var sections: [PaywallSection] {
+        _sections ?? layout?.sections ?? []
+    }
 }
 
 struct PaywallLayout: Codable {
-    let type: String // "stack", "grid", "carousel"
+    let type: String? // "stack", "grid", "carousel"
     let spacing: CGFloat?
     let padding: CGFloat?
+    let sections: [PaywallSection]?
+    let background: PaywallBackground?
+    let global_style: AnyCodable?
     /// One of 12 plan display styles: vertical_stack, horizontal_scroll, radio_list, pill_selector,
     /// segmented_toggle, comparison_cards, feature_matrix, pricing_table, timeline, tier_ladder,
     /// interactive_slider, mini_cards. Falls back to `type` mapping when nil.
