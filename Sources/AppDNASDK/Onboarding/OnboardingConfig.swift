@@ -96,16 +96,49 @@ public struct OnboardingStep: Codable, Identifiable {
     public let hide_progress: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, config, hook, hide_progress
+        case id, type, config, layout, hook, hide_progress, content_blocks
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
         self.type = try c.decodeIfPresent(StepType.self, forKey: .type) ?? .custom
-        self.config = try c.decodeIfPresent(StepConfig.self, forKey: .config) ?? StepConfig()
         self.hook = try c.decodeIfPresent(StepHookConfig.self, forKey: .hook)
         self.hide_progress = try c.decodeIfPresent(Bool.self, forKey: .hide_progress)
+
+        // Server writes step content as "layout" or "config" depending on source.
+        // Also, content_blocks may be at step level. Try all locations.
+        var decoded = try c.decodeIfPresent(StepConfig.self, forKey: .config)
+            ?? c.decodeIfPresent(StepConfig.self, forKey: .layout)
+            ?? StepConfig()
+
+        // If content_blocks empty in config/layout, check step-level content_blocks
+        if (decoded.content_blocks ?? []).isEmpty {
+            if let stepBlocks = try c.decodeIfPresent([ContentBlock].self, forKey: .content_blocks), !stepBlocks.isEmpty {
+                decoded = StepConfig(
+                    title: decoded.title, subtitle: decoded.subtitle, image_url: decoded.image_url,
+                    cta_text: decoded.cta_text, skip_enabled: decoded.skip_enabled,
+                    options: decoded.options, selection_mode: decoded.selection_mode,
+                    items: decoded.items, layout: decoded.layout,
+                    fields: decoded.fields, validation_mode: decoded.validation_mode,
+                    field_defaults: decoded.field_defaults,
+                    content_blocks: stepBlocks, layout_variant: decoded.layout_variant,
+                    background: decoded.background, text_style: decoded.text_style,
+                    element_style: decoded.element_style, animation: decoded.animation,
+                    localizations: decoded.localizations, default_locale: decoded.default_locale
+                )
+            }
+        }
+        self.config = decoded
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(type, forKey: .type)
+        try c.encode(config, forKey: .config)
+        try c.encodeIfPresent(hook, forKey: .hook)
+        try c.encodeIfPresent(hide_progress, forKey: .hide_progress)
     }
 
     public init(id: String = "", type: StepType = .custom, config: StepConfig = StepConfig(), hook: StepHookConfig? = nil, hide_progress: Bool? = nil) {

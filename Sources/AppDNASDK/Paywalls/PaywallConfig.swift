@@ -49,16 +49,24 @@ struct PaywallLayout: Codable {
 
 struct PaywallSection: Codable {
     let _type: String?
-    let data: PaywallSectionData?
+    let id: String?
+    private let _data: PaywallSectionData?
+    private let _config: PaywallSectionData?
     // SPEC-084: Per-section styling
     let style: SectionStyleConfig?
 
     /// Non-optional accessor defaulting to "unknown" when Firestore omits the field.
     var type: String { _type ?? "unknown" }
 
+    /// Section data — server writes as "config", SDK historically used "data". Accept both.
+    var data: PaywallSectionData? { _data ?? _config }
+
     enum CodingKeys: String, CodingKey {
         case _type = "type"
-        case data, style
+        case id
+        case _data = "data"
+        case _config = "config"
+        case style
     }
 }
 
@@ -332,14 +340,22 @@ struct PaywallPlan: Codable, Identifiable {
     let id: String?
     let productId: String?
     let name: String?
+    let label: String?
     let price: String?
+    let price_display: String?
     let period: String?
     let badge: String?
     let trialDuration: String?
     let isDefault: Bool?
+    let sort_order: Int?
+
+    /// Display name — try label first (Firestore), then name (legacy)
+    var displayName: String { label ?? name ?? "" }
+    /// Display price — try price_display first (Firestore), then price (legacy)
+    var displayPrice: String { price_display ?? price ?? "" }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, price, period, badge
+        case id, name, label, price, period, badge, price_display, sort_order
         case productId = "product_id"
         case trialDuration = "trial_duration"
         case isDefault = "is_default"
@@ -348,7 +364,17 @@ struct PaywallPlan: Codable, Identifiable {
 
 struct PaywallCTA: Codable {
     let text: String?
-    let style: String? // "primary", "gradient"
+    let style: AnyCodable? // Can be string ("primary") or object ({bg_color, text_color})
+    let bg_color: String?
+    let text_color: String?
+    let corner_radius: Double?
+}
+
+struct PaywallDismissConfig: Codable {
+    let allowed: Bool?
+    let style: String?  // "x_button", "swipe_down", "text_link"
+    let delay_seconds: Int?
+    let text: String?
 }
 
 struct PaywallDismiss: Codable {
