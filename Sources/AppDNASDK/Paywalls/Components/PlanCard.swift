@@ -141,21 +141,27 @@ struct PlanCard: View {
         let text = loc?("plan.\(planIndex).badge", badge) ?? badge
         let shape = cardStyle.badgeStyle ?? "capsule"
 
-        if let ts = badgeTextStyle {
-            Text(text)
-                .applyTextStyle(ts)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .background(badgeBg)
-                .clipShape(badgeShape(shape))
-        } else {
-            Text(text)
-                .font(.caption2.bold())
-                .foregroundColor(badgeFg)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .background(badgeBg)
-                .clipShape(badgeShape(shape))
+        if !text.isEmpty {
+            if let ts = badgeTextStyle {
+                Text(text)
+                    .applyTextStyle(ts)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(badgeBg)
+                    .clipShape(badgeShape(shape))
+            } else {
+                Text(text)
+                    .font(.caption2.bold())
+                    .foregroundColor(badgeFg)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(badgeBg)
+                    .clipShape(badgeShape(shape))
+            }
         }
     }
 

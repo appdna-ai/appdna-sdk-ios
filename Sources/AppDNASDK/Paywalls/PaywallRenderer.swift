@@ -1022,9 +1022,12 @@ struct PaywallRenderer: View {
 
             // Header row
             HStack(spacing: 0) {
-                // Feature column header (empty)
-                Text("")
-                    .frame(maxWidth: .infinity)
+                // Feature column header
+                Text("Feature")
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8)
 
                 ForEach(Array(columnLabels.enumerated()), id: \.offset) { colIdx, label in
                     Text(label)

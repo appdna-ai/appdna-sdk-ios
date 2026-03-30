@@ -326,11 +326,20 @@ struct ReviewsCarouselView: View {
                         }
                     }
                     .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                    )
+                    .padding(.horizontal, 8)
                     .tag(index)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 180)
+            .frame(height: 200)
 
             // Page dots
             HStack(spacing: 6) {
