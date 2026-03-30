@@ -218,6 +218,31 @@ struct PaywallSectionData: Codable {
     let showRatingStars: Bool?
     let starColor: String?
 
+    // Section layout/orientation
+    let layout: String?              // testimonial: card/quote/minimal; countdown: boxed/inline/banner
+    let orientation: String?         // timeline: vertical/horizontal
+
+    // Plan display style (per-section override)
+    let planDisplayStyle: String?
+
+    // Show flags for plan enrichment
+    let showPlanIcons: Bool?
+    let showPlanImages: Bool?
+    let showPlanSubtitles: Bool?
+    let showPlanFeatures: Bool?
+    let showSavings: Bool?
+
+    // Multi-card section
+    let cards: [PaywallCardItem]?
+    let cardColumns: Int?
+
+    // Feature columns/gap (items come from existing 'items' field, parsed as PaywallFeatureItem)
+    let featureColumns: Int?
+    let featureGap: CGFloat?
+
+    // CTA gradient
+    let ctaGradient: PaywallGradient?
+
     // Plan card/badge styling (Gap 11)
     let cardCornerRadius: CGFloat?
     let cardPadding: CGFloat?
@@ -331,7 +356,34 @@ struct PaywallSectionData: Codable {
         case selectedBorderColor = "selected_border_color"
         case selectedBgColor = "selected_bg_color"
         case selectedScale = "selected_scale"
+        case layout, orientation
+        case planDisplayStyle = "plan_display_style"
+        case showPlanIcons = "show_plan_icons"
+        case showPlanImages = "show_plan_images"
+        case showPlanSubtitles = "show_plan_subtitles"
+        case showPlanFeatures = "show_plan_features"
+        case showSavings = "show_savings"
+        case cards
+        case cardColumns = "card_columns"
+        case featureColumns = "feature_columns"
+        case featureGap = "feature_gap"
+        case ctaGradient = "cta_gradient"
     }
+}
+
+// MARK: - Multi-card item
+
+struct PaywallCardItem: Codable {
+    let title: String?
+    let subtitle: String?
+    let text: String?
+    let image_url: String?
+    let cta_text: String?
+    let icon: String?
+    let bg_color: String?
+    let text_color: String?
+    let border_color: String?
+    let corner_radius: CGFloat?
 }
 
 struct PaywallPlanTrial: Codable {
@@ -499,6 +551,13 @@ struct PaywallGenericItem: Codable {
     let status: String?       // completed | current | upcoming (timeline)
     let label: String?         // icon_grid
     let description: String?   // icon_grid
+    let text: String?          // features
+    let image_url: String?     // features
+    let included: Bool?        // features (false = excluded)
+    let emoji: String?         // features
+
+    /// Display text — try text, title, label
+    var displayText: String? { text ?? title ?? label }
 }
 
 struct PaywallTableColumn: Codable {

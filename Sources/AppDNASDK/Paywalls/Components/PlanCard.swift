@@ -12,6 +12,11 @@ struct PlanCard: View {
     var sectionStyle: SectionStyleConfig? = nil
     /// Gap 11: Card/badge styling from section data.
     var cardStyle: PlanCardStyle = PlanCardStyle()
+    private var showIcon: Bool { cardStyle.showIcon }
+    private var showImage: Bool { cardStyle.showImage }
+    private var showSubtitle: Bool { cardStyle.showSubtitle }
+    private var showFeatures: Bool { cardStyle.showFeatures }
+    private var showSavings: Bool { cardStyle.showSavings }
 
     private var planNameTextStyle: TextStyleConfig? {
         sectionStyle?.elements?["plan_name"]?.textStyle
@@ -42,6 +47,18 @@ struct PlanCard: View {
     var body: some View {
         Button(action: onSelect) {
             ZStack(alignment: badgeAlignment) {
+                VStack(spacing: 0) {
+                    // Plan image (if enabled)
+                    if showImage, let imgUrl = plan.image_url, let url = URL(string: imgUrl) {
+                        AsyncImage(url: url) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            Color.gray.opacity(0.1)
+                        }
+                        .frame(height: 80)
+                        .clipped()
+                    }
+
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
@@ -91,19 +108,58 @@ struct PlanCard: View {
                                     .foregroundColor(.blue)
                             }
                         }
+
+                        // Description
+                        if showSubtitle, let desc = plan.description, !desc.isEmpty {
+                            Text(desc)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(2)
+                        }
+
+                        // Savings text
+                        if showSavings, let savings = plan.savings_text, !savings.isEmpty {
+                            Text(savings)
+                                .font(.caption2.bold())
+                                .foregroundColor(.green)
+                        }
+
+                        // Per-plan features
+                        if showFeatures, let features = plan.features, !features.isEmpty {
+                            VStack(alignment: .leading, spacing: 2) {
+                                ForEach(features, id: \.self) { feat in
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundColor(.green)
+                                        Text(feat).font(.caption2).foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     Spacer()
+
+                    // Plan icon
+                    if showIcon, let iconName = plan.icon, !iconName.isEmpty {
+                        Image(systemName: iconName)
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                            .padding(.trailing, 4)
+                    }
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .font(.title2)
                         .foregroundColor(isSelected ? selectedBorder : .secondary)
                 }
                 .padding(cardPadding)
+                } // close VStack for image
                 .background(
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .fill(isSelected ? (selectedBg ?? Color(.secondarySystemBackground)) : Color(.secondarySystemBackground))
                 )
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .stroke(isSelected ? selectedBorder : Color.clear, lineWidth: 2)
@@ -190,6 +246,12 @@ struct PlanCardStyle {
     var selectedBorderColor: String? = nil
     var selectedBgColor: String? = nil
     var selectedScale: CGFloat? = nil
+    // Show flags
+    var showIcon: Bool = false
+    var showImage: Bool = false
+    var showSubtitle: Bool = false
+    var showFeatures: Bool = false
+    var showSavings: Bool = false
 
     init() {}
 
@@ -205,6 +267,11 @@ struct PlanCardStyle {
         self.selectedBorderColor = data?.selectedBorderColor
         self.selectedBgColor = data?.selectedBgColor
         self.selectedScale = data?.selectedScale
+        self.showIcon = data?.showPlanIcons ?? false
+        self.showImage = data?.showPlanImages ?? false
+        self.showSubtitle = data?.showPlanSubtitles ?? false
+        self.showFeatures = data?.showPlanFeatures ?? false
+        self.showSavings = data?.showSavings ?? false
     }
 }
 

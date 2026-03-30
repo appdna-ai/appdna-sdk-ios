@@ -257,7 +257,12 @@ struct PaywallRenderer: View {
             return AnyView(HeaderSection(data: section.data, loc: loc, sectionStyle: section.style)
                 .applyContainerStyle(section.style?.container))
         case "features":
-            return AnyView(FeatureList(features: (section.data?.features ?? []).enumerated().map { i, f in loc("feature.\(i)", f) }, sectionStyle: section.style)
+            return AnyView(FeatureList(
+                features: (section.data?.features ?? []).enumerated().map { i, f in loc("feature.\(i)", f) },
+                richItems: section.data?.items,
+                columns: Int(section.data?.featureColumns ?? 1),
+                gap: section.data?.featureGap ?? 12,
+                sectionStyle: section.style)
                 .applyContainerStyle(section.style?.container))
         case "plans":
             // Plans can be in section.data.plans OR top-level config.plans
@@ -271,7 +276,8 @@ struct PaywallRenderer: View {
                 isPurchasing: isPurchasing,
                 onTap: handleCTATap,
                 loc: loc,
-                sectionStyle: section.style
+                sectionStyle: section.style,
+                ctaGradient: section.data?.ctaGradient
             )
             .ctaAnimation(config.animation?.cta_animation)
             .applyContainerStyle(section.style?.container))
@@ -458,11 +464,15 @@ struct PaywallRenderer: View {
         let quoteTextStyle = style?.elements?["quote"]?.textStyle
         let authorNameTextStyle = style?.elements?["author_name"]?.textStyle
         let authorRoleTextStyle = style?.elements?["author_role"]?.textStyle
+        let layout = data?.layout ?? "quote"
 
-        return VStack(spacing: 12) {
-            Text("\u{201C}")
-                .font(.system(size: 40, weight: .bold))
-                .foregroundColor(.accentColor)
+        let content = VStack(spacing: 12) {
+            // Quote mark only for "quote" layout
+            if layout == "quote" {
+                Text("\u{201C}")
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(.accentColor)
+            }
 
             if let ts = quoteTextStyle {
                 Text(loc("testimonial.quote", data?.quote ?? data?.testimonial ?? ""))
@@ -472,52 +482,65 @@ struct PaywallRenderer: View {
                     .italic()
                     .multilineTextAlignment(.center)
                     .foregroundColor(.secondary)
+                    .font(layout == "minimal" ? .caption : .body)
             }
 
-            HStack(spacing: 12) {
-                if let avatarUrl = data?.avatarUrl, let url = URL(string: avatarUrl) {
-                    AsyncImage(url: url) { phase in
-                        if case .success(let image) = phase {
-                            image.resizable().aspectRatio(contentMode: .fill)
+            if layout != "minimal" {
+                HStack(spacing: 12) {
+                    if let avatarUrl = data?.avatarUrl, let url = URL(string: avatarUrl) {
+                        AsyncImage(url: url) { phase in
+                            if case .success(let image) = phase {
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            }
                         }
-                    }
-                    .frame(width: 40, height: 40)
-                    .clipShape(Circle())
-                } else if let name = data?.authorName {
-                    Circle()
-                        .fill(Color.accentColor.opacity(0.2))
                         .frame(width: 40, height: 40)
-                        .overlay(
-                            Text(initials(name))
-                                .font(.caption.bold())
-                                .foregroundColor(.accentColor)
-                        )
-                }
+                        .clipShape(Circle())
+                    } else if let name = data?.authorName {
+                        Circle()
+                            .fill(Color.accentColor.opacity(0.2))
+                            .frame(width: 40, height: 40)
+                            .overlay(
+                                Text(initials(name))
+                                    .font(.caption.bold())
+                                    .foregroundColor(.accentColor)
+                            )
+                    }
 
-                VStack(alignment: .leading, spacing: 2) {
-                    if let name = data?.authorName {
-                        let interpolatedName = loc("testimonial.author_name", name)
-                        if let ts = authorNameTextStyle {
-                            Text(interpolatedName)
-                                .applyTextStyle(ts)
-                        } else {
-                            Text(interpolatedName)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundColor(.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let name = data?.authorName {
+                            let interpolatedName = loc("testimonial.author_name", name)
+                            if let ts = authorNameTextStyle {
+                                Text(interpolatedName).applyTextStyle(ts)
+                            } else {
+                                Text(interpolatedName).font(.subheadline.weight(.semibold)).foregroundColor(.primary)
+                            }
                         }
-                    }
-                    if let role = data?.authorRole {
-                        let interpolatedRole = loc("testimonial.author_role", role)
-                        if let ts = authorRoleTextStyle {
-                            Text(interpolatedRole)
-                                .applyTextStyle(ts)
-                        } else {
-                            Text(interpolatedRole)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                        if let role = data?.authorRole {
+                            let interpolatedRole = loc("testimonial.author_role", role)
+                            if let ts = authorRoleTextStyle {
+                                Text(interpolatedRole).applyTextStyle(ts)
+                            } else {
+                                Text(interpolatedRole).font(.caption).foregroundColor(.secondary)
+                            }
                         }
                     }
                 }
+            } else if let name = data?.authorName {
+                // Minimal: just author name inline
+                Text("— \(loc("testimonial.author_name", name))")
+                    .font(.caption.weight(.medium)).foregroundColor(.secondary)
+            }
+        }
+        .padding(layout == "card" ? 16 : 0)
+
+        return Group {
+            if layout == "card" {
+                content
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
+                    .padding(.horizontal)
+            } else {
+                content
             }
         }
         .applyContainerStyle(style?.container)
@@ -599,9 +622,30 @@ struct PaywallRenderer: View {
     @ViewBuilder
     private func countdownSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
         let duration = data?.durationSeconds ?? data?.countdownSeconds ?? 3600
-        let textColor = data?.color ?? data?.accentColor ?? "#FFFFFF"
         let valueTextStyle = style?.elements?["value"]?.textStyle
-        CountdownTimerView(seconds: duration, valueTextStyle: valueTextStyle)
+        let layout = data?.layout ?? "inline"
+        let labelText = data?.label ?? data?.labelText
+
+        VStack(spacing: 8) {
+            // Label text (e.g. "Offer ends in")
+            if let label = labelText {
+                Text(loc("countdown.label", label))
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(.secondary)
+            }
+
+            if layout == "boxed" || layout == "banner" {
+                CountdownTimerView(seconds: duration, valueTextStyle: valueTextStyle)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: layout == "banner" ? 0 : 12)
+                            .fill(Color(hex: data?.backgroundColor ?? "#1a1a1a"))
+                    )
+            } else {
+                CountdownTimerView(seconds: duration, valueTextStyle: valueTextStyle)
+            }
+        }
     }
 
     // MARK: - SPEC-089d: Legal section (AC-029)
@@ -812,36 +856,67 @@ struct PaywallRenderer: View {
     private func cardSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
         let radius = data?.cornerRadius ?? 16
 
-        VStack(alignment: .leading, spacing: 12) {
-            if let title = data?.title {
-                Text(loc("card.title", title))
-                    .font(.headline)
-                    .foregroundColor(.primary)
+        if let cards = data?.cards, !cards.isEmpty {
+            // Multi-card grid
+            let cols = data?.cardColumns ?? 2
+            let gridCols = Array(repeating: GridItem(.flexible(), spacing: 12), count: cols)
+            LazyVGrid(columns: gridCols, spacing: 12) {
+                ForEach(Array(cards.enumerated()), id: \.offset) { _, card in
+                    singleCardView(card: card, radius: card.corner_radius ?? radius)
+                }
             }
-
-            if let subtitle = data?.subtitle {
-                Text(loc("card.subtitle", subtitle))
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+            .padding(.horizontal)
+            .applyContainerStyle(style?.container)
+        } else {
+            // Single card (legacy)
+            VStack(alignment: .leading, spacing: 12) {
+                if let title = data?.title {
+                    Text(loc("card.title", title)).font(.headline).foregroundColor(.primary)
+                }
+                if let subtitle = data?.subtitle {
+                    Text(loc("card.subtitle", subtitle)).font(.subheadline).foregroundColor(.secondary)
+                }
+                if let text = data?.text {
+                    Text(loc("card.body", text)).font(.body).foregroundColor(.secondary)
+                }
             }
+            .padding(data?.padding ?? 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(hex: data?.backgroundColor ?? "#1A1A2E"))
+            .clipShape(RoundedRectangle(cornerRadius: radius))
+            .overlay(RoundedRectangle(cornerRadius: radius).stroke(Color(hex: data?.borderColor ?? "#333333"), lineWidth: 1))
+            .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+            .applyContainerStyle(style?.container)
+        }
+    }
 
-            // Render child text/body if present
-            if let text = data?.text {
-                Text(loc("card.body", text))
-                    .font(.body)
-                    .foregroundColor(.secondary)
+    private func singleCardView(card: PaywallCardItem, radius: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let imgUrl = card.image_url, let url = URL(string: imgUrl) {
+                AsyncImage(url: url) { img in img.resizable().scaledToFill() } placeholder: { Color.gray.opacity(0.1) }
+                    .frame(height: 80).clipped()
+            }
+            if let icon = card.icon, !icon.isEmpty {
+                Image(systemName: icon).font(.title2).foregroundColor(.accentColor)
+            }
+            if let title = card.title {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundColor(Color(hex: card.text_color ?? "#FFFFFF"))
+            }
+            if let subtitle = card.subtitle {
+                Text(subtitle).font(.caption).foregroundColor(Color(hex: card.text_color ?? "#FFFFFF").opacity(0.7))
+            }
+            if let text = card.text {
+                Text(text).font(.caption).foregroundColor(Color(hex: card.text_color ?? "#FFFFFF").opacity(0.7))
+            }
+            if let cta = card.cta_text, !cta.isEmpty {
+                Text(cta).font(.caption.bold()).foregroundColor(.accentColor)
             }
         }
-        .padding(data?.padding ?? 16)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(hex: data?.backgroundColor ?? "#1A1A2E"))
+        .background(Color(hex: card.bg_color ?? "#1A1A2E"))
         .clipShape(RoundedRectangle(cornerRadius: radius))
-        .overlay(
-            RoundedRectangle(cornerRadius: radius)
-                .stroke(Color(hex: data?.borderColor ?? "#333333"), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
-        .applyContainerStyle(style?.container)
+        .overlay(RoundedRectangle(cornerRadius: radius).stroke(Color(hex: card.border_color ?? "#333333"), lineWidth: 1))
     }
 
     // MARK: - SPEC-089d: Carousel section (AC-033)
@@ -870,7 +945,45 @@ struct PaywallRenderer: View {
         let items = data?.items ?? []
         let isCompact = data?.compact ?? false
         let showLine = data?.showLine ?? true
+        let isHorizontal = data?.orientation == "horizontal"
 
+        if isHorizontal {
+            // Horizontal timeline
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                        VStack(spacing: 8) {
+                            let statusColor = timelineStatusColor(
+                                status: item.status ?? "upcoming",
+                                completedColor: data?.completedColor ?? "#22C55E",
+                                currentColor: data?.currentColor ?? "#6366F1",
+                                upcomingColor: data?.upcomingColor ?? "#666666"
+                            )
+                            HStack(spacing: 0) {
+                                if index > 0 && showLine {
+                                    Rectangle().fill(Color(hex: data?.lineColor ?? "#333333")).frame(height: 2)
+                                }
+                                ZStack {
+                                    Circle().fill(statusColor).frame(width: 24, height: 24)
+                                    if item.status == "completed" {
+                                        Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundColor(.primary)
+                                    }
+                                }
+                                if index < items.count - 1 && showLine {
+                                    Rectangle().fill(Color(hex: data?.lineColor ?? "#333333")).frame(height: 2)
+                                }
+                            }
+                            if let title = item.title {
+                                Text(title).font(.caption.weight(.semibold)).foregroundColor(.primary).multilineTextAlignment(.center)
+                            }
+                        }
+                        .frame(width: 80)
+                    }
+                }
+                .padding(.horizontal, 8)
+            }
+        } else {
+        // Vertical timeline (default)
         VStack(spacing: isCompact ? 12 : 24) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 HStack(spacing: 16) {
@@ -920,6 +1033,7 @@ struct PaywallRenderer: View {
                 }
             }
         }
+        } // close else (vertical)
     }
 
     private func timelineStatusColor(status: String, completedColor: String, currentColor: String, upcomingColor: String) -> Color {
@@ -1054,15 +1168,15 @@ struct PaywallRenderer: View {
                     ForEach(Array((row.values ?? []).enumerated()), id: \.offset) { valIdx, value in
                         Group {
                             switch value.lowercased() {
-                            case "check":
+                            case "check", "true", "yes", "y", "✓":
                                 Image(systemName: "checkmark")
                                     .foregroundColor(checkClr)
                                     .font(.caption.weight(.bold))
-                            case "cross":
+                            case "cross", "false", "no", "n", "-", "✗":
                                 Image(systemName: "xmark")
                                     .foregroundColor(crossClr)
                                     .font(.caption.weight(.bold))
-                            case "partial":
+                            case "partial", "~":
                                 Image(systemName: "minus")
                                     .foregroundColor(.yellow)
                                     .font(.caption.weight(.bold))
@@ -1213,10 +1327,10 @@ struct PaywallRenderer: View {
 
     // SPEC-084: Grid/carousel/stack plan layouts
     private func plansSection(plans: [PaywallPlan], style: SectionStyleConfig? = nil) -> some View {
-        // Gap 10: Read plan_display_style from layout, falling back to layout.type
-        let displayStyle = config.layout?.plan_display_style ?? config.layout?.type ?? "stack"
-        // Gap 11: Build card styling from section data
+        // Gap 10: Read plan_display_style from section data first, then layout, then type
         let sectionData = config.sections.first(where: { $0.type == "plans" })?.data
+        let displayStyle = sectionData?.planDisplayStyle ?? config.layout?.plan_display_style ?? config.layout?.type ?? "stack"
+        // Gap 11: Build card styling from section data
         let cardStyle = PlanCardStyle(from: sectionData)
         let cardGap = cardStyle.cardGap ?? 12
 

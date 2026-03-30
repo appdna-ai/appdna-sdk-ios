@@ -8,6 +8,8 @@ struct CTAButton: View {
     var loc: ((String, String) -> String)? = nil
     /// SPEC-084: Per-section style with element overrides.
     var sectionStyle: SectionStyleConfig? = nil
+    /// CTA gradient (from section data)
+    var ctaGradient: PaywallGradient? = nil
 
     private var buttonElement: ElementStyleConfig? {
         sectionStyle?.elements?["button"]
@@ -50,8 +52,19 @@ struct CTAButton: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: buttonCornerRadius)
-                    .fill(buttonBgColor)
+                Group {
+                    if let grad = ctaGradient, let stops = grad.stops, stops.count >= 2 {
+                        RoundedRectangle(cornerRadius: buttonCornerRadius)
+                            .fill(LinearGradient(
+                                stops: stops.map { Gradient.Stop(color: Color(hex: $0.color ?? "#000"), location: ($0.position ?? 0) / 100.0) },
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ))
+                    } else {
+                        RoundedRectangle(cornerRadius: buttonCornerRadius)
+                            .fill(buttonBgColor)
+                    }
+                }
             )
         }
         .disabled(isPurchasing)
