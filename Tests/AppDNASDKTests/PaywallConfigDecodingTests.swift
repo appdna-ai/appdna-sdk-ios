@@ -844,7 +844,8 @@ final class PaywallConfigDecodingTests: XCTestCase {
         let section = try JSONDecoder().decode(PaywallSection.self, from: json)
         XCTAssertEqual(section.type, "cta")
         XCTAssertEqual(section.data?.cta?.text, "Start Free Trial")
-        XCTAssertEqual(section.data?.cta?.style?.value as? String, "primary")
+        // "style": "primary" is a legacy string value — styleObj is nil (only objects decode)
+        XCTAssertNil(section.data?.cta?.styleObj)
     }
 
     // 22. Unknown section type does not crash
