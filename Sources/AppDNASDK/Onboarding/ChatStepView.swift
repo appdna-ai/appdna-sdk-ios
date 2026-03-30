@@ -239,7 +239,7 @@ struct ChatStepView: View {
     private var inputBar: some View {
         HStack(spacing: 8) {
             TextField(chatConfig?.input_placeholder ?? "Type your message...", text: $inputText)
-                .font(.subheadline)
+                .font(.system(size: CGFloat(style?.input_font_size ?? 14)))
                 .foregroundColor(inputTextColor)
                 .padding(12)
                 .background(inputBg)

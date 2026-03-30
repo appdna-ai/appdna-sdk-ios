@@ -77,6 +77,7 @@ public struct ChatStyleConfig: Codable {
     public let input_bg: String?
     public let input_text: String?
     public let input_border: String?
+    public let input_font_size: Int?
     public let typing_indicator_color: String?
     public let timestamp_color: String?
     public let quick_reply_bg: String?
