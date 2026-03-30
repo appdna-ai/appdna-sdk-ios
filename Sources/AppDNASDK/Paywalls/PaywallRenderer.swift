@@ -988,7 +988,6 @@ struct PaywallRenderer: View {
 
     // MARK: - SPEC-089d: Comparison table section (AC-036)
 
-    @ViewBuilder
     private func comparisonTableSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
         // Column labels: prefer structured tableColumns, fall back to plain string array from AnyCodable columns
         let structuredCols = data?.tableColumns ?? []
@@ -1011,7 +1010,7 @@ struct PaywallRenderer: View {
         let borderClr = Color(hex: data?.borderColor ?? "#333333")
         let radius = data?.cornerRadius ?? 12
 
-        VStack(spacing: 0) {
+        return VStack(spacing: 0) {
             // Title above table
             if let title = data?.title {
                 Text(loc("comparison_table.title", title))
