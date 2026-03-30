@@ -848,6 +848,98 @@ final class PaywallConfigDecodingTests: XCTestCase {
         XCTAssertNil(section.data?.cta?.styleObj)
     }
 
+    // 21b. CTA with style object (console format)
+    func testDecodeCTAWithStyleObject() throws {
+        let json = """
+        {
+            "text": "Subscribe Now",
+            "style": {
+                "bg_color": "#6366f1",
+                "text_color": "#ffffff",
+                "corner_radius": 14
+            }
+        }
+        """.data(using: .utf8)!
+
+        let cta = try JSONDecoder().decode(PaywallCTA.self, from: json)
+        XCTAssertEqual(cta.text, "Subscribe Now")
+        XCTAssertEqual(cta.styleObj?.bg_color, "#6366f1")
+        XCTAssertEqual(cta.styleObj?.text_color, "#ffffff")
+        XCTAssertEqual(cta.styleObj?.corner_radius, 14)
+        XCTAssertEqual(cta.resolvedBgColor, "#6366f1")
+        XCTAssertEqual(cta.resolvedTextColor, "#ffffff")
+        XCTAssertEqual(cta.resolvedCornerRadius, 14)
+    }
+
+    // 21c. CTA with direct color fields (fallback)
+    func testDecodeCTAWithDirectFields() throws {
+        let json = """
+        {
+            "text": "Buy",
+            "bg_color": "#FF0000",
+            "text_color": "#000000",
+            "corner_radius": 8
+        }
+        """.data(using: .utf8)!
+
+        let cta = try JSONDecoder().decode(PaywallCTA.self, from: json)
+        XCTAssertNil(cta.styleObj)
+        XCTAssertEqual(cta.resolvedBgColor, "#FF0000")
+        XCTAssertEqual(cta.resolvedTextColor, "#000000")
+        XCTAssertEqual(cta.resolvedCornerRadius, 8)
+    }
+
+    // 21d. Dismiss with allowed=false
+    func testDecodeDismissAllowedFalse() throws {
+        let json = """
+        {
+            "allowed": false,
+            "style": "x_button",
+            "delay_seconds": 0
+        }
+        """.data(using: .utf8)!
+
+        let dismiss = try JSONDecoder().decode(PaywallDismiss.self, from: json)
+        XCTAssertFalse(dismiss.isAllowed)
+        XCTAssertEqual(dismiss.style, "x_button")
+    }
+
+    // 21e. Plan identity uses product_id
+    func testPlanIdFallsBackToProductId() throws {
+        let json = """
+        {
+            "product_id": "com.app.yearly",
+            "label": "Yearly",
+            "price_display": "$49.99",
+            "is_default": true,
+            "sort_order": 0
+        }
+        """.data(using: .utf8)!
+
+        let plan = try JSONDecoder().decode(PaywallPlan.self, from: json)
+        XCTAssertEqual(plan.id, "com.app.yearly")
+        XCTAssertEqual(plan.displayName, "Yearly")
+        XCTAssertEqual(plan.displayPrice, "$49.99")
+    }
+
+    // 21f. Plan trial object format
+    func testDecodePlanTrialObject() throws {
+        let json = """
+        {
+            "product_id": "com.app.monthly",
+            "label": "Monthly",
+            "price_display": "$9.99",
+            "is_default": false,
+            "sort_order": 1,
+            "trial": { "duration_days": 7, "label": "7-day free trial" }
+        }
+        """.data(using: .utf8)!
+
+        let plan = try JSONDecoder().decode(PaywallPlan.self, from: json)
+        XCTAssertEqual(plan.trial?.duration_days, 7)
+        XCTAssertEqual(plan.trialLabel, "7-day free trial")
+    }
+
     // 22. Unknown section type does not crash
     func testDecodeUnknownSectionType() throws {
         let json = """
