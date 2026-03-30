@@ -1495,17 +1495,15 @@ struct PaywallRenderer: View {
             return AnyView(VStack(spacing: 0) {
                 ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
                     HStack(alignment: .top, spacing: 12) {
-                        // Timeline dot + line
+                        // Timeline dot + line (always show line as decorative element)
                         VStack(spacing: 0) {
                             Circle()
                                 .fill(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
                                 .frame(width: 12, height: 12)
-                            if index < plans.count - 1 {
-                                Rectangle()
-                                    .fill(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1").opacity(0.3))
-                                    .frame(width: 2)
-                                    .frame(maxHeight: .infinity)
-                            }
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(width: 2)
+                                .frame(maxHeight: .infinity)
                         }
                         .frame(width: 12)
                         .padding(.top, 6)
@@ -1562,8 +1560,236 @@ struct PaywallRenderer: View {
                 }
             })
 
-        // comparison_cards, feature_matrix, pricing_table, tier_ladder, interactive_slider
-        case "comparison_cards", "feature_matrix", "pricing_table", "tier_ladder", "interactive_slider":
+        // Comparison table: feature rows with check/cross per plan
+        case "comparison_table", "comparison_cards", "feature_matrix", "pricing_table":
+            let sectionData = config.sections.first(where: { $0.type == "plans" })?.data
+            let compFeatures = sectionData?.features ?? []
+            return AnyView(VStack(spacing: 0) {
+                // Header row: plan names
+                HStack(spacing: 0) {
+                    Text("").frame(maxWidth: .infinity)
+                    ForEach(plans, id: \.id) { plan in
+                        Button { selectPlan(plan.id) } label: {
+                            Text(plan.displayName)
+                                .font(.caption.bold())
+                                .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : .primary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .background(Color.gray.opacity(0.05))
+                // Price row
+                HStack(spacing: 0) {
+                    Text("Price").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8)
+                    ForEach(plans, id: \.id) { plan in
+                        Text(plan.displayPrice).font(.caption.bold()).foregroundColor(.primary).frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(.vertical, 6)
+                Divider()
+                // Feature rows
+                ForEach(compFeatures, id: \.self) { feature in
+                    HStack(spacing: 0) {
+                        Text(feature).font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8)
+                        ForEach(plans, id: \.id) { _ in
+                            Image(systemName: "checkmark").font(.caption.bold()).foregroundColor(.green).frame(maxWidth: .infinity)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    Divider()
+                }
+                // Badge row
+                HStack(spacing: 0) {
+                    Text("").frame(maxWidth: .infinity)
+                    ForEach(plans, id: \.id) { plan in
+                        if let badge = plan.badge, !badge.isEmpty {
+                            Text(badge).font(.caption2.bold()).foregroundColor(Color(hex: cardStyle.badgeTextColor ?? "#FFF"))
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(Color(hex: cardStyle.badgeBgColor ?? "#6366F1")).clipShape(Capsule())
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Text("").frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
+            )
+
+        // Single hero: one featured plan, large card
+        case "single_hero":
+            let hero = plans.first(where: { $0.isDefault == true }) ?? plans.first
+            guard let plan = hero else { return planLayoutFallbackStack(plans: plans, style: style, cardStyle: cardStyle) }
+            let idx = plans.firstIndex(where: { $0.id == plan.id }) ?? 0
+            return AnyView(
+                Button { selectPlan(plan.id) } label: {
+                    VStack(spacing: 12) {
+                        if let trial = plan.trialLabel {
+                            Text(trial.uppercased())
+                                .font(.caption.bold()).foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
+                                .tracking(0.5)
+                        }
+                        Text(plan.displayName).font(.title2.bold()).foregroundColor(.primary)
+                        Text(plan.displayPrice).font(.title.bold()).foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
+                        if let badge = plan.badge, !badge.isEmpty {
+                            Text(badge).font(.caption.bold()).foregroundColor(Color(hex: cardStyle.badgeTextColor ?? "#FFF"))
+                                .padding(.horizontal, 14).padding(.vertical, 6)
+                                .background(Color(hex: cardStyle.badgeBgColor ?? "#6366F1")).clipShape(Capsule())
+                        }
+                        if let desc = plan.description, !desc.isEmpty {
+                            Text(desc).font(.subheadline).foregroundColor(.secondary).multilineTextAlignment(.center)
+                        }
+                        if let features = plan.features, !features.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(features, id: \.self) { f in
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "checkmark.circle.fill").font(.caption).foregroundColor(.green)
+                                        Text(f).font(.caption).foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(24)
+                    .frame(maxWidth: .infinity)
+                    .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 16)
+                        .fill(Color(.secondarySystemBackground)))
+                    .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 16)
+                        .stroke(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"), lineWidth: 2))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal)
+            )
+
+        // Product as CTA: each plan IS a buy button
+        case "product_as_cta":
+            return AnyView(VStack(spacing: cardStyle.cardGap ?? 10) {
+                ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                    Button { selectPlan(plan.id); handleCTATap() } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(plan.displayName).font(.subheadline.weight(.semibold)).foregroundColor(.white)
+                                if let trial = plan.trialLabel {
+                                    Text(trial).font(.caption).foregroundColor(.white.opacity(0.8))
+                                }
+                            }
+                            Spacer()
+                            Text(plan.displayPrice).font(.headline.bold()).foregroundColor(.white)
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity)
+                        .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 14)
+                            .fill(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1")))
+                    }
+                    .buttonStyle(.plain)
+                }
+            })
+
+        // Carousel cards: horizontally swipeable rich cards
+        case "carousel_cards":
+            return AnyView(
+                TabView {
+                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                        Button { selectPlan(plan.id) } label: {
+                            VStack(spacing: 8) {
+                                if let trial = plan.trialLabel {
+                                    Text(trial.uppercased()).font(.caption2.bold())
+                                        .foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
+                                }
+                                Text(plan.displayName).font(.headline).foregroundColor(.primary)
+                                Text(plan.displayPrice).font(.title3.bold()).foregroundColor(.primary)
+                                if let badge = plan.badge, !badge.isEmpty {
+                                    Text(badge).font(.caption2.bold()).foregroundColor(Color(hex: cardStyle.badgeTextColor ?? "#FFF"))
+                                        .padding(.horizontal, 10).padding(.vertical, 4)
+                                        .background(Color(hex: cardStyle.badgeBgColor ?? "#6366F1")).clipShape(Capsule())
+                                }
+                                if let desc = plan.description, !desc.isEmpty {
+                                    Text(desc).font(.caption).foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(20)
+                            .frame(maxWidth: .infinity)
+                            .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 16)
+                                .fill(selectedPlanId == plan.id ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color(.secondarySystemBackground)) : Color(.secondarySystemBackground)))
+                            .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 16)
+                                .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.gray.opacity(0.2), lineWidth: selectedPlanId == plan.id ? 2 : 1))
+                            .padding(.horizontal, 8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: plans.count > 1 ? .always : .never))
+                .frame(height: 200)
+            )
+
+        // Accordion: expandable/collapsible rows
+        case "accordion":
+            return AnyView(VStack(spacing: cardStyle.cardGap ?? 8) {
+                ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                    let isExpanded = selectedPlanId == plan.id
+                    Button { selectPlan(plan.id) } label: {
+                        VStack(spacing: 0) {
+                            // Header row (always visible)
+                            HStack {
+                                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                                    .font(.caption.bold())
+                                    .foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
+                                    .frame(width: 16)
+                                Text(plan.displayName).font(.subheadline.weight(.semibold)).foregroundColor(.primary)
+                                Spacer()
+                                Text(plan.displayPrice).font(.subheadline.bold()).foregroundColor(.primary)
+                                if let badge = plan.badge, !badge.isEmpty {
+                                    Text(badge).font(.system(size: 9).bold()).foregroundColor(Color(hex: cardStyle.badgeTextColor ?? "#FFF"))
+                                        .padding(.horizontal, 6).padding(.vertical, 2)
+                                        .background(Color(hex: cardStyle.badgeBgColor ?? "#6366F1")).clipShape(Capsule())
+                                }
+                            }
+                            .padding(12)
+
+                            // Expanded content
+                            if isExpanded {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    if let trial = plan.trialLabel {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "gift").font(.caption).foregroundColor(.blue)
+                                            Text(trial).font(.caption).foregroundColor(.blue)
+                                        }
+                                    }
+                                    if let desc = plan.description, !desc.isEmpty {
+                                        Text(desc).font(.caption).foregroundColor(.secondary)
+                                    }
+                                    if let savings = plan.savings_text, !savings.isEmpty {
+                                        Text(savings).font(.caption.bold()).foregroundColor(.green)
+                                    }
+                                    if let features = plan.features, !features.isEmpty {
+                                        ForEach(features, id: \.self) { f in
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundColor(.green)
+                                                Text(f).font(.caption).foregroundColor(.secondary)
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, 12).padding(.bottom, 12)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                            }
+                        }
+                        .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
+                            .fill(isExpanded ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color(.secondarySystemBackground)) : Color(.secondarySystemBackground)))
+                        .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
+                            .stroke(isExpanded ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.gray.opacity(0.2), lineWidth: isExpanded ? 2 : 1))
+                    }
+                    .buttonStyle(.plain)
+                    .animation(.easeInOut(duration: 0.25), value: isExpanded)
+                }
+            })
+
+        // tier_ladder, interactive_slider — fallback
+        case "tier_ladder", "interactive_slider":
             return planLayoutFallbackStack(plans: plans, style: style, cardStyle: cardStyle)
 
         // Default: unknown styles fall back to vertical_stack
