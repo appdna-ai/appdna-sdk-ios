@@ -130,7 +130,7 @@ public struct OnboardingStep: Codable, Identifiable {
                     options: decoded.options, selection_mode: decoded.selection_mode,
                     items: decoded.items, layout: decoded.layout,
                     fields: decoded.fields, validation_mode: decoded.validation_mode,
-                    field_defaults: decoded.field_defaults,
+                    field_defaults: decoded.field_defaults, chat_config: decoded.chat_config,
                     content_blocks: stepBlocks, layout_variant: decoded.layout_variant,
                     background: decoded.background, text_style: decoded.text_style,
                     element_style: decoded.element_style, animation: decoded.animation,
@@ -166,6 +166,7 @@ public struct OnboardingStep: Codable, Identifiable {
         case value_prop
         case custom
         case form
+        case interactive_chat
 
         public init(from decoder: Decoder) throws {
             let container = try decoder.singleValueContainer()
@@ -214,6 +215,9 @@ public struct StepConfig: Codable {
     // SPEC-083: Populated by applyOverrides from StepConfigOverride.fieldDefaults
     public let field_defaults: [String: AnyCodable]?
 
+    // SPEC-090: Interactive chat
+    public let chat_config: ChatConfig?
+
     // SPEC-084: Content blocks (block-based step rendering)
     public let content_blocks: [ContentBlock]?
     public let layout_variant: String?   // image_top, image_bottom, image_fullscreen, image_split, no_image
@@ -228,6 +232,7 @@ public struct StepConfig: Codable {
         case title, subtitle, image_url, cta_text, skip_enabled
         case options, selection_mode, items, layout
         case fields, validation_mode, field_defaults
+        case chat_config
         case content_blocks, layout_variant, background
         case text_style, element_style, animation
         case localizations, default_locale
@@ -247,6 +252,7 @@ public struct StepConfig: Codable {
         fields = try c.decodeIfPresent([FormField].self, forKey: .fields)
         validation_mode = try c.decodeIfPresent(String.self, forKey: .validation_mode)
         field_defaults = nil  // Never from JSON; only set via applyOverrides
+        chat_config = try c.decodeIfPresent(ChatConfig.self, forKey: .chat_config)
         content_blocks = try c.decodeIfPresent([ContentBlock].self, forKey: .content_blocks)
         layout_variant = try c.decodeIfPresent(String.self, forKey: .layout_variant)
         background = try c.decodeIfPresent(BackgroundStyleConfig.self, forKey: .background)
@@ -265,6 +271,7 @@ public struct StepConfig: Codable {
         items: [ValuePropItem]? = nil, layout: [String: AnyCodable]? = nil,
         fields: [FormField]? = nil, validation_mode: String? = nil,
         field_defaults: [String: AnyCodable]? = nil,
+        chat_config: ChatConfig? = nil,
         content_blocks: [ContentBlock]? = nil, layout_variant: String? = nil,
         background: BackgroundStyleConfig? = nil, text_style: TextStyleConfig? = nil,
         element_style: ElementStyleConfig? = nil, animation: AnimationConfig? = nil,
@@ -275,7 +282,7 @@ public struct StepConfig: Codable {
         self.options = options; self.selection_mode = selection_mode
         self.items = items; self.layout = layout
         self.fields = fields; self.validation_mode = validation_mode
-        self.field_defaults = field_defaults
+        self.field_defaults = field_defaults; self.chat_config = chat_config
         self.content_blocks = content_blocks; self.layout_variant = layout_variant
         self.background = background; self.text_style = text_style
         self.element_style = element_style; self.animation = animation

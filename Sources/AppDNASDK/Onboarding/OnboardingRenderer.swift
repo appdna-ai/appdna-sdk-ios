@@ -49,6 +49,7 @@ struct OnboardingFlowHost: View {
                             onSkip: {
                                 handleStepSkipped(step: step)
                             },
+                            flowId: flow.id,
                             currentStepIndex: currentIndex,
                             totalSteps: flow.steps.count
                         )
@@ -629,6 +630,8 @@ struct OnboardingStepRouter: View {
     let effectiveConfig: StepConfig
     let onNext: ([String: Any]?) -> Void
     let onSkip: () -> Void
+    /// Flow ID for chat webhook context
+    var flowId: String = ""
     /// Current step index (0-based) for auto-binding page_indicator / progress_bar.
     var currentStepIndex: Int = 0
     /// Total steps in the flow for auto-binding page_indicator / progress_bar.
@@ -767,6 +770,8 @@ struct OnboardingStepRouter: View {
                 CustomStepView(config: effectiveConfig, onNext: { onNext(nil) })
             case .form:
                 FormStepView(config: effectiveConfig, onNext: onNext, apiClient: AppDNA.geocodeClient)
+            case .interactive_chat:
+                ChatStepView(step: step, flowId: flowId, onNext: { data in onNext(data) }, onSkip: onSkip)
             }
 
             if step.config.skip_enabled == true {
