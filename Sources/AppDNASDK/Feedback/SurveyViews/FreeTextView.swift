@@ -5,6 +5,7 @@ struct FreeTextView: View {
     let question: SurveyQuestion
     @Binding var answer: SurveyAnswer?
     @State private var text: String = ""
+    @FocusState private var isFocused: Bool
 
     private var maxLength: Int {
         question.free_text_config?.max_length ?? 500
@@ -27,9 +28,14 @@ struct FreeTextView: View {
                         .foregroundColor(.gray.opacity(0.5))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 12)
+                        .onTapGesture {
+                            isFocused = true
+                        }
                 }
 
                 TextEditor(text: $text)
+                    .focused($isFocused)
+                    .scrollContentBackground(.hidden)
                     .frame(minHeight: 100, maxHeight: 200)
                     .padding(4)
                     .onChange(of: text) { newValue in
@@ -43,6 +49,9 @@ struct FreeTextView: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.gray.opacity(0.3), lineWidth: 1)
             )
+            .onTapGesture {
+                isFocused = true
+            }
 
             HStack {
                 Spacer()

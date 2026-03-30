@@ -84,8 +84,9 @@ struct PaywallRenderer: View {
                 ConfettiOverlay(effect: effect)
             }
 
-            // Dismiss control — respect allowed flag
-            if showDismiss && (config.dismiss?.isAllowed ?? true) {
+            // Dismiss control — show by default when config.dismiss is nil (not in Firestore)
+            let dismissAllowed = config.dismiss?.isAllowed ?? true
+            if showDismiss && dismissAllowed {
                 let dismissStyle = config.dismiss?.style ?? "x_button"
                 switch dismissStyle {
                 case "text_link":
@@ -123,14 +124,14 @@ struct PaywallRenderer: View {
                 selectedPlanId = plans.first(where: { $0.isDefault == true })?.id ?? plans.first?.id
             }
 
-            // Handle dismiss delay
-            let delay = config.dismiss?.delaySeconds ?? 0
-            if delay > 0 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + Double(delay)) {
+            // Handle dismiss delay — always show dismiss when config.dismiss is nil (default behavior)
+            let dismissDelay = config.dismiss?.delaySeconds ?? 0
+            if dismissDelay > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(dismissDelay)) {
                     withAnimation { showDismiss = true }
                 }
             } else {
-                showDismiss = true
+                withAnimation { showDismiss = true }
             }
         }
         .gesture(
@@ -1125,15 +1126,6 @@ struct PaywallRenderer: View {
         let radius = data?.cornerRadius ?? 12
 
         return VStack(spacing: 0) {
-            // Title above table
-            if let title = data?.title {
-                Text(loc("comparison_table.title", title))
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.bottom, 12)
-            }
-
             // Header row
             HStack(spacing: 0) {
                 // Feature column header
@@ -1329,7 +1321,7 @@ struct PaywallRenderer: View {
     private func plansSection(plans: [PaywallPlan], style: SectionStyleConfig? = nil) -> some View {
         // Gap 10: Read plan_display_style from section data first, then layout, then type
         let sectionData = config.sections.first(where: { $0.type == "plans" })?.data
-        let displayStyle = sectionData?.planDisplayStyle ?? config.layout?.plan_display_style ?? config.layout?.type ?? "stack"
+        let displayStyle = sectionData?.planDisplayStyle ?? config.layout?.plan_display_style ?? config.layout?.type ?? "vertical_stack"
         // Gap 11: Build card styling from section data
         let cardStyle = PlanCardStyle(from: sectionData)
         let cardGap = cardStyle.cardGap ?? 12
@@ -1494,12 +1486,16 @@ struct PaywallRenderer: View {
                 }
             })
 
+        // Explicit vertical stack cases
+        case "vertical_stack", "stack":
+            return planLayoutFallbackStack(plans: plans, style: style, cardStyle: cardStyle)
+
         // comparison_cards, feature_matrix, pricing_table, timeline, tier_ladder, interactive_slider
         // These advanced styles fall back to vertical_stack with full PlanCard
         case "comparison_cards", "feature_matrix", "pricing_table", "timeline", "tier_ladder", "interactive_slider":
             return planLayoutFallbackStack(plans: plans, style: style, cardStyle: cardStyle)
 
-        // Default: vertical_stack / stack
+        // Default: unknown styles fall back to vertical_stack
         default:
             return planLayoutFallbackStack(plans: plans, style: style, cardStyle: cardStyle)
         }

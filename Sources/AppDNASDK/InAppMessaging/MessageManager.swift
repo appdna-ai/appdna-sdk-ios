@@ -26,29 +26,55 @@ final class MessageManager {
 
     /// Evaluate all active messages against an event. Called internally after every track() call.
     func onEvent(eventName: String, properties: [String: Any]?) {
-        guard !isPresenting, !suppressDisplay else { return }
+        guard !isPresenting, !suppressDisplay else {
+            Log.debug("[Messages] Skipping event '\(eventName)' — isPresenting=\(isPresenting), suppressDisplay=\(suppressDisplay)")
+            return
+        }
 
         let messages = remoteConfigManager.getActiveMessages()
+        Log.debug("[Messages] Evaluating \(messages.count) active message(s) for event '\(eventName)'")
         var candidates: [(id: String, config: MessageConfig)] = []
+        var filteredByEvent = 0
+        var filteredByConditions = 0
+        var filteredByFrequency = 0
+        var filteredByDateRange = 0
 
         for (id, config) in messages {
             // 1. Event name match
-            guard config.trigger_rules?.event == eventName else { continue }
+            guard config.trigger_rules?.event == eventName else {
+                filteredByEvent += 1
+                continue
+            }
 
             // 2. Conditions evaluation
-            guard evaluateConditions(config.trigger_rules?.conditions, properties: properties ?? [:]) else { continue }
+            guard evaluateConditions(config.trigger_rules?.conditions, properties: properties ?? [:]) else {
+                filteredByConditions += 1
+                continue
+            }
 
             // 3. Frequency check
             guard frequencyTracker.canShow(
                 messageId: id,
                 frequency: config.trigger_rules?.frequency ?? .once,
                 maxDisplays: config.trigger_rules?.max_displays
-            ) else { continue }
+            ) else {
+                filteredByFrequency += 1
+                continue
+            }
 
             // 4. Date range check
-            guard checkDateRange(config) else { continue }
+            guard checkDateRange(config) else {
+                filteredByDateRange += 1
+                continue
+            }
 
             candidates.append((id: id, config: config))
+        }
+
+        if candidates.isEmpty {
+            Log.debug("[Messages] No candidates for '\(eventName)' — filtered: event=\(filteredByEvent), conditions=\(filteredByConditions), frequency=\(filteredByFrequency), dateRange=\(filteredByDateRange)")
+        } else {
+            Log.debug("[Messages] \(candidates.count) candidate(s) passed all filters for '\(eventName)'")
         }
 
         // 5. Sort by priority (highest first)
