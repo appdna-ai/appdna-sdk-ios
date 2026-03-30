@@ -46,10 +46,10 @@ struct PlanCard: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             if let ts = planNameTextStyle {
-                                Text(loc?("plan.\(planIndex).name", plan.name ?? "") ?? plan.name ?? "")
+                                Text(loc?("plan.\(planIndex).name", plan.displayName) ?? plan.displayName)
                                     .applyTextStyle(ts)
                             } else {
-                                Text(loc?("plan.\(planIndex).name", plan.name ?? "") ?? plan.name ?? "")
+                                Text(loc?("plan.\(planIndex).name", plan.displayName) ?? plan.displayName)
                                     .font(.headline)
                                     .foregroundColor(.primary)
                             }
@@ -62,10 +62,10 @@ struct PlanCard: View {
 
                         HStack(spacing: 4) {
                             if let ts = priceTextStyle {
-                                Text(loc?("plan.\(planIndex).price", plan.price ?? "") ?? plan.price ?? "")
+                                Text(loc?("plan.\(planIndex).price", plan.displayPrice) ?? plan.displayPrice)
                                     .applyTextStyle(ts)
                             } else {
-                                Text(loc?("plan.\(planIndex).price", plan.price ?? "") ?? plan.price ?? "")
+                                Text(loc?("plan.\(planIndex).price", plan.displayPrice) ?? plan.displayPrice)
                                     .font(.subheadline.bold())
                                     .foregroundColor(.primary)
                             }
@@ -81,7 +81,7 @@ struct PlanCard: View {
                             }
                         }
 
-                        if let trial = plan.trialDuration {
+                        if let trial = plan.trialLabel {
                             if let ts = featureTextStyle {
                                 Text(loc?("plan.\(planIndex).trial", "\(trial) free trial") ?? "\(trial) free trial")
                                     .applyTextStyle(ts)

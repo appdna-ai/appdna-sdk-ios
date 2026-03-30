@@ -19,7 +19,16 @@ struct CTAButton: View {
         if let hex = buttonElement?.background?.color {
             return Color(hex: hex)
         }
-        return .blue
+        return Color(hex: cta?.resolvedBgColor ?? "#007AFF")
+    }
+    private var buttonTextColor: Color {
+        if let ts = buttonTextStyle, let hex = ts.color {
+            return Color(hex: hex)
+        }
+        return Color(hex: cta?.resolvedTextColor ?? "#FFFFFF")
+    }
+    private var buttonCornerRadius: CGFloat {
+        CGFloat(cta?.resolvedCornerRadius ?? 14.0)
     }
 
     var body: some View {
@@ -35,13 +44,13 @@ struct CTAButton: View {
                 } else {
                     Text(isPurchasing ? "Processing..." : (loc?("cta.text", cta?.text ?? "Subscribe") ?? cta?.text ?? "Subscribe"))
                         .font(.headline)
-                        .foregroundColor(.white)
+                        .foregroundColor(buttonTextColor)
                 }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: buttonCornerRadius)
                     .fill(buttonBgColor)
             )
         }

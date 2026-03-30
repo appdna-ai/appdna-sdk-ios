@@ -289,6 +289,25 @@ struct ReviewsCarouselView: View {
                                 }
                                 .frame(width: 28, height: 28)
                                 .clipShape(Circle())
+                            } else if let emoji = review.avatarEmoji, !emoji.isEmpty {
+                                // Show emoji avatar (convert descriptive names to actual emoji, or use as-is)
+                                let displayEmoji = Self.emojiFromName(emoji)
+                                Text(displayEmoji)
+                                    .font(.system(size: 18))
+                                    .frame(width: 28, height: 28)
+                                    .background(Color.gray.opacity(0.15))
+                                    .clipShape(Circle())
+                            } else if let author = review.author, !author.isEmpty {
+                                // Colored circle with initial
+                                let initial = String(author.prefix(1)).uppercased()
+                                Circle()
+                                    .fill(Color.accentColor.opacity(0.2))
+                                    .frame(width: 28, height: 28)
+                                    .overlay(
+                                        Text(initial)
+                                            .font(.caption.bold())
+                                            .foregroundColor(.accentColor)
+                                    )
                             }
 
                             if let as_ = authorStyle {
@@ -334,5 +353,22 @@ struct ReviewsCarouselView: View {
             autoScrollTimer?.invalidate()
             autoScrollTimer = nil
         }
+    }
+
+    /// Convert descriptive emoji names (e.g. "woman", "man") to actual emoji characters.
+    /// If the name is already an emoji character, return as-is.
+    static func emojiFromName(_ name: String) -> String {
+        // If it's already an emoji (single character or emoji sequence), return as-is
+        if name.count <= 2 && name.unicodeScalars.allSatisfy({ $0.value > 127 }) {
+            return name
+        }
+        let map: [String: String] = [
+            "woman": "\u{1F469}", "man": "\u{1F468}", "girl": "\u{1F467}", "boy": "\u{1F466}",
+            "baby": "\u{1F476}", "older_woman": "\u{1F475}", "older_man": "\u{1F474}",
+            "person": "\u{1F9D1}", "star": "\u{2B50}", "heart": "\u{2764}\u{FE0F}",
+            "thumbsup": "\u{1F44D}", "fire": "\u{1F525}", "rocket": "\u{1F680}",
+            "smile": "\u{1F604}", "clap": "\u{1F44F}", "sparkles": "\u{2728}",
+        ]
+        return map[name.lowercased()] ?? "\u{1F464}" // fallback: bust silhouette
     }
 }

@@ -206,7 +206,7 @@ final class PaywallConfigDecodingTests: XCTestCase {
         XCTAssertEqual(plan.id, "plan_basic")
         XCTAssertNil(plan.period)
         XCTAssertNil(plan.badge)
-        XCTAssertNil(plan.trialDuration)
+        XCTAssertNil(plan.trialLabel)
         XCTAssertNil(plan.isDefault)
     }
 
@@ -222,9 +222,10 @@ final class PaywallConfigDecodingTests: XCTestCase {
         """.data(using: .utf8)!
 
         let dismiss = try JSONDecoder().decode(PaywallDismiss.self, from: json)
-        XCTAssertEqual(dismiss.type, "x_button")
+        XCTAssertEqual(dismiss.style, "x_button")
         XCTAssertEqual(dismiss.delaySeconds, 5)
         XCTAssertEqual(dismiss.text, "Close")
+        XCTAssertTrue(dismiss.isAllowed) // defaults to true when not present
     }
 
     // MARK: - Background config
@@ -1102,7 +1103,7 @@ final class PaywallConfigDecodingTests: XCTestCase {
         XCTAssertEqual(config.sections[5].data?.blurBackground, true)
 
         // Verify dismiss and background still decode
-        XCTAssertEqual(config.dismiss?.type, "x_button")
+        XCTAssertEqual(config.dismiss?.style, "x_button")
         XCTAssertEqual(config.dismiss?.delaySeconds, 5)
         XCTAssertEqual(config.background?.type, "gradient")
         XCTAssertEqual(config.background?.colors?.count, 2)

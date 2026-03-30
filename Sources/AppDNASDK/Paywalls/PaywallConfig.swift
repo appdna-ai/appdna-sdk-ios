@@ -24,7 +24,8 @@ struct PaywallConfig: Codable {
     enum CodingKeys: String, CodingKey {
         case id, name, layout, _sections = "sections", plans, cta, dismiss, background
         case placement, placement_label, version
-        case animation, localizations, default_locale
+        case animation = "animation_config"
+        case localizations, default_locale
         case haptic, particle_effect
     }
 
@@ -333,56 +334,122 @@ struct PaywallSectionData: Codable {
     }
 }
 
+struct PaywallPlanTrial: Codable {
+    let duration_days: Int?
+    let label: String?
+}
+
 struct PaywallPlan: Codable, Identifiable {
-    let id: String?
+    private let _id: String?
     let productId: String?
+
+    /// Stable identity — prefer explicit id, fall back to product_id
+    var id: String { _id ?? productId ?? UUID().uuidString }
     let name: String?
     let label: String?
     let price: String?
     let price_display: String?
     let period: String?
     let badge: String?
-    let trialDuration: String?
+    private let trialDuration: String?   // Legacy: "trial_duration" string
+    let trial: PaywallPlanTrial?         // New: {duration_days, label} object
     let isDefault: Bool?
     let sort_order: Int?
+    let description: String?
+    let features: [String]?
+    let savings_text: String?
+    let cta_text: String?
+    let icon: String?
+    let image_url: String?
 
     /// Display name — try label first (Firestore), then name (legacy)
     var displayName: String { label ?? name ?? "" }
     /// Display price — try price_display first (Firestore), then price (legacy)
     var displayPrice: String { price_display ?? price ?? "" }
+    /// Trial display — try trial.label first, then legacy trialDuration string
+    var trialLabel: String? { trial?.label ?? trialDuration }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, label, price, period, badge, price_display, sort_order
+        case _id = "id"
+        case name, label, price, period, badge, price_display, sort_order
+        case trial, description, features, savings_text, cta_text, icon, image_url
         case productId = "product_id"
         case trialDuration = "trial_duration"
         case isDefault = "is_default"
     }
 }
 
-struct PaywallCTA: Codable {
-    let text: String?
-    let style: AnyCodable? // Can be string ("primary") or object ({bg_color, text_color})
+struct PaywallCTAStyle: Codable {
     let bg_color: String?
     let text_color: String?
     let corner_radius: Double?
 }
 
-struct PaywallDismissConfig: Codable {
-    let allowed: Bool?
-    let style: String?  // "x_button", "swipe_down", "text_link"
-    let delay_seconds: Int?
+struct PaywallCTA: Codable {
     let text: String?
+    private let _styleObj: PaywallCTAStyle?
+    private let _stylePrimitive: String?
+    let bg_color: String?
+    let text_color: String?
+    let corner_radius: Double?
+
+    /// Resolved bg_color — from style object, direct field, or default
+    var resolvedBgColor: String { _styleObj?.bg_color ?? bg_color ?? "#007AFF" }
+    /// Resolved text_color — from style object, direct field, or default
+    var resolvedTextColor: String { _styleObj?.text_color ?? text_color ?? "#FFFFFF" }
+    /// Resolved corner_radius — from style object, direct field, or default
+    var resolvedCornerRadius: Double { _styleObj?.corner_radius ?? corner_radius ?? 12.0 }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decodeIfPresent(String.self, forKey: .text)
+        bg_color = try container.decodeIfPresent(String.self, forKey: .bg_color)
+        text_color = try container.decodeIfPresent(String.self, forKey: .text_color)
+        corner_radius = try container.decodeIfPresent(Double.self, forKey: .corner_radius)
+        // Try decoding style as object first, then as string
+        if let obj = try? container.decodeIfPresent(PaywallCTAStyle.self, forKey: .style) {
+            _styleObj = obj
+            _stylePrimitive = nil
+        } else {
+            _styleObj = nil
+            _stylePrimitive = try? container.decodeIfPresent(String.self, forKey: .style)
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case text, style, bg_color, text_color, corner_radius
+    }
 }
 
 struct PaywallDismiss: Codable {
-    let type: String? // "x_button", "swipe", "text_link"
+    let allowed: Bool?
+    private let _style: String?  // Firestore sends "style"
+    private let _type: String?   // Legacy "type" fallback
     let delaySeconds: Int?
     let text: String?
 
+    /// Dismiss style — server writes "style", legacy used "type". Accept both.
+    var style: String { _style ?? _type ?? "x_button" }
+    /// Whether dismiss is allowed — defaults to true for backward compat.
+    var isAllowed: Bool { allowed ?? true }
+
     enum CodingKeys: String, CodingKey {
-        case type, text
+        case allowed, text
+        case _style = "style"
+        case _type = "type"
         case delaySeconds = "delay_seconds"
     }
+}
+
+struct PaywallGradientStop: Codable {
+    let color: String?
+    let position: Double?
+}
+
+struct PaywallGradient: Codable {
+    let type: String?       // "linear", "radial"
+    let angle: Double?
+    let stops: [PaywallGradientStop]?
 }
 
 struct PaywallBackground: Codable {
@@ -390,9 +457,15 @@ struct PaywallBackground: Codable {
     let value: String? // hex color, gradient def, image URL, or video URL (legacy)
     let color: String? // hex color (Firestore format)
     let colors: [String]?
+    let gradient: PaywallGradient?
+    let image_url: String?
+    let image_fit: String?  // "cover", "contain", "fill"
+    let overlay: String?    // hex color overlay
     // SPEC-085: Video background
     let video_url: String?
     let video_poster_url: String?
+    let video_muted: Bool?
+    let video_loop: Bool?
 }
 
 // MARK: - SPEC-089d: Codable sub-types for new paywall sections
@@ -400,6 +473,7 @@ struct PaywallBackground: Codable {
 struct PaywallLink: Codable {
     let label: String?
     let url: String?
+    let action: String?  // "restore", "url", etc.
 }
 
 struct PaywallCarouselPage: Codable, Identifiable {

@@ -61,13 +61,13 @@ struct PaywallRenderer: View {
                         } else {
                             Text(cta.text ?? "Continue")
                                 .font(.headline)
-                                .foregroundColor(Color(hex: (cta.style?.value as? [String: Any])?["text_color"] as? String ?? "#FFFFFF"))
+                                .foregroundColor(Color(hex: cta.resolvedTextColor))
                         }
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
-                    .background(Color(hex: (cta.style?.value as? [String: Any])?["bg_color"] as? String ?? "#007AFF"))
-                    .cornerRadius(CGFloat((cta.style?.value as? [String: Any])?["corner_radius"] as? Double ?? 12))
+                    .background(Color(hex: cta.resolvedBgColor))
+                    .cornerRadius(CGFloat(cta.resolvedCornerRadius))
                     .padding(.horizontal, 20)
                     .padding(.bottom, 16)
                     .disabled(isPurchasing || selectedPlanId == nil)
@@ -84,10 +84,10 @@ struct PaywallRenderer: View {
                 ConfettiOverlay(effect: effect)
             }
 
-            // Dismiss control
-            if showDismiss {
-                let dismissType = config.dismiss?.type ?? "x_button"
-                switch dismissType {
+            // Dismiss control — respect allowed flag
+            if showDismiss && (config.dismiss?.isAllowed ?? true) {
+                let dismissStyle = config.dismiss?.style ?? "x_button"
+                switch dismissStyle {
                 case "text_link":
                     VStack {
                         Spacer()
@@ -134,7 +134,7 @@ struct PaywallRenderer: View {
             }
         }
         .gesture(
-            config.dismiss?.type == "swipe_down" ?
+            config.dismiss?.style == "swipe_down" ?
             DragGesture()
                 .onChanged { value in
                     if value.translation.height > 0 {
@@ -160,18 +160,34 @@ struct PaywallRenderer: View {
         let bg = config.background ?? config.layout?.background
         switch bg?.type {
         case "gradient":
-            if let colors = bg?.colors, colors.count >= 2 {
+            // Structured gradient (angle + stops) or flat colors array
+            if let gradient = bg?.gradient, let stops = gradient.stops, stops.count >= 2 {
+                let angle = Angle(degrees: gradient.angle ?? 180)
+                let swiftStops = stops.map { stop in
+                    Gradient.Stop(
+                        color: Color(hex: stop.color ?? "#000000"),
+                        location: (stop.position ?? 0) / 100.0
+                    )
+                }
+                let start = UnitPoint(x: 0.5 - cos(angle.radians) * 0.5, y: 0.5 - sin(angle.radians) * 0.5)
+                let end = UnitPoint(x: 0.5 + cos(angle.radians) * 0.5, y: 0.5 + sin(angle.radians) * 0.5)
+                return AnyView(LinearGradient(
+                    stops: swiftStops,
+                    startPoint: start,
+                    endPoint: end
+                ).ignoresSafeArea())
+            } else if let colors = bg?.colors, colors.count >= 2 {
                 return AnyView(LinearGradient(
                     colors: colors.map { Color(hex: $0) },
                     startPoint: .top,
                     endPoint: .bottom
-                )
-                .ignoresSafeArea())
+                ).ignoresSafeArea())
             } else {
                 return AnyView(Color.black.ignoresSafeArea())
             }
         case "image":
-            if let urlString = bg?.value, let url = URL(string: urlString) {
+            let urlString = bg?.image_url ?? bg?.value
+            if let urlString, let url = URL(string: urlString) {
                 return AnyView(AsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
@@ -272,7 +288,7 @@ struct PaywallRenderer: View {
             return AnyView(testimonialSectionView(data: section.data, style: section.style))
         case "lottie":
             return AnyView(lottieSectionView(data: section.data, style: section.style))
-        case "video":
+        case "video", "video_background":
             return AnyView(videoSectionView(data: section.data, style: section.style))
         case "rive":
             return AnyView(riveSectionView(data: section.data, style: section.style))
@@ -318,15 +334,72 @@ struct PaywallRenderer: View {
 
     @ViewBuilder
     private func guaranteeSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
-        if let text = data?.guaranteeText {
-            let ts = style?.elements?["text"]?.textStyle
-            Text(loc("guarantee.text", text))
-                .applyTextStyle(ts)
-                .font(ts == nil ? .caption : nil)
-                .foregroundColor(ts?.color == nil ? .secondary : nil)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-                .applyContainerStyle(style?.container)
+        let hasContent = data?.guaranteeText != nil || data?.title != nil || data?.text != nil || data?.description != nil
+        if hasContent {
+            VStack(spacing: 8) {
+                // Icon (SF Symbol or fallback shield)
+                if let iconName = data?.icon {
+                    let sfName = iconName.contains("_") || iconName.contains(".") ? iconName : "shield.checkmark.fill"
+                    Image(systemName: sfName)
+                        .font(.system(size: 28))
+                        .foregroundColor(Color(hex: data?.accentColor ?? "#22C55E"))
+                } else {
+                    Image(systemName: "shield.checkmark.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(Color(hex: data?.accentColor ?? "#22C55E"))
+                }
+
+                // Badge text
+                if let badge = data?.guaranteeText ?? data?.text {
+                    let badgeTs = style?.elements?["badge"]?.textStyle
+                    if let ts = badgeTs {
+                        Text(loc("guarantee.badge", badge))
+                            .applyTextStyle(ts)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background(Color(hex: data?.accentColor ?? "#22C55E").opacity(0.15))
+                            .clipShape(Capsule())
+                    } else {
+                        Text(loc("guarantee.badge", badge))
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(Color(hex: data?.accentColor ?? "#22C55E"))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background(Color(hex: data?.accentColor ?? "#22C55E").opacity(0.15))
+                            .clipShape(Capsule())
+                    }
+                }
+
+                // Title
+                if let title = data?.title {
+                    let titleTs = style?.elements?["title"]?.textStyle
+                    if let ts = titleTs {
+                        Text(loc("guarantee.title", title)).applyTextStyle(ts)
+                    } else {
+                        Text(loc("guarantee.title", title))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.primary)
+                    }
+                }
+
+                // Description
+                if let desc = data?.description ?? (data?.title != nil ? (data?.text ?? data?.guaranteeText) : nil) {
+                    let textTs = style?.elements?["text"]?.textStyle ?? style?.elements?["description"]?.textStyle
+                    if let ts = textTs {
+                        Text(loc("guarantee.description", desc))
+                            .applyTextStyle(ts)
+                            .multilineTextAlignment(.center)
+                    } else {
+                        Text(loc("guarantee.description", desc))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal)
+            .applyContainerStyle(style?.container)
         }
     }
 
@@ -558,7 +631,15 @@ struct PaywallRenderer: View {
             if let links = data?.links, !links.isEmpty {
                 HStack(spacing: 16) {
                     ForEach(links, id: \.label) { link in
-                        if let urlStr = link.url, let url = URL(string: urlStr) {
+                        if link.action == "restore" {
+                            Button {
+                                onRestore()
+                            } label: {
+                                Text(link.label ?? "Restore Purchases")
+                                    .font(.system(size: size))
+                                    .foregroundColor(Color(hex: data?.accentColor ?? "#6366F1"))
+                            }
+                        } else if let urlStr = link.url, let url = URL(string: urlStr) {
                             Link(link.label ?? "", destination: url)
                                 .font(.system(size: size))
                                 .foregroundColor(Color(hex: data?.accentColor ?? "#6366F1"))
@@ -909,7 +990,20 @@ struct PaywallRenderer: View {
 
     @ViewBuilder
     private func comparisonTableSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
-        let cols = data?.tableColumns ?? []
+        // Column labels: prefer structured tableColumns, fall back to plain string array from AnyCodable columns
+        let structuredCols = data?.tableColumns ?? []
+        let columnLabels: [String]
+        let columnHighlights: [Bool]
+        if !structuredCols.isEmpty {
+            columnLabels = structuredCols.map { $0.label ?? "" }
+            columnHighlights = structuredCols.map { $0.highlighted ?? false }
+        } else if let colStrings = data?.columns?.value as? [String] {
+            columnLabels = colStrings
+            columnHighlights = Array(repeating: false, count: colStrings.count)
+        } else {
+            columnLabels = []
+            columnHighlights = []
+        }
         let rows = data?.tableRows ?? []
         let checkClr = Color(hex: data?.checkColor ?? "#22C55E")
         let crossClr = Color(hex: data?.crossColor ?? "#EF4444")
@@ -918,19 +1012,28 @@ struct PaywallRenderer: View {
         let radius = data?.cornerRadius ?? 12
 
         VStack(spacing: 0) {
+            // Title above table
+            if let title = data?.title {
+                Text(loc("comparison_table.title", title))
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 12)
+            }
+
             // Header row
             HStack(spacing: 0) {
                 // Feature column header (empty)
                 Text("")
                     .frame(maxWidth: .infinity)
 
-                ForEach(Array(cols.enumerated()), id: \.offset) { colIdx, col in
-                    Text(col.label ?? "")
+                ForEach(Array(columnLabels.enumerated()), id: \.offset) { colIdx, label in
+                    Text(label)
                         .font(.caption.weight(.bold))
                         .foregroundColor(.primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(col.highlighted == true ? highlightClr.opacity(0.15) : Color.clear)
+                        .background(colIdx < columnHighlights.count && columnHighlights[colIdx] ? highlightClr.opacity(0.15) : Color.clear)
                 }
             }
             .background(Color.white.opacity(0.05))
@@ -970,7 +1073,7 @@ struct PaywallRenderer: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .background(
-                            valIdx < cols.count && cols[valIdx].highlighted == true
+                            valIdx < columnHighlights.count && columnHighlights[valIdx]
                                 ? highlightClr.opacity(0.08)
                                 : Color.clear
                         )
@@ -1136,7 +1239,7 @@ struct PaywallRenderer: View {
             return AnyView(LazyVGrid(columns: columns, spacing: cardStyle.cardGap ?? 12) {
                 ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
                     PlanCard(plan: plan, isSelected: selectedPlanId == plan.id,
-                             onSelect: { selectPlan(plan.id ?? "") }, planIndex: index,
+                             onSelect: { selectPlan(plan.id) }, planIndex: index,
                              loc: loc, sectionStyle: style, cardStyle: cardStyle)
                     .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
                 }
@@ -1148,7 +1251,7 @@ struct PaywallRenderer: View {
                 HStack(spacing: cardStyle.cardGap ?? 12) {
                     ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
                         PlanCard(plan: plan, isSelected: selectedPlanId == plan.id,
-                                 onSelect: { selectPlan(plan.id ?? "") }, planIndex: index,
+                                 onSelect: { selectPlan(plan.id) }, planIndex: index,
                                  loc: loc, sectionStyle: style, cardStyle: cardStyle)
                         .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
                         .frame(width: 200)
@@ -1162,17 +1265,17 @@ struct PaywallRenderer: View {
         case "radio_list":
             return AnyView(VStack(spacing: cardStyle.cardGap ?? 8) {
                 ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                    Button { selectPlan(plan.id ?? "") } label: {
+                    Button { selectPlan(plan.id) } label: {
                         HStack(spacing: 12) {
                             Image(systemName: selectedPlanId == plan.id ? "largecircle.fill.circle" : "circle")
                                 .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#3B82F6") : .secondary)
                                 .font(.title3)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(loc("plan.\(index).name", plan.name ?? ""))
+                                Text(loc("plan.\(index).name", plan.displayName))
                                     .font(.subheadline.weight(.medium))
                                     .foregroundColor(.primary)
                                 HStack(spacing: 4) {
-                                    Text(plan.price ?? "").font(.caption.bold()).foregroundColor(.primary)
+                                    Text(plan.displayPrice).font(.caption.bold()).foregroundColor(.primary)
                                     if let period = plan.period {
                                         Text("/ \(period)").font(.caption).foregroundColor(.secondary)
                                     }
@@ -1201,11 +1304,11 @@ struct PaywallRenderer: View {
             return AnyView(ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: cardStyle.cardGap ?? 8) {
                     ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                        Button { selectPlan(plan.id ?? "") } label: {
+                        Button { selectPlan(plan.id) } label: {
                             VStack(spacing: 2) {
-                                Text(loc("plan.\(index).name", plan.name ?? ""))
+                                Text(loc("plan.\(index).name", plan.displayName))
                                     .font(.subheadline.weight(.semibold))
-                                Text(plan.price ?? "")
+                                Text(plan.displayPrice)
                                     .font(.caption)
                             }
                             .padding(.horizontal, 20)
@@ -1229,7 +1332,7 @@ struct PaywallRenderer: View {
                     set: { selectPlan($0) }
                 )) {
                     ForEach(plans) { plan in
-                        Text(plan.name ?? "").tag(plan.id ?? "")
+                        Text(plan.displayName).tag(plan.id)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -1237,7 +1340,7 @@ struct PaywallRenderer: View {
                 // Show price for selected plan
                 if let selected = plans.first(where: { $0.id == selectedPlanId }) {
                     HStack(spacing: 4) {
-                        Text(selected.price ?? "").font(.title3.bold())
+                        Text(selected.displayPrice).font(.title3.bold())
                         if let period = selected.period {
                             Text("/ \(period)").font(.subheadline).foregroundColor(.secondary)
                         }
@@ -1250,12 +1353,12 @@ struct PaywallRenderer: View {
             let columns = [GridItem(.flexible()), GridItem(.flexible())]
             return AnyView(LazyVGrid(columns: columns, spacing: cardStyle.cardGap ?? 8) {
                 ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                    Button { selectPlan(plan.id ?? "") } label: {
+                    Button { selectPlan(plan.id) } label: {
                         VStack(spacing: 4) {
-                            Text(loc("plan.\(index).name", plan.name ?? ""))
+                            Text(loc("plan.\(index).name", plan.displayName))
                                 .font(.caption.weight(.semibold))
                                 .foregroundColor(.primary)
-                            Text(plan.price ?? "")
+                            Text(plan.displayPrice)
                                 .font(.subheadline.bold())
                                 .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#3B82F6") : .primary)
                             if let period = plan.period {
@@ -1290,7 +1393,7 @@ struct PaywallRenderer: View {
     private func planLayoutFallbackStack(plans: [PaywallPlan], style: SectionStyleConfig?, cardStyle: PlanCardStyle) -> AnyView {
         return AnyView(ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
             PlanCard(plan: plan, isSelected: selectedPlanId == plan.id,
-                     onSelect: { selectPlan(plan.id ?? "") }, planIndex: index,
+                     onSelect: { selectPlan(plan.id) }, planIndex: index,
                      loc: loc, sectionStyle: style, cardStyle: cardStyle)
             .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
         })
