@@ -216,6 +216,9 @@ struct ChatStepView: View {
             HStack(spacing: 8) {
                 ForEach(dynamicQuickReplies) { qr in
                     Button {
+                        AppDNA.track(event: "chat_quick_reply_tapped", properties: [
+                            "flow_id": flowId, "step_id": step.id, "quick_reply_id": qr.id, "turn": userTurnCount,
+                        ])
                         sendMessage(qr.text)
                     } label: {
                         Text(qr.text)
@@ -327,6 +330,11 @@ struct ChatStepView: View {
         userTurnCount += 1
         dynamicQuickReplies = []
 
+        // Track message sent
+        AppDNA.track(event: "chat_message_sent", properties: [
+            "flow_id": flowId, "step_id": step.id, "turn": userTurnCount, "message_length": trimmed.count,
+        ])
+
         // Check soft limit warning
         if !(chatConfig?.isHardLimit ?? true) && turnsRemaining == 1 {
             showSoftLimitWarning = true
@@ -407,12 +415,20 @@ struct ChatStepView: View {
                 isTyping = false
                 let errorMsg = chatConfig?.webhook?.error_text ?? "Sorry, something went wrong. Please try again."
                 messages.append(ChatMessage(id: "err_\(userTurnCount)", role: .system, content: errorMsg, media: nil, timestamp: Date()))
+                AppDNA.track(event: "chat_webhook_error", properties: [
+                    "flow_id": flowId, "step_id": step.id, "turn": userTurnCount, "error": error.localizedDescription,
+                ])
             }
         }
     }
 
     private func handleWebhookResponse(_ response: ChatWebhookResponse) {
         isTyping = false
+
+        AppDNA.track(event: "chat_message_received", properties: [
+            "flow_id": flowId, "step_id": step.id, "turn": userTurnCount,
+            "message_count": response.messages?.count ?? 0,
+        ])
 
         // Add AI messages
         if let msgs = response.messages {
