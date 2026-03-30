@@ -387,18 +387,17 @@ struct PaywallCTAStyle: Codable {
 
 struct PaywallCTA: Codable {
     let text: String?
-    private let _styleObj: PaywallCTAStyle?
-    private let _stylePrimitive: String?
+    let styleObj: PaywallCTAStyle?
     let bg_color: String?
     let text_color: String?
     let corner_radius: Double?
 
     /// Resolved bg_color — from style object, direct field, or default
-    var resolvedBgColor: String { _styleObj?.bg_color ?? bg_color ?? "#007AFF" }
+    var resolvedBgColor: String { styleObj?.bg_color ?? bg_color ?? "#007AFF" }
     /// Resolved text_color — from style object, direct field, or default
-    var resolvedTextColor: String { _styleObj?.text_color ?? text_color ?? "#FFFFFF" }
+    var resolvedTextColor: String { styleObj?.text_color ?? text_color ?? "#FFFFFF" }
     /// Resolved corner_radius — from style object, direct field, or default
-    var resolvedCornerRadius: Double { _styleObj?.corner_radius ?? corner_radius ?? 12.0 }
+    var resolvedCornerRadius: Double { styleObj?.corner_radius ?? corner_radius ?? 12.0 }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -406,18 +405,22 @@ struct PaywallCTA: Codable {
         bg_color = try container.decodeIfPresent(String.self, forKey: .bg_color)
         text_color = try container.decodeIfPresent(String.self, forKey: .text_color)
         corner_radius = try container.decodeIfPresent(Double.self, forKey: .corner_radius)
-        // Try decoding style as object first, then as string
-        if let obj = try? container.decodeIfPresent(PaywallCTAStyle.self, forKey: .style) {
-            _styleObj = obj
-            _stylePrimitive = nil
-        } else {
-            _styleObj = nil
-            _stylePrimitive = try? container.decodeIfPresent(String.self, forKey: .style)
-        }
+        // Try decoding style as object first, then as string (ignore string variant)
+        styleObj = try? container.decodeIfPresent(PaywallCTAStyle.self, forKey: .styleObj)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(text, forKey: .text)
+        try container.encodeIfPresent(bg_color, forKey: .bg_color)
+        try container.encodeIfPresent(text_color, forKey: .text_color)
+        try container.encodeIfPresent(corner_radius, forKey: .corner_radius)
+        try container.encodeIfPresent(styleObj, forKey: .styleObj)
     }
 
     enum CodingKeys: String, CodingKey {
-        case text, style, bg_color, text_color, corner_radius
+        case text, bg_color, text_color, corner_radius
+        case styleObj = "style"
     }
 }
 
