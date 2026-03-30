@@ -69,6 +69,7 @@ public struct ChatMedia: Codable {
 
 /// Chat styling configuration (14 color tokens).
 public struct ChatStyleConfig: Codable {
+    public let background_color: String?
     public let ai_bubble_bg: String?
     public let ai_bubble_text: String?
     public let user_bubble_bg: String?

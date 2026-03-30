@@ -105,7 +105,7 @@ struct ChatStepView: View {
                     .onAppear { completeChat(reason: "max_turns") }
             }
         }
-        .background(Color(hex: style?.ai_bubble_bg ?? "#0F172A").opacity(0.95))
+        .background(Color(hex: style?.background_color ?? "#0F172A"))
         .onAppear {
             startTime = Date()
             playAutoMessages()
