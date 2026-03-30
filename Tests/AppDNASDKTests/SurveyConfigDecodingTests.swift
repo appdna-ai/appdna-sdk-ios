@@ -205,7 +205,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
         XCTAssertEqual(question.text, "How satisfied are you with our service?")
         XCTAssertTrue(question.required ?? false)
         XCTAssertNotNil(question.csat_config)
-        XCTAssertEqual(question.csat_config?.max_rating, 5)
+        XCTAssertEqual(question.csat_config?.resolvedMax, 5)
         XCTAssertEqual(question.csat_config?.style, "star")
         XCTAssertNil(question.nps_config)
     }
@@ -227,7 +227,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
         let question = try JSONDecoder().decode(SurveyQuestion.self, from: json)
 
         XCTAssertEqual(question.csat_config?.style, "emoji")
-        XCTAssertEqual(question.csat_config?.max_rating, 3)
+        XCTAssertEqual(question.csat_config?.resolvedMax, 3)
         XCTAssertFalse(question.required ?? true)
     }
 
@@ -245,7 +245,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
         let question = try JSONDecoder().decode(SurveyQuestion.self, from: json)
 
         XCTAssertNotNil(question.csat_config)
-        XCTAssertNil(question.csat_config?.max_rating)
+        XCTAssertEqual(question.csat_config?.resolvedMax, 5) // defaults to 5 when empty
         XCTAssertNil(question.csat_config?.style)
     }
 
@@ -270,7 +270,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
         XCTAssertEqual(question.id, "rating_q")
         XCTAssertEqual(question.type, "rating")
         XCTAssertNotNil(question.rating_config)
-        XCTAssertEqual(question.rating_config?.max_rating, 5)
+        XCTAssertEqual(question.rating_config?.resolvedMax, 5)
         XCTAssertEqual(question.rating_config?.style, "star")
         XCTAssertNil(question.csat_config)
         XCTAssertNil(question.nps_config)
@@ -293,7 +293,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
         let question = try JSONDecoder().decode(SurveyQuestion.self, from: json)
 
         XCTAssertEqual(question.rating_config?.style, "heart")
-        XCTAssertEqual(question.rating_config?.max_rating, 3)
+        XCTAssertEqual(question.rating_config?.resolvedMax, 3)
     }
 
     func testDecodeRatingQuestionThumbStyle() throws {
@@ -311,8 +311,8 @@ final class SurveyConfigDecodingTests: XCTestCase {
 
         let question = try JSONDecoder().decode(SurveyQuestion.self, from: json)
 
-        XCTAssertEqual(question.rating_config?.style, "thumb")
-        XCTAssertNil(question.rating_config?.max_rating)
+        XCTAssertEqual(question.rating_config?.resolvedIcon, "thumb")
+        XCTAssertEqual(question.rating_config?.resolvedMax, 5) // defaults to 5 when not set
     }
 
     // MARK: - Question type: Single choice
@@ -1225,7 +1225,7 @@ final class SurveyConfigDecodingTests: XCTestCase {
         let csat = root.surveys?["csat_v1"]
         XCTAssertNotNil(csat)
         XCTAssertEqual(csat?.survey_type, "csat")
-        XCTAssertEqual(csat?.questions?.first?.csat_config?.max_rating, 5)
+        XCTAssertEqual(csat?.questions?.first?.csat_config?.resolvedMax, 5)
 
         // Feedback survey
         let feedback = root.surveys?["feedback_v1"]
