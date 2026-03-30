@@ -1490,9 +1490,80 @@ struct PaywallRenderer: View {
         case "vertical_stack", "stack":
             return planLayoutFallbackStack(plans: plans, style: style, cardStyle: cardStyle)
 
-        // comparison_cards, feature_matrix, pricing_table, timeline, tier_ladder, interactive_slider
-        // These advanced styles fall back to vertical_stack with full PlanCard
-        case "comparison_cards", "feature_matrix", "pricing_table", "timeline", "tier_ladder", "interactive_slider":
+        // Timeline reveal: dot + line + horizontal card
+        case "timeline_reveal", "timeline":
+            return AnyView(VStack(spacing: 0) {
+                ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                    HStack(alignment: .top, spacing: 12) {
+                        // Timeline dot + line
+                        VStack(spacing: 0) {
+                            Circle()
+                                .fill(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
+                                .frame(width: 12, height: 12)
+                            if index < plans.count - 1 {
+                                Rectangle()
+                                    .fill(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1").opacity(0.3))
+                                    .frame(width: 2)
+                                    .frame(maxHeight: .infinity)
+                            }
+                        }
+                        .frame(width: 12)
+                        .padding(.top, 6)
+
+                        // Plan card — horizontal layout
+                        Button { selectPlan(plan.id) } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                // Trial label
+                                if let trial = plan.trialLabel {
+                                    Text(trial.uppercased())
+                                        .font(.caption2.weight(.bold))
+                                        .foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
+                                        .tracking(0.5)
+                                }
+                                // Name + Price horizontal
+                                HStack {
+                                    Text(plan.displayName)
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Text(plan.displayPrice)
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+                                }
+                                // Badge
+                                if let badge = plan.badge, !badge.isEmpty {
+                                    Text(badge)
+                                        .font(.caption2.bold())
+                                        .foregroundColor(Color(hex: cardStyle.badgeTextColor ?? "#FFFFFF"))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4)
+                                        .background(Color(hex: cardStyle.badgeBgColor ?? "#6366F1"))
+                                        .clipShape(Capsule())
+                                }
+                                // Description
+                                if let desc = plan.description, !desc.isEmpty {
+                                    Text(desc).font(.caption).foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 12)
+                                    .fill(selectedPlanId == plan.id ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color(.secondarySystemBackground)) : Color(.secondarySystemBackground))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 12)
+                                    .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.gray.opacity(0.2), lineWidth: selectedPlanId == plan.id ? 2 : 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.bottom, index < plans.count - 1 ? 8 : 0)
+                }
+            })
+
+        // comparison_cards, feature_matrix, pricing_table, tier_ladder, interactive_slider
+        case "comparison_cards", "feature_matrix", "pricing_table", "tier_ladder", "interactive_slider":
             return planLayoutFallbackStack(plans: plans, style: style, cardStyle: cardStyle)
 
         // Default: unknown styles fall back to vertical_stack
