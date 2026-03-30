@@ -6,11 +6,11 @@ struct RatingQuestionView: View {
     @Binding var answer: SurveyAnswer?
 
     private var maxRating: Int {
-        question.rating_config?.max_rating ?? 5
+        question.rating_config?.resolvedMax ?? 5
     }
 
     private var style: String {
-        question.rating_config?.style ?? "star"
+        question.rating_config?.resolvedIcon ?? "star"
     }
 
     private var selectedRating: Int? {

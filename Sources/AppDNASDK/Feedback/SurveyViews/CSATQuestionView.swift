@@ -6,7 +6,7 @@ struct CSATQuestionView: View {
     @Binding var answer: SurveyAnswer?
 
     private var maxRating: Int {
-        question.csat_config?.max_rating ?? 5
+        question.csat_config?.resolvedMax ?? 5
     }
 
     private var style: String {

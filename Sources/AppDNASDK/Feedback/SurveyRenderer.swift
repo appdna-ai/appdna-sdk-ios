@@ -78,6 +78,10 @@ struct SurveyContainerView: View {
         Color(hex: config.appearance?.theme?.button_color ?? "#6366f1")
     }
 
+    private var buttonTextColor: Color {
+        Color(hex: config.appearance?.theme?.button_text_color ?? "#FFFFFF")
+    }
+
     /// SPEC-084: Resolve font from theme
     private var themeFont: Font? {
         guard let fontFamily = config.appearance?.theme?.font_family else { return nil }
@@ -170,7 +174,7 @@ struct SurveyContainerView: View {
                             .padding(.horizontal, 24)
                             .padding(.vertical, 10)
                             .background(canAdvance ? buttonColor : Color.gray.opacity(0.3))
-                            .foregroundColor(.white)
+                            .foregroundColor(buttonTextColor)
                             .cornerRadius(8)
                             .disabled(!canAdvance)
                         } else {
@@ -180,7 +184,7 @@ struct SurveyContainerView: View {
                             .padding(.horizontal, 24)
                             .padding(.vertical, 10)
                             .background(canAdvance ? buttonColor : Color.gray.opacity(0.3))
-                            .foregroundColor(.white)
+                            .foregroundColor(buttonTextColor)
                             .cornerRadius(8)
                             .disabled(!canAdvance)
                         }

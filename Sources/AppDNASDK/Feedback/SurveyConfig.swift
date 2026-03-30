@@ -19,6 +19,11 @@ public struct SurveyConfig: Codable {
 }
 
 /// A single survey question.
+/// Choice config wrapper — Firestore nests options inside choice_config
+public struct ChoiceConfig: Codable {
+    public let options: [SurveyQuestionOption]?
+}
+
 public struct SurveyQuestion: Codable {
     public let id: String?
     public let type: String? // "nps", "csat", "rating", "single_choice", "multi_choice", "free_text", "yes_no", "emoji_scale"
@@ -30,11 +35,36 @@ public struct SurveyQuestion: Codable {
     public let nps_config: NPSConfig?
     public let csat_config: CSATConfig?
     public let rating_config: RatingConfig?
-    public let options: [SurveyQuestionOption]?
+    public let choice_config: ChoiceConfig?     // Firestore format
+    private let _options: [SurveyQuestionOption]?  // Legacy flat format
     public let emoji_config: EmojiConfig?
     public let free_text_config: FreeTextConfig?
     // SPEC-085: Question-level image
     public let image_url: String?
+
+    /// Resolved options — prefer choice_config.options, fall back to flat options
+    public var options: [SurveyQuestionOption]? { choice_config?.options ?? _options }
+
+    /// Convenience init for creating interpolated copies
+    public init(
+        id: String?, type: String?, text: String?, required: Bool?,
+        show_if: ShowIfCondition?, nps_config: NPSConfig?, csat_config: CSATConfig?,
+        rating_config: RatingConfig?, options: [SurveyQuestionOption]?,
+        emoji_config: EmojiConfig?, free_text_config: FreeTextConfig?, image_url: String?
+    ) {
+        self.id = id; self.type = type; self.text = text; self.required = required
+        self.show_if = show_if; self.nps_config = nps_config; self.csat_config = csat_config
+        self.rating_config = rating_config; self.choice_config = nil; self._options = options
+        self.emoji_config = emoji_config; self.free_text_config = free_text_config
+        self.image_url = image_url
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, text, required, show_if
+        case nps_config, csat_config, rating_config, choice_config
+        case _options = "options"
+        case emoji_config, free_text_config, image_url
+    }
 }
 
 public struct ShowIfCondition: Codable {
@@ -48,19 +78,46 @@ public struct NPSConfig: Codable {
 }
 
 public struct CSATConfig: Codable {
-    public let max_rating: Int?  // default 5
-    public let style: String?    // "star", "emoji"
+    private let max_rating: Int?  // Legacy SDK field
+    public let scale: Int?        // Firestore sends "scale" (3, 5, or 7)
+    public let labels: [String]?
+    public let style: String?
+
+    /// Resolved max — prefer scale (Firestore), fall back to max_rating (legacy)
+    public var resolvedMax: Int { scale ?? max_rating ?? 5 }
 }
 
 public struct RatingConfig: Codable {
-    public let max_rating: Int?  // default 5
-    public let style: String?    // "star", "heart", "thumb"
+    private let max_rating: Int?  // Legacy SDK field
+    public let max: Int?          // Firestore sends "max"
+    public let icon: String?      // "star", "heart", "thumb"
+    public let style: String?
+
+    /// Resolved max — prefer max (Firestore), fall back to max_rating (legacy)
+    public var resolvedMax: Int { max ?? max_rating ?? 5 }
+    /// Resolved icon — prefer icon (Firestore), fall back to style (legacy)
+    public var resolvedIcon: String { icon ?? style ?? "star" }
 }
 
 public struct SurveyQuestionOption: Codable {
     public let id: String?
-    public let text: String?
+    private let _text: String?   // Legacy "text"
+    public let label: String?    // Firestore sends "label"
     public let icon: String?
+    public let emoji: String?
+
+    /// Display text — prefer label (Firestore), fall back to text (legacy)
+    public var text: String? { label ?? _text }
+
+    /// Convenience init for creating interpolated copies
+    public init(id: String?, text: String?, icon: String?) {
+        self.id = id; self._text = text; self.label = nil; self.icon = icon; self.emoji = nil
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, label, icon, emoji
+        case _text = "text"
+    }
 }
 
 public struct EmojiConfig: Codable {
@@ -116,6 +173,7 @@ public struct SurveyTheme: Codable {
     public let text_color: String?
     public let accent_color: String?
     public let button_color: String?
+    public let button_text_color: String?
     public let font_family: String?
     // SPEC-085: Rich media in surveys
     public let intro_lottie_url: String?
