@@ -241,28 +241,38 @@ struct ChatStepView: View {
 
     private var inputBar: some View {
         HStack(spacing: 8) {
-            TextField(chatConfig?.input_placeholder ?? "Type your message...", text: $inputText)
-                .font(.system(size: CGFloat(style?.input_font_size ?? 14)))
-                .foregroundColor(inputTextColor)
-                .padding(12)
-                .background(inputBg)
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-                .overlay(RoundedRectangle(cornerRadius: 20).stroke(inputBorder, lineWidth: 1))
-                .submitLabel(.send)
-                .onSubmit { if canSendMessage { sendMessage(inputText) } }
+            // Custom text field with styled placeholder
+            ZStack(alignment: .leading) {
+                if inputText.isEmpty {
+                    Text(chatConfig?.input_placeholder ?? "Type your message...")
+                        .font(.system(size: CGFloat(style?.input_font_size ?? 14)))
+                        .foregroundColor(inputTextColor.opacity(0.5))
+                        .padding(.horizontal, 12)
+                }
+                TextField("", text: $inputText)
+                    .font(.system(size: CGFloat(style?.input_font_size ?? 14)))
+                    .foregroundColor(inputTextColor)
+                    .padding(.horizontal, 12)
+                    .submitLabel(.send)
+                    .onSubmit { if canSendMessage { sendMessage(inputText) } }
+            }
+            .padding(.vertical, 10)
+            .background(inputBg)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(inputBorder, lineWidth: 1))
 
             Button {
                 sendMessage(inputText)
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 32))
-                    .foregroundColor(canSendMessage ? sendBtnColor : Color.gray.opacity(0.3))
+                    .foregroundColor(canSendMessage ? sendBtnColor : sendBtnColor.opacity(0.3))
             }
             .disabled(!canSendMessage)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Color(hex: style?.background_color ?? "#0F172A").opacity(0.95))
+        .background(inputBg.opacity(0.3))
     }
 
     // MARK: - Rating Prompt
