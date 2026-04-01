@@ -601,22 +601,30 @@ struct OnboardingFlowHost: View {
                     let currentResponses = responses
                     let tracker = eventTracker
                     let flowId = flow.id
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        guard let vc = AppDNA.topViewController() else {
+                    // First dismiss onboarding, then present paywall from the underlying VC
+                    let onboardingDismissed = onFlowDismissed
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        guard let onboardingVC = AppDNA.topViewController() else {
                             flowCompleted(currentResponses)
                             return
                         }
-                        // Present paywall with delegate that resumes flow on dismiss
-                        let bridge = OnboardingPaywallBridge(onDismissed: {
-                                // Paywall dismissed (purchased or not) — complete the onboarding flow
-                            tracker?.track(event: "onboarding_completed", properties: [
-                                "flow_id": flowId,
-                                "paywall_id": paywallId,
-                                "completed_via": "paywall_trigger",
-                            ])
-                            flowCompleted(currentResponses)
-                        })
-                        AppDNA.presentPaywall(id: paywallId, from: vc, delegate: bridge)
+                        // Dismiss onboarding first
+                        onboardingVC.dismiss(animated: true) {
+                            // Now present paywall from the VC underneath
+                            guard let rootVC = AppDNA.topViewController() else {
+                                flowCompleted(currentResponses)
+                                return
+                            }
+                            let bridge = OnboardingPaywallBridge(onDismissed: {
+                                tracker?.track(event: "onboarding_completed", properties: [
+                                    "flow_id": flowId,
+                                    "paywall_id": paywallId,
+                                    "completed_via": "paywall_trigger",
+                                ])
+                                flowCompleted(currentResponses)
+                            })
+                            AppDNA.presentPaywall(id: paywallId, from: rootVC, delegate: bridge)
+                        }
                     }
                 } else {
                     onFlowCompleted(responses)
