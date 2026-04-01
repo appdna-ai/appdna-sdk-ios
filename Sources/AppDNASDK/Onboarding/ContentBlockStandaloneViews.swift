@@ -398,7 +398,12 @@ struct DateWheelPickerBlockView: View {
     var body: some View {
         let highlightCol = Color(hex: block.highlight_color ?? "#6366F1")
         let isFieldMode = block.picker_presentation == "field"
+        // Read picker_mode from config (console saves "date" or "datetime")
+        // Fall back to block type for legacy compatibility
         let components: DatePickerComponents = {
+            let mode = block.picker_mode
+            if mode == "datetime" || mode == "date_time" { return [.date, .hourAndMinute] }
+            if mode == "time" { return [.hourAndMinute] }
             switch block.type {
             case .input_time: return [.hourAndMinute]
             case .input_datetime: return [.date, .hourAndMinute]
@@ -487,7 +492,7 @@ struct WheelPickerBlockView: View {
 
         let initialIndex = values.firstIndex(where: { $0 >= defaultVal }) ?? 0
 
-        let isHorizontal = block.orientation == "horizontal"
+        let isHorizontal = block.wheel_orientation == "horizontal" || block.orientation == "horizontal"
 
         VStack(spacing: 8) {
             if let label = block.rating_label ?? block.text {
