@@ -172,6 +172,19 @@ public final class AppDNA: @unchecked Sendable {
             }
             shared.eventTracker?.track(event: "identify", properties: identifyProps)
 
+            // Send identify to backend alias endpoint
+            var aliasBody: [String: Any] = [
+                "anon_id": previousAnonId ?? "",
+                "user_id": userId,
+            ]
+            if let traits = traits { aliasBody["traits"] = traits }
+            shared.apiClient?.post(path: "/api/v1/sdk/identify", body: aliasBody) { result in
+                switch result {
+                case .success: Log.debug("Identity alias synced: \(previousAnonId ?? "?") → \(userId)")
+                case .failure(let err): Log.debug("Identity alias sync failed: \(err.localizedDescription)")
+                }
+            }
+
             // Start web entitlement observer for this user (v0.3)
             if let bootstrapData = shared.bootstrapData {
                 shared.webEntitlementManager?.startObserving(
