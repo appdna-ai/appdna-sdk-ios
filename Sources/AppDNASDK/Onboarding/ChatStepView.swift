@@ -262,7 +262,7 @@ struct ChatStepView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Color.black.opacity(0.3))
+        .background(Color(hex: style?.background_color ?? "#0F172A").opacity(0.95))
     }
 
     // MARK: - Rating Prompt

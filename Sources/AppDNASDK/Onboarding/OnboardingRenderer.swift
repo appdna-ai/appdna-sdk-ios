@@ -82,33 +82,69 @@ struct OnboardingFlowHost: View {
 
     // MARK: - Progress bar
 
+    @ViewBuilder
     private var progressBar: some View {
         let trackColor: Color = {
-            if let hex = flow.settings.progress_track_color {
-                return Color(hex: hex)
-            }
+            if let hex = flow.settings.progress_track_color { return Color(hex: hex) }
             return Color.gray.opacity(0.2)
         }()
         let fillColor: Color = {
-            if let hex = flow.settings.progress_color {
-                return Color(hex: hex)
-            }
+            if let hex = flow.settings.progress_color { return Color(hex: hex) }
             return Color.accentColor
         }()
+        let style = flow.settings.progress_style ?? "continuous_bar"
+        let total = flow.steps.count
+        let current = currentIndex
 
-        return GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Rectangle()
-                    .fill(trackColor)
-                    .frame(height: 4)
-
-                Rectangle()
-                    .fill(fillColor)
-                    .frame(width: geo.size.width * progress, height: 4)
-                    .animation(.easeInOut(duration: 0.3), value: currentIndex)
+        switch style {
+        case "dots":
+            HStack(spacing: 8) {
+                ForEach(0..<total, id: \.self) { i in
+                    Circle()
+                        .fill(i <= current ? fillColor : trackColor)
+                        .frame(width: 8, height: 8)
+                        .animation(.easeInOut(duration: 0.2), value: currentIndex)
+                }
             }
+            .frame(height: 12)
+            .padding(.horizontal)
+
+        case "segmented_bar":
+            HStack(spacing: 4) {
+                ForEach(0..<total, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(i <= current ? fillColor : trackColor)
+                        .frame(height: 4)
+                        .animation(.easeInOut(duration: 0.2), value: currentIndex)
+                }
+            }
+            .frame(height: 4)
+            .padding(.horizontal)
+
+        case "fraction":
+            Text("\(current + 1)/\(total)")
+                .font(.caption.monospacedDigit())
+                .foregroundColor(fillColor)
+                .frame(height: 16)
+
+        case "none":
+            EmptyView()
+
+        default: // continuous_bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(trackColor)
+                        .frame(height: 4)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(fillColor)
+                        .frame(width: geo.size.width * progress, height: 4)
+                        .animation(.easeInOut(duration: 0.3), value: currentIndex)
+                }
+            }
+            .frame(height: 4)
+            .padding(.horizontal)
         }
-        .frame(height: 4)
     }
 
     private var progress: CGFloat {
@@ -119,14 +155,18 @@ struct OnboardingFlowHost: View {
     // MARK: - Navigation bar
 
     private var navigationBar: some View {
-        HStack {
+        let backStyle = flow.settings.back_button_style
+        let backSize = backStyle?.icon_size ?? 16
+        let backColor: Color = backStyle?.icon_color.flatMap { Color(hex: $0) } ?? .primary
+
+        return HStack {
             if flow.settings.allow_back && currentIndex > 0 {
                 Button {
                     withAnimation { currentIndex -= 1 }
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .font(.system(size: backSize, weight: .semibold))
+                        .foregroundColor(backColor)
                         .frame(width: 44, height: 44)
                 }
                 .disabled(isProcessing)
@@ -137,16 +177,18 @@ struct OnboardingFlowHost: View {
             Spacer()
 
             // Dismiss button
-            Button {
-                let step = flow.steps[currentIndex]
-                onFlowDismissed(step.id, currentIndex)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 44, height: 44)
+            if flow.settings.dismiss_allowed ?? true {
+                Button {
+                    let step = flow.steps[currentIndex]
+                    onFlowDismissed(step.id, currentIndex)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .disabled(isProcessing)
             }
-            .disabled(isProcessing)
         }
         .padding(.horizontal, 8)
     }

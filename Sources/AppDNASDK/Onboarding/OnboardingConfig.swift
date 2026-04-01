@@ -55,21 +55,33 @@ public struct OnboardingFlowConfig: Codable {
 }
 
 /// Flow-level settings.
+public struct BackButtonStyle: Codable {
+    public let icon_size: CGFloat?
+    public let icon_color: String?
+    public let position: String?  // "left" | "right"
+}
+
 public struct OnboardingSettings: Codable {
     public let show_progress: Bool
     public let allow_back: Bool
     public let skip_to_step: String?
-    /// Custom progress bar fill color (hex). Falls back to accentColor if nil.
+    public let progress_style: String?  // "dots" | "segmented_bar" | "continuous_bar" | "fraction" | "none"
     public let progress_color: String?
-    /// Custom progress bar track/background color (hex). Falls back to gray if nil.
     public let progress_track_color: String?
+    public let back_button_style: BackButtonStyle?
+    public let dismiss_allowed: Bool?
 
-    public init(show_progress: Bool = true, allow_back: Bool = true, skip_to_step: String? = nil, progress_color: String? = nil, progress_track_color: String? = nil) {
+    public init(show_progress: Bool = true, allow_back: Bool = true, skip_to_step: String? = nil,
+                progress_style: String? = nil, progress_color: String? = nil, progress_track_color: String? = nil,
+                back_button_style: BackButtonStyle? = nil, dismiss_allowed: Bool? = nil) {
         self.show_progress = show_progress
         self.allow_back = allow_back
         self.skip_to_step = skip_to_step
+        self.progress_style = progress_style
         self.progress_color = progress_color
         self.progress_track_color = progress_track_color
+        self.back_button_style = back_button_style
+        self.dismiss_allowed = dismiss_allowed
     }
 
     public init(from decoder: Decoder) throws {
@@ -77,12 +89,16 @@ public struct OnboardingSettings: Codable {
         self.show_progress = try c.decodeIfPresent(Bool.self, forKey: .show_progress) ?? true
         self.allow_back = try c.decodeIfPresent(Bool.self, forKey: .allow_back) ?? true
         self.skip_to_step = try c.decodeIfPresent(String.self, forKey: .skip_to_step)
+        self.progress_style = try c.decodeIfPresent(String.self, forKey: .progress_style)
         self.progress_color = try c.decodeIfPresent(String.self, forKey: .progress_color)
         self.progress_track_color = try c.decodeIfPresent(String.self, forKey: .progress_track_color)
+        self.back_button_style = try c.decodeIfPresent(BackButtonStyle.self, forKey: .back_button_style)
+        self.dismiss_allowed = try c.decodeIfPresent(Bool.self, forKey: .dismiss_allowed)
     }
 
     enum CodingKeys: String, CodingKey {
-        case show_progress, allow_back, skip_to_step, progress_color, progress_track_color
+        case show_progress, allow_back, skip_to_step, progress_style
+        case progress_color, progress_track_color, back_button_style, dismiss_allowed
     }
 }
 
