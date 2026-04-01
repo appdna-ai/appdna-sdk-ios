@@ -24,6 +24,8 @@ struct MessageRenderer: View {
             auto_dismiss_seconds: config.content?.auto_dismiss_seconds,
             text_color: config.content?.text_color,
             button_color: config.content?.button_color,
+            button_text_color: config.content?.button_text_color,
+            button_corner_radius: config.content?.button_corner_radius,
             corner_radius: config.content?.corner_radius,
             secondary_cta_text: config.content?.secondary_cta_text.map { e.interpolate($0, context: ctx) },
             lottie_url: config.content?.lottie_url,
@@ -35,9 +37,7 @@ struct MessageRenderer: View {
             secondary_cta_icon: config.content?.secondary_cta_icon,
             haptic: config.content?.haptic,
             particle_effect: config.content?.particle_effect,
-            blur_backdrop: config.content?.blur_backdrop,
-            button_text_color: config.content?.button_text_color,
-            button_corner_radius: config.content?.button_corner_radius
+            blur_backdrop: config.content?.blur_backdrop
         )
     }
 
