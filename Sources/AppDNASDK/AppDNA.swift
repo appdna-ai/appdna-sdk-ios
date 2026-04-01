@@ -154,8 +154,23 @@ public final class AppDNA: @unchecked Sendable {
     /// Link the anonymous device to a known user.
     public static func identify(userId: String, traits: [String: Any]? = nil) {
         shared.queue.async {
+            let previousAnonId = shared.identityManager?.currentIdentity.anonId
+            let previousUserId = shared.identityManager?.currentIdentity.userId
             shared.identityManager?.identify(userId: userId, traits: traits)
             Log.info("Identified user: \(userId)")
+
+            // Fire identify event for backend alias/merge
+            var identifyProps: [String: Any] = [
+                "user_id": userId,
+                "anon_id": previousAnonId ?? "",
+            ]
+            if let prev = previousUserId, prev != userId {
+                identifyProps["previous_user_id"] = prev
+            }
+            if let traits = traits {
+                identifyProps["traits"] = traits
+            }
+            shared.eventTracker?.track(event: "identify", properties: identifyProps)
 
             // Start web entitlement observer for this user (v0.3)
             if let bootstrapData = shared.bootstrapData {

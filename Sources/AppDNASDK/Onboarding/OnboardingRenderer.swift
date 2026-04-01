@@ -597,19 +597,28 @@ struct OnboardingFlowHost: View {
             if target.hasPrefix("paywall_trigger_") {
                 // Extract paywall ID from graph node data and present it
                 if let paywallId = resolvePaywallFromTrigger(target) {
-                    // Present paywall after a short delay to ensure the current step animation settles
-                    let completionHandler = onFlowCompleted
+                    let flowCompleted = onFlowCompleted
                     let currentResponses = responses
+                    let tracker = eventTracker
+                    let flowId = flow.id
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         guard let vc = AppDNA.topViewController() else {
-                            completionHandler(currentResponses)
+                            flowCompleted(currentResponses)
                             return
                         }
-                        AppDNA.presentPaywall(id: paywallId, from: vc)
+                        // Present paywall with delegate that resumes flow on dismiss
+                        let bridge = OnboardingPaywallBridge(onDismissed: {
+                                // Paywall dismissed (purchased or not) — complete the onboarding flow
+                            tracker?.track(event: "onboarding_completed", properties: [
+                                "flow_id": flowId,
+                                "paywall_id": paywallId,
+                                "completed_via": "paywall_trigger",
+                            ])
+                            flowCompleted(currentResponses)
+                        })
+                        AppDNA.presentPaywall(id: paywallId, from: vc, delegate: bridge)
                     }
-                    // Don't complete the flow yet — user stays on last step until paywall is dismissed
                 } else {
-                    // No paywall ID found — just complete
                     onFlowCompleted(responses)
                 }
                 return
@@ -871,5 +880,25 @@ struct OnboardingStepRouter: View {
         default:
             onNext(nil)
         }
+    }
+}
+
+// MARK: - Paywall Bridge for Onboarding Flow Continuation
+
+/// Bridges paywall dismiss back to onboarding flow completion.
+/// Kept as a strong reference until paywall dismisses.
+private class OnboardingPaywallBridge: AppDNAPaywallDelegate {
+    private let onDismissed: () -> Void
+
+    init(onDismissed: @escaping () -> Void) {
+        self.onDismissed = onDismissed
+    }
+
+    func onPaywallDismissed(paywallId: String) {
+        onDismissed()
+    }
+
+    func onPaywallPurchaseCompleted(paywallId: String, productId: String, transaction: TransactionInfo) {
+        // Purchase succeeded — flow will complete via onDismissed
     }
 }
