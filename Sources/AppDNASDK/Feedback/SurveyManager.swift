@@ -136,13 +136,13 @@ final class SurveyManager {
     private func submitResponse(surveyId: String, config: SurveyConfig, answers: [SurveyAnswer]) {
         let body: [String: Any] = [
             "survey_id": surveyId,
-            "survey_type": config.survey_type ?? "",
+            "user_id": AppDNA.currentUserId ?? "anonymous",
+            "platform": "ios",
             "answers": answers.map { $0.asDictionary },
+            "completed_at": ISO8601DateFormatter().string(from: Date()),
             "context": [
-                "sdk_version": AppDNA.sdkVersion,
-                "platform": "ios",
-                "device": UIDevice.current.model,
                 "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
+                "device_type": UIDevice.current.model,
                 "session_count": UserDefaults.standard.integer(forKey: "ai.appdna.sdk.session_count"),
                 "days_since_install": self.daysSinceInstall(),
             ],
