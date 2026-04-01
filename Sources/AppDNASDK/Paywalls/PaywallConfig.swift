@@ -20,13 +20,15 @@ struct PaywallConfig: Codable {
     // SPEC-085: Rich media
     let haptic: HapticConfig?
     let particle_effect: ParticleEffect?
+    // Post-purchase actions
+    let post_purchase: PostPurchaseConfig?
 
     enum CodingKeys: String, CodingKey {
         case id, name, layout, _sections = "sections", plans, cta, dismiss, background
         case placement, placement_label, version
         case animation = "animation_config"
         case localizations, default_locale
-        case haptic, particle_effect
+        case haptic, particle_effect, post_purchase
     }
 
     /// Sections resolved from top-level or inside layout (non-optional for renderer compat)
@@ -629,6 +631,10 @@ public protocol AppDNAPaywallDelegate: AnyObject {
     func onPaywallDismissed(paywallId: String)
     /// AC-037: Validate a promo code entered by the user. Call the completion handler with `true` if valid, `false` otherwise.
     func onPromoCodeSubmit(paywallId: String, code: String, completion: @escaping (Bool) -> Void)
+    /// Post-purchase: SDK wants the host app to open a deep link URL.
+    func onPostPurchaseDeepLink(paywallId: String, url: String)
+    /// Post-purchase: SDK wants the host app to continue to the next onboarding step.
+    func onPostPurchaseNextStep(paywallId: String)
 }
 
 /// Default empty implementations so delegates can opt into specific callbacks.
@@ -640,4 +646,29 @@ public extension AppDNAPaywallDelegate {
     func onPaywallPurchaseFailed(paywallId: String, error: Error) {}
     func onPaywallDismissed(paywallId: String) {}
     func onPromoCodeSubmit(paywallId: String, code: String, completion: @escaping (Bool) -> Void) { completion(false) }
+    func onPostPurchaseDeepLink(paywallId: String, url: String) {}
+    func onPostPurchaseNextStep(paywallId: String) {}
+}
+
+// MARK: - Post-Purchase Config
+
+public struct PostPurchaseConfig: Codable {
+    public let on_success: PostPurchaseSuccessConfig?
+    public let on_failure: PostPurchaseFailureConfig?
+}
+
+public struct PostPurchaseSuccessConfig: Codable {
+    public let action: String  // "dismiss", "show_message", "deep_link", "next_step"
+    public let message: String?
+    public let delay_ms: Int?
+    public let deep_link_url: String?
+    public let confetti: Bool?
+    public let lottie_url: String?
+}
+
+public struct PostPurchaseFailureConfig: Codable {
+    public let action: String  // "show_error", "retry", "dismiss"
+    public let message: String?
+    public let retry_text: String?
+    public let allow_dismiss: Bool?
 }

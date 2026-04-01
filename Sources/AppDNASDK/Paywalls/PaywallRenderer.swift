@@ -16,6 +16,13 @@ struct PaywallRenderer: View {
     @State private var dragOffset: CGFloat = 0
     // SPEC-085: Particle effect state
     @State private var showConfetti = false
+    // Post-purchase overlay state
+    @State private var showSuccessOverlay = false
+    @State private var successMessage = ""
+    @State private var showErrorBanner = false
+    @State private var errorMessage = ""
+    @State private var errorRetryText = ""
+    @State private var errorAllowRetry = false
 
     // SPEC-084: Localization helper + SPEC-088: Template variable interpolation
     private func loc(_ key: String, _ fallback: String) -> String {
@@ -84,6 +91,58 @@ struct PaywallRenderer: View {
                 ConfettiOverlay(effect: effect)
             }
 
+            // Post-purchase success overlay
+            if showSuccessOverlay {
+                ZStack {
+                    Color.black.opacity(0.6).ignoresSafeArea()
+                    VStack(spacing: 16) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 56))
+                            .foregroundColor(.green)
+                        Text(successMessage)
+                            .font(.title3.weight(.semibold))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    }
+                }
+                .transition(.opacity)
+            }
+
+            // Post-purchase error banner
+            if showErrorBanner {
+                VStack {
+                    Spacer()
+                    VStack(spacing: 12) {
+                        Text(errorMessage)
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                        if errorAllowRetry {
+                            Button {
+                                showErrorBanner = false
+                                isPurchasing = false
+                            } label: {
+                                Text(errorRetryText)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 10)
+                                    .background(Color.white.opacity(0.2))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                    }
+                    .padding(20)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.red.opacity(0.9))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 80)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             // Dismiss control — show by default when config.dismiss is nil (not in Firestore)
             let dismissAllowed = config.dismiss?.isAllowed ?? true
             if showDismiss && dismissAllowed {
@@ -132,6 +191,22 @@ struct PaywallRenderer: View {
                 }
             } else {
                 withAnimation { showDismiss = true }
+            }
+
+            // Listen for post-purchase notifications
+            NotificationCenter.default.addObserver(forName: .paywallPurchaseSuccess, object: nil, queue: .main) { notif in
+                let info = notif.userInfo ?? [:]
+                successMessage = info["message"] as? String ?? "Welcome to Premium!"
+                withAnimation { showSuccessOverlay = true }
+                if info["confetti"] as? Bool == true { showConfetti = true }
+            }
+            NotificationCenter.default.addObserver(forName: .paywallPurchaseFailure, object: nil, queue: .main) { notif in
+                let info = notif.userInfo ?? [:]
+                errorMessage = info["message"] as? String ?? "Payment failed."
+                errorRetryText = info["retry_text"] as? String ?? "Try Again"
+                errorAllowRetry = (info["action"] as? String) == "retry"
+                isPurchasing = false
+                withAnimation { showErrorBanner = true }
             }
         }
         .gesture(

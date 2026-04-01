@@ -2,6 +2,11 @@ import Foundation
 import UIKit
 import SwiftUI
 
+extension Notification.Name {
+    static let paywallPurchaseSuccess = Notification.Name("ai.appdna.paywallPurchaseSuccess")
+    static let paywallPurchaseFailure = Notification.Name("ai.appdna.paywallPurchaseFailure")
+}
+
 /// Manages paywall presentation, purchase flow, and event tracking.
 final class PaywallManager {
     private let remoteConfigManager: RemoteConfigManager
@@ -45,7 +50,7 @@ final class PaywallManager {
         let paywallView = PaywallRenderer(
             config: config,
             onPlanSelected: { [weak self] plan, metadata in
-                self?.handlePurchase(paywallId: id, plan: plan, metadata: metadata, delegate: delegate)
+                self?.handlePurchase(paywallId: id, plan: plan, config: config, metadata: metadata, delegate: delegate, viewController: viewController)
             },
             onRestore: { [weak self] in
                 self?.handleRestore(paywallId: id, delegate: delegate)
@@ -73,7 +78,7 @@ final class PaywallManager {
 
     // MARK: - Purchase flow
 
-    private func handlePurchase(paywallId: String, plan: PaywallPlan, metadata: [String: Any] = [:], delegate: AppDNAPaywallDelegate?) {
+    private func handlePurchase(paywallId: String, plan: PaywallPlan, config: PaywallConfig, metadata: [String: Any] = [:], delegate: AppDNAPaywallDelegate?, viewController: UIViewController) {
         guard let bridge = billingBridge else {
             Log.error("No billing bridge configured")
             return
@@ -100,7 +105,7 @@ final class PaywallManager {
                     "currency": result.currency,
                     "provider": result.provider,
                 ])
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self] in
                     delegate?.onPaywallPurchaseCompleted(
                         paywallId: paywallId,
                         productId: result.productId,
@@ -110,6 +115,13 @@ final class PaywallManager {
                             purchaseDate: Date()
                         )
                     )
+                    // Post-purchase success action
+                    self?.handlePostPurchaseSuccess(
+                        config: config.post_purchase?.on_success,
+                        paywallId: paywallId,
+                        delegate: delegate,
+                        viewController: viewController
+                    )
                 }
             } catch {
                 eventTracker.track(event: "purchase_failed", properties: [
@@ -117,13 +129,90 @@ final class PaywallManager {
                     "product_id": plan.productId,
                     "error": error.localizedDescription,
                 ])
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self] in
                     delegate?.onPaywallPurchaseFailed(
                         paywallId: paywallId,
                         error: error
                     )
+                    // Post-purchase failure action
+                    self?.handlePostPurchaseFailure(
+                        config: config.post_purchase?.on_failure,
+                        paywallId: paywallId,
+                        viewController: viewController
+                    )
                 }
             }
+        }
+    }
+
+    // MARK: - Post-purchase actions
+
+    private func handlePostPurchaseSuccess(config: PostPurchaseSuccessConfig?, paywallId: String, delegate: AppDNAPaywallDelegate?, viewController: UIViewController) {
+        guard let config = config else { return } // No config = legacy behavior (delegate-only)
+        let delay = Double(config.delay_ms ?? 2000) / 1000.0
+
+        switch config.action {
+        case "dismiss":
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                viewController.dismiss(animated: true)
+            }
+
+        case "show_message":
+            // Show success overlay via notification (PaywallRenderer listens)
+            NotificationCenter.default.post(name: .paywallPurchaseSuccess, object: nil, userInfo: [
+                "message": config.message ?? "Welcome to Premium!",
+                "confetti": config.confetti ?? false,
+                "lottie_url": config.lottie_url ?? "",
+                "delay_ms": config.delay_ms ?? 2000,
+            ])
+            // Auto-dismiss after delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                viewController.dismiss(animated: true) {
+                    delegate?.onPaywallDismissed(paywallId: paywallId)
+                }
+            }
+
+        case "deep_link":
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                viewController.dismiss(animated: true) {
+                    delegate?.onPaywallDismissed(paywallId: paywallId)
+                    if let url = config.deep_link_url {
+                        delegate?.onPostPurchaseDeepLink(paywallId: paywallId, url: url)
+                    }
+                }
+            }
+
+        case "next_step":
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                viewController.dismiss(animated: true) {
+                    delegate?.onPaywallDismissed(paywallId: paywallId)
+                    delegate?.onPostPurchaseNextStep(paywallId: paywallId)
+                }
+            }
+
+        default:
+            break
+        }
+    }
+
+    private func handlePostPurchaseFailure(config: PostPurchaseFailureConfig?, paywallId: String, viewController: UIViewController) {
+        guard let config = config else { return }
+
+        switch config.action {
+        case "dismiss":
+            viewController.dismiss(animated: true)
+
+        case "show_error", "retry":
+            // Show error inline via notification (PaywallRenderer listens)
+            NotificationCenter.default.post(name: .paywallPurchaseFailure, object: nil, userInfo: [
+                "message": config.message ?? "Payment failed. Please try again.",
+                "retry_text": config.retry_text ?? "Try Again",
+                "allow_dismiss": config.allow_dismiss ?? true,
+                "action": config.action,
+            ])
+
+        default:
+            break
         }
     }
 
