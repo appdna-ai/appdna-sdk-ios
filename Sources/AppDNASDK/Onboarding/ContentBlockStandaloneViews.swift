@@ -393,21 +393,67 @@ struct DateWheelPickerBlockView: View {
     let block: ContentBlock
 
     @State private var selectedDate = Date()
+    @State private var showPicker = false
 
     var body: some View {
         let highlightCol = Color(hex: block.highlight_color ?? "#6366F1")
+        let isFieldMode = block.picker_presentation == "field"
+        let components: DatePickerComponents = {
+            switch block.type {
+            case .input_time: return [.hourAndMinute]
+            case .input_datetime: return [.date, .hourAndMinute]
+            default: return [.date]
+            }
+        }()
 
         VStack(spacing: 8) {
-            DatePicker(
-                "",
-                selection: $selectedDate,
-                displayedComponents: [.date]
-            )
-            .datePickerStyle(.wheel)
-            .labelsHidden()
-            .accentColor(highlightCol)
-            .frame(maxWidth: .infinity)
+            if isFieldMode {
+                // Field mode: tap to open
+                Button {
+                    withAnimation { showPicker.toggle() }
+                } label: {
+                    HStack {
+                        Text(formatDate(selectedDate, components: components))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Image(systemName: "calendar")
+                            .foregroundColor(highlightCol)
+                    }
+                    .padding(12)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.3), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+
+                if showPicker {
+                    DatePicker("", selection: $selectedDate, displayedComponents: components)
+                        .datePickerStyle(.wheel)
+                        .labelsHidden()
+                        .accentColor(highlightCol)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            } else {
+                // Inline mode (default)
+                DatePicker("", selection: $selectedDate, displayedComponents: components)
+                    .datePickerStyle(.wheel)
+                    .labelsHidden()
+                    .accentColor(highlightCol)
+                    .frame(maxWidth: .infinity)
+            }
         }
+    }
+
+    private func formatDate(_ date: Date, components: DatePickerComponents) -> String {
+        let f = DateFormatter()
+        if components.contains(.date) && components.contains(.hourAndMinute) {
+            f.dateStyle = .medium; f.timeStyle = .short
+        } else if components.contains(.hourAndMinute) {
+            f.dateStyle = .none; f.timeStyle = .short
+        } else {
+            f.dateStyle = .medium; f.timeStyle = .none
+        }
+        return f.string(from: date)
     }
 }
 
@@ -441,6 +487,8 @@ struct WheelPickerBlockView: View {
 
         let initialIndex = values.firstIndex(where: { $0 >= defaultVal }) ?? 0
 
+        let isHorizontal = block.orientation == "horizontal"
+
         VStack(spacing: 8) {
             if let label = block.rating_label ?? block.text {
                 Text(label)
@@ -448,18 +496,48 @@ struct WheelPickerBlockView: View {
                     .foregroundColor(.secondary)
             }
 
-            Picker("", selection: $selectedIndex) {
-                ForEach(0..<values.count, id: \.self) { idx in
-                    let val = values[idx]
-                    let formatted = val == val.rounded() ? String(Int(val)) : String(format: "%.1f", val)
-                    let display = unitPos == "before" ? "\(unitStr)\(formatted)" : "\(formatted)\(unitStr)"
-                    Text(display)
-                        .tag(idx)
+            if isHorizontal {
+                // Horizontal snap scroll picker
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 0) {
+                            ForEach(0..<values.count, id: \.self) { idx in
+                                let val = values[idx]
+                                let formatted = val == val.rounded() ? String(Int(val)) : String(format: "%.1f", val)
+                                let display = unitPos == "before" ? "\(unitStr)\(formatted)" : "\(formatted)\(unitStr)"
+                                Button {
+                                    withAnimation { selectedIndex = idx }
+                                } label: {
+                                    Text(display)
+                                        .font(.system(size: selectedIndex == idx ? 28 : 18, weight: selectedIndex == idx ? .bold : .regular))
+                                        .foregroundColor(selectedIndex == idx ? highlightCol : .gray)
+                                        .frame(width: 60, height: 50)
+                                }
+                                .id(idx)
+                            }
+                        }
+                        .padding(.horizontal, UIScreen.main.bounds.width / 2 - 30)
+                    }
+                    .onAppear { proxy.scrollTo(initialIndex, anchor: .center) }
+                    .onChange(of: selectedIndex) { idx in
+                        withAnimation { proxy.scrollTo(idx, anchor: .center) }
+                    }
                 }
+                .frame(height: 60)
+            } else {
+                // Vertical wheel picker (default)
+                Picker("", selection: $selectedIndex) {
+                    ForEach(0..<values.count, id: \.self) { idx in
+                        let val = values[idx]
+                        let formatted = val == val.rounded() ? String(Int(val)) : String(format: "%.1f", val)
+                        let display = unitPos == "before" ? "\(unitStr)\(formatted)" : "\(formatted)\(unitStr)"
+                        Text(display).tag(idx)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(maxWidth: .infinity)
+                .accentColor(highlightCol)
             }
-            .pickerStyle(.wheel)
-            .frame(maxWidth: .infinity)
-            .accentColor(highlightCol)
         }
         .onAppear {
             selectedIndex = initialIndex

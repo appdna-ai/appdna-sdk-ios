@@ -873,6 +873,8 @@ public struct ContentBlock: Codable, Identifiable {
     public let max_date: String?
     public let highlight_color: String?
     public let haptic_on_scroll: Bool?
+    public let orientation: String?          // "vertical" | "horizontal" for wheel picker
+    public let picker_presentation: String?  // "inline" | "field" for date picker
 
     // SPEC-089d Phase F: stack / row fields (container blocks)
     public let children: [ContentBlock]?
@@ -986,7 +988,7 @@ public struct ContentBlock: Codable, Identifiable {
         case gauge_value, max_value, sublabel, stroke_width
         case label_color, label_font_size, animate, animation_duration_ms
         case columns, default_date_value, min_date, max_date
-        case highlight_color, haptic_on_scroll
+        case highlight_color, haptic_on_scroll, orientation, picker_presentation
         case children, z_index, gap, wrap, justify, align_items
         case row_direction, row_distribution, row_child_fill
         case view_key, custom_config, placeholder_image_url, placeholder_text
@@ -1136,6 +1138,8 @@ public struct ContentBlock: Codable, Identifiable {
         self.min_date = try c.decodeIfPresent(String.self, forKey: .min_date)
         self.max_date = try c.decodeIfPresent(String.self, forKey: .max_date)
         self.highlight_color = try c.decodeIfPresent(String.self, forKey: .highlight_color)
+        self.orientation = try c.decodeIfPresent(String.self, forKey: .orientation)
+        self.picker_presentation = try c.decodeIfPresent(String.self, forKey: .picker_presentation)
         self.haptic_on_scroll = try c.decodeIfPresent(Bool.self, forKey: .haptic_on_scroll)
         self.children = try c.decodeIfPresent([ContentBlock].self, forKey: .children)
         self.z_index = try c.decodeIfPresent(Double.self, forKey: .z_index)
