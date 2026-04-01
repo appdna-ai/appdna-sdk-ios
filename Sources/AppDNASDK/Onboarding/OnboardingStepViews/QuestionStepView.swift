@@ -49,7 +49,7 @@ struct QuestionStepView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
-                    .background(selectedIds.isEmpty ? Color.gray : Color.accentColor)
+                    .background(selectedIds.isEmpty ? Color.gray : Color(hex: "#6366F1"))
                     .cornerRadius(14)
             }
             .disabled(selectedIds.isEmpty)
@@ -91,11 +91,11 @@ struct QuestionStepView: View {
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.accentColor.opacity(0.1) : Color(.systemGray6))
+                    .fill(isSelected ? Color(hex: "#6366F1").opacity(0.1) : Color(hex: "#F3F4F6"))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                    .stroke(isSelected ? Color(hex: "#6366F1") : Color.clear, lineWidth: 2)
             )
         }
     }

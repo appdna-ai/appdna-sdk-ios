@@ -52,7 +52,7 @@ struct WelcomeStepView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
-                    .background(Color.accentColor)
+                    .background(Color(hex: "#6366F1"))
                     .cornerRadius(14)
             }
             .padding(.horizontal, 24)

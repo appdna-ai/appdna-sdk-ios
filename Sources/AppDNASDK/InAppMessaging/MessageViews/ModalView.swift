@@ -18,7 +18,7 @@ struct ModalView: View {
                     .blur(radius: CGFloat(blurConfig.radius ?? 0) / 3)
                     .onTapGesture { onDismiss() }
             } else {
-                Color.black.opacity(0.5)
+                Color.black.opacity(0.4)
                     .ignoresSafeArea()
                     .onTapGesture { onDismiss() }
             }
@@ -100,11 +100,11 @@ struct ModalView: View {
                             Text(ctaText)
                         }
                         .font(.headline)
-                        .foregroundColor(.white)
+                        .foregroundColor(Color(hex: content.button_text_color ?? "#FFFFFF"))
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
                         .background(Color(hex: content.button_color ?? "#6366F1"))
-                        .cornerRadius(CGFloat(content.corner_radius ?? 12))
+                        .cornerRadius(CGFloat(content.button_corner_radius ?? 8))
                     }
                 }
 
@@ -131,7 +131,7 @@ struct ModalView: View {
             }
             .padding(24)
             .background(
-                RoundedRectangle(cornerRadius: CGFloat(content.corner_radius ?? 20))
+                RoundedRectangle(cornerRadius: CGFloat(content.corner_radius ?? 12))
                     .fill(Color(hex: content.background_color ?? "#FFFFFF"))
             )
             .applyBlurBackdrop(content.blur_backdrop)

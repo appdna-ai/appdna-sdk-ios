@@ -44,7 +44,7 @@ struct FeatureList: View {
                 ForEach(features, id: \.self) { feature in
                     HStack(spacing: 12) {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(iconColor ?? .green)
+                            .foregroundColor(iconColor ?? Color(hex: "#6366F1"))
                             .font(.body)
                         if let ts = itemTextStyle {
                             Text(feature).applyTextStyle(ts)
@@ -67,7 +67,7 @@ struct FeatureList: View {
                 Text(emoji).font(.body)
             } else if let iconName = item.icon, !iconName.isEmpty {
                 Image(systemName: iconName)
-                    .foregroundColor(iconColor ?? (isIncluded ? .green : .red))
+                    .foregroundColor(iconColor ?? (isIncluded ? Color(hex: "#6366F1") : Color(hex: "#EF4444")))
                     .font(.body)
             } else if let imageUrl = item.image_url, let url = URL(string: imageUrl) {
                 AsyncImage(url: url) { img in
@@ -79,7 +79,7 @@ struct FeatureList: View {
                 .clipShape(RoundedRectangle(cornerRadius: 4))
             } else {
                 Image(systemName: isIncluded ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .foregroundColor(isIncluded ? (iconColor ?? .green) : .red.opacity(0.5))
+                    .foregroundColor(isIncluded ? (iconColor ?? Color(hex: "#6366F1")) : Color(hex: "#EF4444").opacity(0.5))
                     .font(.body)
             }
 

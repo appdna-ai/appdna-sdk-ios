@@ -23,7 +23,7 @@ struct YesNoView: View {
                         .font(.body.weight(.medium))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(selectedValue == "yes" ? Color.accentColor : Color.gray.opacity(0.1))
+                        .background(selectedValue == "yes" ? Color(hex: "#6366F1") : Color.gray.opacity(0.1))
                         .foregroundColor(selectedValue == "yes" ? .white : .primary)
                         .cornerRadius(10)
                 }
@@ -35,7 +35,7 @@ struct YesNoView: View {
                         .font(.body.weight(.medium))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(selectedValue == "no" ? Color.accentColor : Color.gray.opacity(0.1))
+                        .background(selectedValue == "no" ? Color(hex: "#6366F1") : Color.gray.opacity(0.1))
                         .foregroundColor(selectedValue == "no" ? .white : .primary)
                         .cornerRadius(10)
                 }

@@ -92,11 +92,11 @@ struct FullscreenView: View {
                             Text(ctaText)
                         }
                         .font(.headline)
-                        .foregroundColor(.white)
+                        .foregroundColor(Color(hex: content.button_text_color ?? "#FFFFFF"))
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
                         .background(Color(hex: content.button_color ?? "#6366F1"))
-                        .cornerRadius(CGFloat(content.corner_radius ?? 14))
+                        .cornerRadius(CGFloat(content.button_corner_radius ?? 8))
                     }
                     .padding(.horizontal, 24)
                 }
@@ -131,7 +131,6 @@ struct FullscreenView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.primary)
                     .frame(width: 36, height: 36)
-                    .background(Color(.systemGray5))
                     .clipShape(Circle())
             }
             .padding(16)

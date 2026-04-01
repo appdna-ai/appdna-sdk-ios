@@ -34,7 +34,7 @@ struct CSATQuestionView: View {
                         } else {
                             Image(systemName: (selectedRating ?? 0) >= rating ? "star.fill" : "star")
                                 .font(.system(size: 28))
-                                .foregroundColor((selectedRating ?? 0) >= rating ? .yellow : .gray.opacity(0.3))
+                                .foregroundColor((selectedRating ?? 0) >= rating ? Color(hex: "#FBBF24") : Color(hex: "#D1D5DB"))
                         }
                     }
                 }

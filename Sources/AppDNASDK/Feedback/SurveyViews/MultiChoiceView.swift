@@ -24,7 +24,7 @@ struct MultiChoiceView: View {
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: selectedIds.contains(option.id ?? "") ? "checkmark.square.fill" : "square")
-                            .foregroundColor(selectedIds.contains(option.id ?? "") ? .accentColor : .gray)
+                            .foregroundColor(selectedIds.contains(option.id ?? "") ? Color(hex: "#6366F1") : .gray)
 
                         if let icon = option.icon {
                             Text(icon)

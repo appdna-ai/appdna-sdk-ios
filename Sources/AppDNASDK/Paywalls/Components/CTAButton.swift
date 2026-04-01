@@ -21,7 +21,7 @@ struct CTAButton: View {
         if let hex = buttonElement?.background?.color {
             return Color(hex: hex)
         }
-        return Color(hex: cta?.resolvedBgColor ?? "#007AFF")
+        return Color(hex: cta?.resolvedBgColor ?? "#6366F1")
     }
     private var buttonTextColor: Color {
         if let ts = buttonTextStyle, let hex = ts.color {
@@ -30,7 +30,7 @@ struct CTAButton: View {
         return Color(hex: cta?.resolvedTextColor ?? "#FFFFFF")
     }
     private var buttonCornerRadius: CGFloat {
-        CGFloat(cta?.resolvedCornerRadius ?? 14.0)
+        CGFloat(cta?.resolvedCornerRadius ?? 12.0)
     }
 
     var body: some View {

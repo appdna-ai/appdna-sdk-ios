@@ -74,8 +74,8 @@ struct BannerView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(Color(hex: content.button_color ?? "#6366F1"))
-                        .foregroundColor(.white)
-                        .cornerRadius(CGFloat(content.corner_radius ?? 8))
+                        .foregroundColor(Color(hex: content.button_text_color ?? "#FFFFFF"))
+                        .cornerRadius(CGFloat(content.button_corner_radius ?? 8))
                     }
                 }
 

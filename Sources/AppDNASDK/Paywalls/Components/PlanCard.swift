@@ -36,12 +36,12 @@ struct PlanCard: View {
 
     private var cornerRadius: CGFloat { cardStyle.cardCornerRadius ?? 12 }
     private var cardPadding: CGFloat { cardStyle.cardPadding ?? 16 }
-    private var selectedBorder: Color { Color(hex: cardStyle.selectedBorderColor ?? "#3B82F6") }
+    private var selectedBorder: Color { Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") }
     private var selectedBg: Color? {
         cardStyle.selectedBgColor.map { Color(hex: $0) }
     }
     private var selectedScaleValue: CGFloat { cardStyle.selectedScale ?? 1.0 }
-    private var badgeBg: Color { Color(hex: cardStyle.badgeBgColor ?? "#3B82F6") }
+    private var badgeBg: Color { Color(hex: cardStyle.badgeBgColor ?? "#6366F1") }
     private var badgeFg: Color { Color(hex: cardStyle.badgeTextColor ?? "#FFFFFF") }
 
     var body: some View {
@@ -105,7 +105,7 @@ struct PlanCard: View {
                             } else {
                                 Text(loc?("plan.\(planIndex).trial", "\(trial) free trial") ?? "\(trial) free trial")
                                     .font(.caption)
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(Color(hex: "#6366F1"))
                             }
                         }
 
@@ -121,7 +121,7 @@ struct PlanCard: View {
                         if showSavings, let savings = plan.savings_text, !savings.isEmpty {
                             Text(savings)
                                 .font(.caption2.bold())
-                                .foregroundColor(.green)
+                                .foregroundColor(Color(hex: "#22C55E"))
                         }
 
                         // Per-plan features
@@ -131,7 +131,7 @@ struct PlanCard: View {
                                     HStack(spacing: 4) {
                                         Image(systemName: "checkmark")
                                             .font(.system(size: 9, weight: .bold))
-                                            .foregroundColor(.green)
+                                            .foregroundColor(Color(hex: "#6366F1"))
                                         Text(feat).font(.caption2).foregroundColor(.secondary)
                                     }
                                 }
@@ -157,7 +157,7 @@ struct PlanCard: View {
                 } // close VStack for image
                 .background(
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(isSelected ? (selectedBg ?? Color(.secondarySystemBackground)) : Color(.secondarySystemBackground))
+                        .fill(isSelected ? (selectedBg ?? Color.clear) : Color.clear)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                 .overlay(

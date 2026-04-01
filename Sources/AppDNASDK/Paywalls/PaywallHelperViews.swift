@@ -301,12 +301,12 @@ struct ReviewsCarouselView: View {
                                 // Colored circle with initial
                                 let initial = String(author.prefix(1)).uppercased()
                                 Circle()
-                                    .fill(Color.accentColor.opacity(0.2))
+                                    .fill(Color(hex: "#6366F1").opacity(0.2))
                                     .frame(width: 28, height: 28)
                                     .overlay(
                                         Text(initial)
                                             .font(.caption.bold())
-                                            .foregroundColor(.accentColor)
+                                            .foregroundColor(Color(hex: "#6366F1"))
                                     )
                             }
 
@@ -328,7 +328,7 @@ struct ReviewsCarouselView: View {
                     .padding(16)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(.secondarySystemBackground))
+                            .fill(Color(hex: "#F9FAFB"))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)

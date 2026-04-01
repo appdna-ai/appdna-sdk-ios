@@ -46,7 +46,7 @@ struct RatingQuestionView: View {
                     } label: {
                         Image(systemName: (selectedRating ?? 0) >= rating ? filledIcon : emptyIcon)
                             .font(.system(size: 28))
-                            .foregroundColor((selectedRating ?? 0) >= rating ? ratingColor : .gray.opacity(0.3))
+                            .foregroundColor((selectedRating ?? 0) >= rating ? ratingColor : Color(hex: "#D1D5DB"))
                     }
                 }
             }
@@ -56,8 +56,8 @@ struct RatingQuestionView: View {
     private var ratingColor: Color {
         switch style {
         case "heart": return .red
-        case "thumb": return .blue
-        default: return .yellow
+        case "thumb": return Color(hex: "#6366F1")
+        default: return Color(hex: "#FBBF24")
         }
     }
 }

@@ -393,7 +393,7 @@ struct ContentBlockRendererView: View {
         case "check":
             return AnyView(Image(systemName: "checkmark.circle.fill")
                 .font(.subheadline)
-                .foregroundColor(.green))
+                .foregroundColor(Color(hex: "#6366F1")))
         default:
             return AnyView(Circle()
                 .fill(Color.primary.opacity(0.5))
@@ -455,7 +455,7 @@ struct ContentBlockRendererView: View {
 
         return VStack(alignment: .leading, spacing: 4) {
             Toggle(loc?("block.\(block.id).label", block.toggle_label ?? "") ?? block.toggle_label ?? "", isOn: binding)
-                .tint(.accentColor)
+                .tint(Color(hex: "#6366F1"))
             if let desc = block.toggle_description {
                 Text(loc?("block.\(block.id).description", desc) ?? desc)
                     .font(.caption)
@@ -689,7 +689,7 @@ struct ContentBlockRendererView: View {
         case "google": return .white
         case "facebook": return Color(hex: "#1877F2")
         case "github": return Color(hex: "#24292E")
-        default: return .accentColor
+        default: return Color(hex: "#6366F1")
         }
     }
 

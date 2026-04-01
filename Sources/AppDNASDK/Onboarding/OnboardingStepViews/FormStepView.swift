@@ -67,7 +67,7 @@ struct FormStepView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
-                    .background(canSubmit ? Color.accentColor : Color.gray.opacity(0.4))
+                    .background(canSubmit ? Color(hex: "#6366F1") : Color.gray.opacity(0.4))
                     .cornerRadius(14)
             }
             .disabled(!canSubmit)

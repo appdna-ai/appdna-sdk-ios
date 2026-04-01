@@ -98,7 +98,7 @@ struct PaywallRenderer: View {
                     VStack(spacing: 16) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 56))
-                            .foregroundColor(.green)
+                            .foregroundColor(Color(hex: "#22C55E"))
                         Text(successMessage)
                             .font(.title3.weight(.semibold))
                             .foregroundColor(.white)
@@ -497,15 +497,15 @@ struct PaywallRenderer: View {
                     .applyTextStyle(ts)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(Color.accentColor.opacity(0.15))
+                    .background(Color(hex: "#6366F1").opacity(0.15))
                     .clipShape(Capsule()))
             } else {
                 return AnyView(Text(loc("social_proof.trial_badge", data?.text ?? "Free Trial"))
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(Color.accentColor.opacity(0.15))
-                    .foregroundColor(.accentColor)
+                    .background(Color(hex: "#6366F1").opacity(0.15))
+                    .foregroundColor(Color(hex: "#6366F1"))
                     .clipShape(Capsule()))
             }
         default: // app_rating
@@ -547,7 +547,7 @@ struct PaywallRenderer: View {
             if layout == "quote" {
                 Text("\u{201C}")
                     .font(.system(size: 40, weight: .bold))
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(Color(hex: "#6366F1"))
             }
 
             if let ts = quoteTextStyle {
@@ -573,12 +573,12 @@ struct PaywallRenderer: View {
                         .clipShape(Circle())
                     } else if let name = data?.authorName {
                         Circle()
-                            .fill(Color.accentColor.opacity(0.2))
+                            .fill(Color(hex: "#6366F1").opacity(0.2))
                             .frame(width: 40, height: 40)
                             .overlay(
                                 Text(initials(name))
                                     .font(.caption.bold())
-                                    .foregroundColor(.accentColor)
+                                    .foregroundColor(Color(hex: "#6366F1"))
                             )
                     }
 
@@ -612,8 +612,8 @@ struct PaywallRenderer: View {
         return Group {
             if layout == "card" {
                 content
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: "#F9FAFB")))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "#E5E7EB"), lineWidth: 1))
                     .padding(.horizontal)
             } else {
                 content
@@ -716,7 +716,7 @@ struct PaywallRenderer: View {
                     .padding(.vertical, 12)
                     .background(
                         RoundedRectangle(cornerRadius: layout == "banner" ? 0 : 12)
-                            .fill(Color(hex: data?.backgroundColor ?? "#1a1a1a"))
+                            .fill(Color(hex: data?.backgroundColor ?? "#FEF2F2"))
                     )
             } else {
                 CountdownTimerView(seconds: duration, valueTextStyle: valueTextStyle)
@@ -728,7 +728,7 @@ struct PaywallRenderer: View {
 
     @ViewBuilder
     private func legalSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
-        let textColor = Color(hex: data?.color ?? "#999999")
+        let textColor = Color(hex: data?.color ?? "#9CA3AF")
         let size = data?.fontSize ?? 11
         let textAlignment: TextAlignment = {
             switch data?.alignment {
@@ -806,7 +806,7 @@ struct PaywallRenderer: View {
 
     @ViewBuilder
     private func dividerSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
-        let dividerColor = Color(hex: data?.color ?? "#333333")
+        let dividerColor = Color(hex: data?.color ?? "#E5E7EB")
         let thickness = data?.thickness ?? 1
         let lineStyle = data?.lineStyle ?? "solid"
         let mTop = data?.marginTop ?? 8
@@ -820,9 +820,9 @@ struct PaywallRenderer: View {
                     dividerLine(color: dividerColor, thickness: thickness, style: lineStyle)
                     Text(labelText)
                         .font(.system(size: data?.labelFontSize ?? 12))
-                        .foregroundColor(Color(hex: data?.labelColor ?? "#999999"))
+                        .foregroundColor(Color(hex: data?.labelColor ?? "#9CA3AF"))
                         .padding(.horizontal, 8)
-                        .background(Color(hex: data?.labelBgColor ?? "#000000"))
+                        .background(Color.clear)
                     dividerLine(color: dividerColor, thickness: thickness, style: lineStyle)
                 }
             } else {
@@ -857,7 +857,7 @@ struct PaywallRenderer: View {
 
     @ViewBuilder
     private func stickyFooterView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
-        let bgColor = Color(hex: data?.backgroundColor ?? "#000000")
+        let bgColor = Color(hex: data?.backgroundColor ?? "#FFFFFF")
 
         VStack(spacing: 8) {
             // CTA button
@@ -958,9 +958,9 @@ struct PaywallRenderer: View {
             }
             .padding(data?.padding ?? 16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(hex: data?.backgroundColor ?? "#1A1A2E"))
+            .background(Color(hex: data?.backgroundColor ?? "#FFFFFF"))
             .clipShape(RoundedRectangle(cornerRadius: radius))
-            .overlay(RoundedRectangle(cornerRadius: radius).stroke(Color(hex: data?.borderColor ?? "#333333"), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: radius).stroke(Color(hex: data?.borderColor ?? "#E5E7EB"), lineWidth: 1))
             .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
             .applyContainerStyle(style?.container)
         }
@@ -973,26 +973,26 @@ struct PaywallRenderer: View {
                     .frame(height: 80).clipped()
             }
             if let icon = card.icon, !icon.isEmpty {
-                Image(systemName: icon).font(.title2).foregroundColor(.accentColor)
+                Image(systemName: icon).font(.title2).foregroundColor(Color(hex: "#6366F1"))
             }
             if let title = card.title {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundColor(Color(hex: card.text_color ?? "#FFFFFF"))
+                Text(title).font(.subheadline.weight(.semibold)).foregroundColor(Color(hex: card.text_color ?? "#1F2937"))
             }
             if let subtitle = card.subtitle {
-                Text(subtitle).font(.caption).foregroundColor(Color(hex: card.text_color ?? "#FFFFFF").opacity(0.7))
+                Text(subtitle).font(.caption).foregroundColor(Color(hex: card.text_color ?? "#1F2937").opacity(0.7))
             }
             if let text = card.text {
-                Text(text).font(.caption).foregroundColor(Color(hex: card.text_color ?? "#FFFFFF").opacity(0.7))
+                Text(text).font(.caption).foregroundColor(Color(hex: card.text_color ?? "#1F2937").opacity(0.7))
             }
             if let cta = card.cta_text, !cta.isEmpty {
-                Text(cta).font(.caption.bold()).foregroundColor(.accentColor)
+                Text(cta).font(.caption.bold()).foregroundColor(Color(hex: "#6366F1"))
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(hex: card.bg_color ?? "#1A1A2E"))
+        .background(Color(hex: card.bg_color ?? "#FFFFFF"))
         .clipShape(RoundedRectangle(cornerRadius: radius))
-        .overlay(RoundedRectangle(cornerRadius: radius).stroke(Color(hex: card.border_color ?? "#333333"), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: radius).stroke(Color(hex: card.border_color ?? "#E5E7EB"), lineWidth: 1))
     }
 
     // MARK: - SPEC-089d: Carousel section (AC-033)
@@ -1037,7 +1037,7 @@ struct PaywallRenderer: View {
                             )
                             HStack(spacing: 0) {
                                 if index > 0 && showLine {
-                                    Rectangle().fill(Color(hex: data?.lineColor ?? "#333333")).frame(height: 2)
+                                    Rectangle().fill(Color(hex: data?.lineColor ?? "#D1D5DB")).frame(height: 2)
                                 }
                                 ZStack {
                                     Circle().fill(statusColor).frame(width: 24, height: 24)
@@ -1046,7 +1046,7 @@ struct PaywallRenderer: View {
                                     }
                                 }
                                 if index < items.count - 1 && showLine {
-                                    Rectangle().fill(Color(hex: data?.lineColor ?? "#333333")).frame(height: 2)
+                                    Rectangle().fill(Color(hex: data?.lineColor ?? "#D1D5DB")).frame(height: 2)
                                 }
                             }
                             if let title = item.title {
@@ -1085,7 +1085,7 @@ struct PaywallRenderer: View {
 
                         if showLine && index < items.count - 1 {
                             Rectangle()
-                                .fill(Color(hex: data?.lineColor ?? "#333333"))
+                                .fill(Color(hex: data?.lineColor ?? "#D1D5DB"))
                                 .frame(width: 2)
                                 .frame(maxHeight: .infinity)
                         }
@@ -1195,9 +1195,9 @@ struct PaywallRenderer: View {
         }
         let rows = data?.tableRows ?? []
         let checkClr = Color(hex: data?.checkColor ?? "#22C55E")
-        let crossClr = Color(hex: data?.crossColor ?? "#EF4444")
+        let crossClr = Color(hex: data?.crossColor ?? "#D1D5DB")
         let highlightClr = Color(hex: data?.highlightColor ?? "#6366F1")
-        let borderClr = Color(hex: data?.borderColor ?? "#333333")
+        let borderClr = Color(hex: data?.borderColor ?? "#E5E7EB")
         let radius = data?.cornerRadius ?? 12
 
         return VStack(spacing: 0) {
@@ -1219,7 +1219,7 @@ struct PaywallRenderer: View {
                         .background(colIdx < columnHighlights.count && columnHighlights[colIdx] ? highlightClr.opacity(0.15) : Color.clear)
                 }
             }
-            .background(Color.white.opacity(0.05))
+            .background(Color(hex: "#F9FAFB"))
 
             Divider().background(borderClr)
 
@@ -1245,7 +1245,7 @@ struct PaywallRenderer: View {
                                     .font(.caption.weight(.bold))
                             case "partial", "~":
                                 Image(systemName: "minus")
-                                    .foregroundColor(.yellow)
+                                    .foregroundColor(Color(hex: "#FBBF24"))
                                     .font(.caption.weight(.bold))
                             default:
                                 Text(value)
@@ -1284,7 +1284,7 @@ struct PaywallRenderer: View {
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
-                .background(Color.white.opacity(0.1))
+                .background(Color(hex: "#F9FAFB"))
                 .cornerRadius(8)
                 .foregroundColor(.primary)
                 .font(.subheadline)
@@ -1323,7 +1323,7 @@ struct PaywallRenderer: View {
         case .success:
             Text(data?.successText ?? "Code applied!")
                 .font(.caption)
-                .foregroundColor(.green)
+                .foregroundColor(Color(hex: "#22C55E"))
         case .error:
             Text(data?.errorText ?? "Invalid code")
                 .font(.caption)
@@ -1359,7 +1359,7 @@ struct PaywallRenderer: View {
                 if let desc = data?.description {
                     Text(loc("toggle.description", desc))
                         .font(.caption)
-                        .foregroundColor(Color(hex: data?.descriptionColor ?? "#999999"))
+                        .foregroundColor(Color(hex: data?.descriptionColor ?? "#9CA3AF"))
                 }
             }
 
@@ -1451,7 +1451,7 @@ struct PaywallRenderer: View {
                     Button { selectPlan(plan.id) } label: {
                         HStack(spacing: 12) {
                             Image(systemName: selectedPlanId == plan.id ? "largecircle.fill.circle" : "circle")
-                                .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#3B82F6") : .secondary)
+                                .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : .secondary)
                                 .font(.title3)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(loc("plan.\(index).name", plan.displayName))
@@ -1471,7 +1471,7 @@ struct PaywallRenderer: View {
                                     .foregroundColor(Color(hex: cardStyle.badgeTextColor ?? "#FFFFFF"))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(Color(hex: cardStyle.badgeBgColor ?? "#3B82F6"))
+                                    .background(Color(hex: cardStyle.badgeBgColor ?? "#6366F1"))
                                     .clipShape(Capsule())
                             }
                         }
@@ -1498,7 +1498,7 @@ struct PaywallRenderer: View {
                             .padding(.vertical, 10)
                             .foregroundColor(selectedPlanId == plan.id ? .white : .primary)
                             .background(
-                                Capsule().fill(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#3B82F6") : Color(.secondarySystemBackground))
+                                Capsule().fill(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.clear)
                             )
                         }
                         .buttonStyle(.plain)
@@ -1543,7 +1543,7 @@ struct PaywallRenderer: View {
                                 .foregroundColor(.primary)
                             Text(plan.displayPrice)
                                 .font(.subheadline.bold())
-                                .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#3B82F6") : .primary)
+                                .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : .primary)
                             if let period = plan.period {
                                 Text("/ \(period)")
                                     .font(.caption2)
@@ -1553,9 +1553,9 @@ struct PaywallRenderer: View {
                         .frame(maxWidth: .infinity)
                         .padding(10)
                         .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
-                            .fill(selectedPlanId == plan.id ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color(.secondarySystemBackground)) : Color(.secondarySystemBackground)))
+                            .fill(selectedPlanId == plan.id ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color.clear) : Color.clear))
                         .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
-                            .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#3B82F6") : Color.clear, lineWidth: 2))
+                            .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.clear, lineWidth: 2))
                     }
                     .buttonStyle(.plain)
                 }
@@ -1622,7 +1622,7 @@ struct PaywallRenderer: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(
                                 RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 12)
-                                    .fill(selectedPlanId == plan.id ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color(.secondarySystemBackground)) : Color(.secondarySystemBackground))
+                                    .fill(selectedPlanId == plan.id ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color.clear) : Color.clear)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 12)
@@ -1669,7 +1669,7 @@ struct PaywallRenderer: View {
                     HStack(spacing: 0) {
                         Text(feature).font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8)
                         ForEach(plans, id: \.id) { _ in
-                            Image(systemName: "checkmark").font(.caption.bold()).foregroundColor(.green).frame(maxWidth: .infinity)
+                            Image(systemName: "checkmark").font(.caption.bold()).foregroundColor(Color(hex: "#22C55E")).frame(maxWidth: .infinity)
                         }
                     }
                     .padding(.vertical, 4)
@@ -1691,7 +1691,7 @@ struct PaywallRenderer: View {
                 }
                 .padding(.vertical, 6)
             }
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.clear))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
             )
 
@@ -1722,7 +1722,7 @@ struct PaywallRenderer: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 ForEach(features, id: \.self) { f in
                                     HStack(spacing: 6) {
-                                        Image(systemName: "checkmark.circle.fill").font(.caption).foregroundColor(.green)
+                                        Image(systemName: "checkmark.circle.fill").font(.caption).foregroundColor(Color(hex: "#6366F1"))
                                         Text(f).font(.caption).foregroundColor(.secondary)
                                     }
                                 }
@@ -1732,7 +1732,7 @@ struct PaywallRenderer: View {
                     .padding(24)
                     .frame(maxWidth: .infinity)
                     .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 16)
-                        .fill(Color(.secondarySystemBackground)))
+                        .fill(Color.clear))
                     .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 16)
                         .stroke(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"), lineWidth: 2))
                 }
@@ -1789,7 +1789,7 @@ struct PaywallRenderer: View {
                             .padding(20)
                             .frame(maxWidth: .infinity)
                             .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 16)
-                                .fill(selectedPlanId == plan.id ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color(.secondarySystemBackground)) : Color(.secondarySystemBackground)))
+                                .fill(selectedPlanId == plan.id ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color.clear) : Color.clear))
                             .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 16)
                                 .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.gray.opacity(0.2), lineWidth: selectedPlanId == plan.id ? 2 : 1))
                             .padding(.horizontal, 8)
@@ -1830,20 +1830,20 @@ struct PaywallRenderer: View {
                                 VStack(alignment: .leading, spacing: 6) {
                                     if let trial = plan.trialLabel {
                                         HStack(spacing: 4) {
-                                            Image(systemName: "gift").font(.caption).foregroundColor(.blue)
-                                            Text(trial).font(.caption).foregroundColor(.blue)
+                                            Image(systemName: "gift").font(.caption).foregroundColor(Color(hex: "#6366F1"))
+                                            Text(trial).font(.caption).foregroundColor(Color(hex: "#6366F1"))
                                         }
                                     }
                                     if let desc = plan.description, !desc.isEmpty {
                                         Text(desc).font(.caption).foregroundColor(.secondary)
                                     }
                                     if let savings = plan.savings_text, !savings.isEmpty {
-                                        Text(savings).font(.caption.bold()).foregroundColor(.green)
+                                        Text(savings).font(.caption.bold()).foregroundColor(Color(hex: "#22C55E"))
                                     }
                                     if let features = plan.features, !features.isEmpty {
                                         ForEach(features, id: \.self) { f in
                                             HStack(spacing: 4) {
-                                                Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundColor(.green)
+                                                Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundColor(Color(hex: "#6366F1"))
                                                 Text(f).font(.caption).foregroundColor(.secondary)
                                             }
                                         }
@@ -1854,7 +1854,7 @@ struct PaywallRenderer: View {
                             }
                         }
                         .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
-                            .fill(isExpanded ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color(.secondarySystemBackground)) : Color(.secondarySystemBackground)))
+                            .fill(isExpanded ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color.clear) : Color.clear))
                         .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
                             .stroke(isExpanded ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.gray.opacity(0.2), lineWidth: isExpanded ? 2 : 1))
                     }

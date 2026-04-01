@@ -17,7 +17,7 @@ struct SocialProof: View {
                 HStack(spacing: 4) {
                     ForEach(0..<5, id: \.self) { index in
                         Image(systemName: starName(for: index, rating: rating))
-                            .foregroundColor(.yellow)
+                            .foregroundColor(Color(hex: "#FBBF24"))
                             .font(.body)
                     }
 

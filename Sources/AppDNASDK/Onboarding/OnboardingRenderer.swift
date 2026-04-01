@@ -90,7 +90,7 @@ struct OnboardingFlowHost: View {
         }()
         let fillColor: Color = {
             if let hex = flow.settings.progress_color { return Color(hex: hex) }
-            return Color.accentColor
+            return Color(hex: "#6366F1")
         }()
         let style = flow.settings.progress_style ?? "continuous_bar"
         let total = flow.steps.count
@@ -157,7 +157,7 @@ struct OnboardingFlowHost: View {
     private var navigationBar: some View {
         let backStyle = flow.settings.back_button_style
         let backSize = backStyle?.icon_size ?? 16
-        let backColor: Color = backStyle?.icon_color.flatMap { Color(hex: $0) } ?? .primary
+        let backColor: Color = backStyle?.icon_color.flatMap { Color(hex: $0) } ?? Color(hex: "#6B7280")
 
         return HStack {
             if flow.settings.allow_back && currentIndex > 0 {
@@ -323,10 +323,15 @@ struct OnboardingFlowHost: View {
 
     private func executeClientHook(step: OnboardingStep, data: [String: Any]?) {
         loadingText = step.hook?.loading_text ?? "Processing..."
-        isProcessing = true
 
         let startTime = Date()
         trackHookEvent("onboarding_hook_started", step: step, extra: ["hook_type": "client"])
+
+        // Only show loading after a delay — avoids flash for instant responses
+        let showLoadingTimer = DispatchWorkItem { [self] in
+            isProcessing = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: showLoadingTimer)
 
         Task {
             let result = await delegate?.onBeforeStepAdvance(
@@ -341,6 +346,7 @@ struct OnboardingFlowHost: View {
             let durationMs = Int(Date().timeIntervalSince(startTime) * 1000)
 
             await MainActor.run {
+                showLoadingTimer.cancel()
                 isProcessing = false
                 trackHookEvent("onboarding_hook_completed", step: step, extra: [
                     "hook_type": "client",

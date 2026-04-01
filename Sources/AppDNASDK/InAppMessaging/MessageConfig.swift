@@ -47,6 +47,8 @@ public struct MessageContent: Codable {
     // SPEC-084: Styling fields
     public let text_color: String?
     public let button_color: String?
+    public let button_text_color: String?
+    public let button_corner_radius: Int?
     public let corner_radius: Int?
     public let secondary_cta_text: String?
     // SPEC-085: Rich media fields

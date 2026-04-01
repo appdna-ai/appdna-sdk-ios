@@ -24,7 +24,7 @@ struct SingleChoiceView: View {
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: selectedId == option.id ? "circle.inset.filled" : "circle")
-                            .foregroundColor(selectedId == option.id ? .accentColor : .gray)
+                            .foregroundColor(selectedId == option.id ? Color(hex: "#6366F1") : .gray)
 
                         if let icon = option.icon {
                             Text(icon)

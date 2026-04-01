@@ -22,7 +22,7 @@ struct NPSQuestionView: View {
                         answer = SurveyAnswer(question_id: question.id ?? "", answer: score)
                     }
                     .frame(width: 30, height: 40)
-                    .background(selectedScore == score ? Color.accentColor : Color.gray.opacity(0.1))
+                    .background(selectedScore == score ? Color(hex: "#6366F1") : Color.gray.opacity(0.1))
                     .foregroundColor(selectedScore == score ? .white : .primary)
                     .cornerRadius(8)
                     .font(.system(size: 14, weight: .medium))
