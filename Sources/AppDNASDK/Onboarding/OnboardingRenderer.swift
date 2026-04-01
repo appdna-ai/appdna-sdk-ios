@@ -597,12 +597,13 @@ struct OnboardingFlowHost: View {
             if target.hasPrefix("paywall_trigger_") {
                 // Extract paywall ID from graph node data and present it
                 if let paywallId = resolvePaywallFromTrigger(target) {
+                    let triggerData = resolvePaywallTriggerData(target)
+                    let onDismissBehavior = triggerData?["on_dismiss"] as? String ?? "continue"
                     let flowCompleted = onFlowCompleted
                     let currentResponses = responses
                     let tracker = eventTracker
                     let flowId = flow.id
-                    // First dismiss onboarding, then present paywall from the underlying VC
-                    let onboardingDismissed = onFlowDismissed
+
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         guard let onboardingVC = AppDNA.topViewController() else {
                             flowCompleted(currentResponses)
@@ -610,19 +611,39 @@ struct OnboardingFlowHost: View {
                         }
                         // Dismiss onboarding first
                         onboardingVC.dismiss(animated: true) {
-                            // Now present paywall from the VC underneath
                             guard let rootVC = AppDNA.topViewController() else {
                                 flowCompleted(currentResponses)
                                 return
                             }
-                            let bridge = OnboardingPaywallBridge(onDismissed: {
-                                tracker?.track(event: "onboarding_completed", properties: [
-                                    "flow_id": flowId,
-                                    "paywall_id": paywallId,
-                                    "completed_via": "paywall_trigger",
-                                ])
-                                flowCompleted(currentResponses)
-                            })
+                            let bridge = OnboardingPaywallBridge(
+                                onPurchased: {
+                                    // Always complete flow on purchase
+                                    tracker?.track(event: "onboarding_completed", properties: [
+                                        "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_purchased",
+                                    ])
+                                    flowCompleted(currentResponses)
+                                },
+                                onDismissedWithoutPurchase: {
+                                    switch onDismissBehavior {
+                                    case "block":
+                                        // Re-present the paywall (user must purchase to continue)
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                            guard let vc = AppDNA.topViewController() else { return }
+                                            AppDNA.presentPaywall(id: paywallId, from: vc)
+                                        }
+                                    case "skip_to_end":
+                                        tracker?.track(event: "onboarding_completed", properties: [
+                                            "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_skipped",
+                                        ])
+                                        flowCompleted(currentResponses)
+                                    default: // "continue"
+                                        tracker?.track(event: "onboarding_completed", properties: [
+                                            "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_dismissed",
+                                        ])
+                                        flowCompleted(currentResponses)
+                                    }
+                                }
+                            )
                             AppDNA.presentPaywall(id: paywallId, from: rootVC, delegate: bridge)
                         }
                     }
@@ -651,11 +672,16 @@ struct OnboardingFlowHost: View {
     /// Resolve paywall ID from a paywall_trigger graph node.
     /// The graph_layout stores the paywall ID in the node's data.
     private func resolvePaywallFromTrigger(_ triggerNodeId: String) -> String? {
+        return resolvePaywallTriggerData(triggerNodeId)?["paywall_id"] as? String
+            ?? resolvePaywallTriggerData(triggerNodeId)?["paywallId"] as? String
+    }
+
+    /// Returns the full data dict for a paywall_trigger graph node.
+    private func resolvePaywallTriggerData(_ triggerNodeId: String) -> [String: Any]? {
         guard let graphLayout = flow.graph_layout?.value as? [String: Any],
               let nodes = graphLayout["nodes"] as? [[String: Any]] else { return nil }
         guard let node = nodes.first(where: { ($0["id"] as? String) == triggerNodeId }) else { return nil }
-        guard let data = node["data"] as? [String: Any] else { return nil }
-        return data["paywall_id"] as? String ?? data["paywallId"] as? String
+        return node["data"] as? [String: Any]
     }
 
     private func skipToStep(_ targetStepId: String) {
@@ -893,20 +919,27 @@ struct OnboardingStepRouter: View {
 
 // MARK: - Paywall Bridge for Onboarding Flow Continuation
 
-/// Bridges paywall dismiss back to onboarding flow completion.
-/// Kept as a strong reference until paywall dismisses.
+/// Bridges paywall events back to onboarding flow.
+/// Handles both purchase and dismiss-without-purchase separately.
 private class OnboardingPaywallBridge: AppDNAPaywallDelegate {
-    private let onDismissed: () -> Void
+    private let onPurchased: () -> Void
+    private let onDismissedWithoutPurchase: () -> Void
+    private var didPurchase = false
 
-    init(onDismissed: @escaping () -> Void) {
-        self.onDismissed = onDismissed
-    }
-
-    func onPaywallDismissed(paywallId: String) {
-        onDismissed()
+    init(onPurchased: @escaping () -> Void, onDismissedWithoutPurchase: @escaping () -> Void) {
+        self.onPurchased = onPurchased
+        self.onDismissedWithoutPurchase = onDismissedWithoutPurchase
     }
 
     func onPaywallPurchaseCompleted(paywallId: String, productId: String, transaction: TransactionInfo) {
-        // Purchase succeeded — flow will complete via onDismissed
+        didPurchase = true
+    }
+
+    func onPaywallDismissed(paywallId: String) {
+        if didPurchase {
+            onPurchased()
+        } else {
+            onDismissedWithoutPurchase()
+        }
     }
 }
