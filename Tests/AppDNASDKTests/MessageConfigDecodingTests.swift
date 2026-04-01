@@ -691,6 +691,8 @@ final class MessageConfigDecodingTests: XCTestCase {
                 auto_dismiss_seconds: nil,
                 text_color: "#FFFFFF",
                 button_color: "#6366F1",
+                button_text_color: nil,
+                button_corner_radius: nil,
                 corner_radius: 8,
                 secondary_cta_text: nil,
                 lottie_url: nil,

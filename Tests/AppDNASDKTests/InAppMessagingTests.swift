@@ -124,6 +124,8 @@ final class InAppMessagingTests: XCTestCase {
                 auto_dismiss_seconds: nil,
                 text_color: nil,
                 button_color: nil,
+                button_text_color: nil,
+                button_corner_radius: nil,
                 corner_radius: nil,
                 secondary_cta_text: nil,
                 lottie_url: nil,
