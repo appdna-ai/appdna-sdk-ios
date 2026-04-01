@@ -432,19 +432,51 @@ struct DateWheelPickerBlockView: View {
                 .buttonStyle(.plain)
 
                 if showPicker {
+                    if components.contains(.date) && components.contains(.hourAndMinute) {
+                        // Date+Time: use graphical for date (shows year) + wheel for time
+                        DatePicker("", selection: $selectedDate, displayedComponents: [.date])
+                            .datePickerStyle(.graphical)
+                            .labelsHidden()
+                            .accentColor(highlightCol)
+                        DatePicker("", selection: $selectedDate, displayedComponents: [.hourAndMinute])
+                            .datePickerStyle(.wheel)
+                            .labelsHidden()
+                            .frame(height: 100)
+                    } else if components.contains(.date) {
+                        DatePicker("", selection: $selectedDate, displayedComponents: [.date])
+                            .datePickerStyle(.graphical)
+                            .labelsHidden()
+                            .accentColor(highlightCol)
+                    } else {
+                        DatePicker("", selection: $selectedDate, displayedComponents: components)
+                            .datePickerStyle(.wheel)
+                            .labelsHidden()
+                    }
+                }
+            } else {
+                // Inline mode (default)
+                if components.contains(.date) && components.contains(.hourAndMinute) {
+                    DatePicker("", selection: $selectedDate, displayedComponents: [.date])
+                        .datePickerStyle(.graphical)
+                        .labelsHidden()
+                        .accentColor(highlightCol)
+                    DatePicker("", selection: $selectedDate, displayedComponents: [.hourAndMinute])
+                        .datePickerStyle(.wheel)
+                        .labelsHidden()
+                        .frame(height: 100)
+                } else if components.contains(.date) {
+                    DatePicker("", selection: $selectedDate, displayedComponents: [.date])
+                        .datePickerStyle(.graphical)
+                        .labelsHidden()
+                        .accentColor(highlightCol)
+                        .frame(maxWidth: .infinity)
+                } else {
                     DatePicker("", selection: $selectedDate, displayedComponents: components)
                         .datePickerStyle(.wheel)
                         .labelsHidden()
                         .accentColor(highlightCol)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .frame(maxWidth: .infinity)
                 }
-            } else {
-                // Inline mode (default)
-                DatePicker("", selection: $selectedDate, displayedComponents: components)
-                    .datePickerStyle(.wheel)
-                    .labelsHidden()
-                    .accentColor(highlightCol)
-                    .frame(maxWidth: .infinity)
             }
         }
     }
