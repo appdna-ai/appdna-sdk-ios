@@ -670,18 +670,27 @@ struct OnboardingFlowHost: View {
     }
 
     /// Resolve paywall ID from a paywall_trigger graph node.
-    /// The graph_layout stores the paywall ID in the node's data.
+    /// Uses graph_nodes (lightweight SDK-only extract) or falls back to full graph_layout.
     private func resolvePaywallFromTrigger(_ triggerNodeId: String) -> String? {
         return resolvePaywallTriggerData(triggerNodeId)?["paywall_id"] as? String
             ?? resolvePaywallTriggerData(triggerNodeId)?["paywallId"] as? String
     }
 
-    /// Returns the full data dict for a paywall_trigger graph node.
+    /// Returns the data dict for a paywall_trigger node.
+    /// Checks graph_nodes first (lightweight, always synced), then falls back to graph_layout.
     private func resolvePaywallTriggerData(_ triggerNodeId: String) -> [String: Any]? {
-        guard let graphLayout = flow.graph_layout?.value as? [String: Any],
-              let nodes = graphLayout["nodes"] as? [[String: Any]] else { return nil }
-        guard let node = nodes.first(where: { ($0["id"] as? String) == triggerNodeId }) else { return nil }
-        return node["data"] as? [String: Any]
+        // Prefer graph_nodes (lightweight dict keyed by node ID)
+        if let graphNodes = flow.graph_nodes?.value as? [String: Any],
+           let node = graphNodes[triggerNodeId] as? [String: Any] {
+            return node
+        }
+        // Fallback to full graph_layout for backward compatibility
+        if let graphLayout = flow.graph_layout?.value as? [String: Any],
+           let nodes = graphLayout["nodes"] as? [[String: Any]],
+           let node = nodes.first(where: { ($0["id"] as? String) == triggerNodeId }) {
+            return node["data"] as? [String: Any]
+        }
+        return nil
     }
 
     private func skipToStep(_ targetStepId: String) {

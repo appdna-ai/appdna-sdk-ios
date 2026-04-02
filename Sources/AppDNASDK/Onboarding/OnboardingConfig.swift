@@ -17,6 +17,9 @@ public struct OnboardingFlowConfig: Codable {
     private let _settings: OnboardingSettings?
     public let status: String?
     public let graph_layout: AnyCodable?
+    /// Lightweight extract of SDK-relevant graph nodes (paywall_trigger, login, end).
+    /// Keyed by node ID for O(1) lookup. Preferred over graph_layout for SDK use.
+    public let graph_nodes: AnyCodable?
     public let audience_rules: AnyCodable?
 
     /// Non-optional steps for renderer compatibility
@@ -26,7 +29,7 @@ public struct OnboardingFlowConfig: Codable {
 
     enum CodingKeys: String, CodingKey {
         case id, name, version, _steps = "steps", _settings = "settings"
-        case status, graph_layout, audience_rules
+        case status, graph_layout, graph_nodes, audience_rules
     }
 
     public init(from decoder: Decoder) throws {
@@ -38,6 +41,7 @@ public struct OnboardingFlowConfig: Codable {
         self._settings = try c.decodeIfPresent(OnboardingSettings.self, forKey: ._settings)
         self.status = try c.decodeIfPresent(String.self, forKey: .status)
         self.graph_layout = try c.decodeIfPresent(AnyCodable.self, forKey: .graph_layout)
+        self.graph_nodes = try c.decodeIfPresent(AnyCodable.self, forKey: .graph_nodes)
         self.audience_rules = try c.decodeIfPresent(AnyCodable.self, forKey: .audience_rules)
     }
 
@@ -50,6 +54,7 @@ public struct OnboardingFlowConfig: Codable {
         self._settings = settings
         self.status = nil
         self.graph_layout = nil
+        self.graph_nodes = nil
         self.audience_rules = nil
     }
 }
