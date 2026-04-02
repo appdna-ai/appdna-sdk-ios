@@ -614,9 +614,9 @@ struct RelativeSizingModifier: ViewModifier {
             case .px(let val):
                 content.frame(width: val)
             case .percent(let fraction):
-                GeometryReader { geo in
-                    content.frame(width: geo.size.width * fraction)
-                }
+                // Use screen width for percentage — avoids GeometryReader which breaks
+                // safeAreaInset positioning by being greedy with space.
+                content.frame(width: UIScreen.main.bounds.width * fraction)
             case .auto_, .none:
                 content
             }
@@ -632,9 +632,7 @@ struct RelativeSizingModifier: ViewModifier {
             case .px(let val):
                 content.frame(height: val)
             case .percent(let fraction):
-                GeometryReader { geo in
-                    content.frame(height: geo.size.height * fraction)
-                }
+                content.frame(height: UIScreen.main.bounds.height * fraction)
             case .auto_, .none:
                 content
             }

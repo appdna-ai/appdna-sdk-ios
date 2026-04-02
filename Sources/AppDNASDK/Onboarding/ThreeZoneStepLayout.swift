@@ -2,12 +2,9 @@ import SwiftUI
 
 // MARK: - Three-Zone Step Layout
 //
-// Partitions content blocks into three vertical zones based on `zone` property:
-//   TOP    → scrollable content area (headings, text, inputs)
-//   CENTER → centered in remaining vertical space (gauges, images, pickers)
-//   BOTTOM → pinned to screen bottom, always visible (CTA buttons, legal text)
-//
-// Falls back to `vertical_align` for legacy data without explicit `zone`.
+// Apple HIG pattern: ScrollView.safeAreaInset(edge: .bottom) for pinned CTA.
+// Background sibling has .ignoresSafeArea(), content layer does NOT.
+// This is Apple's first-party solution for sticky footers (WWDC 2021).
 
 struct ThreeZoneStepLayout: View {
     let blocks: [ContentBlock]
@@ -20,56 +17,40 @@ struct ThreeZoneStepLayout: View {
     var currentStepIndex: Int = 0
     var totalSteps: Int = 1
 
-    @State private var bottomHeight: CGFloat = 0
-    @State private var centerHeight: CGFloat = 0
-
     var body: some View {
         let visible = blocks.filter {
             evaluateVisibilityCondition($0.visibility_condition, responses: responses, hookData: hookData)
         }
         let (topBlocks, centerBlocks, bottomBlocks) = Self.partitionBlocks(visible)
-        let hasBottom = !bottomBlocks.isEmpty
-        let hasCenter = !centerBlocks.isEmpty
 
-        GeometryReader { geometry in
-            let availableHeight = geometry.size.height
-            let topMaxHeight = availableHeight - bottomHeight - centerHeight - (hasCenter ? 16 : 0)
-
-            VStack(spacing: 0) {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 12) {
                 // ── TOP ZONE ──
                 if !topBlocks.isEmpty {
-                    ScrollView(showsIndicators: false) {
-                        zoneRenderer(blocks: topBlocks)
-                            .padding(.top, 16)
-                    }
-                    .frame(maxHeight: (hasBottom || hasCenter) ? max(topMaxHeight, 100) : nil)
+                    zoneRenderer(blocks: topBlocks)
+                        .padding(.top, 16)
                 }
 
-                if hasCenter {
-                    Spacer(minLength: 4)
+                // ── CENTER ZONE ──
+                if !centerBlocks.isEmpty {
                     zoneRenderer(blocks: centerBlocks)
-                        .background(GeometryReader { g in
-                            Color.clear.preference(key: CenterHeightKey.self, value: g.size.height)
-                        })
-                    Spacer(minLength: 4)
-                } else if hasBottom {
-                    Spacer(minLength: 0)
-                }
-
-                // ── BOTTOM ZONE ──
-                if hasBottom {
-                    zoneRenderer(blocks: bottomBlocks)
-                        .padding(.bottom, geometry.safeAreaInsets.bottom > 0 ? 4 : 16)
-                        .background(GeometryReader { g in
-                            Color.clear.preference(key: BottomHeightKey.self, value: g.size.height)
-                        })
+                        .padding(.top, 20)
                 }
             }
-            .frame(width: geometry.size.width, height: availableHeight)
-            .onPreferenceChange(BottomHeightKey.self) { bottomHeight = $0 }
-            .onPreferenceChange(CenterHeightKey.self) { centerHeight = $0 }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .ignoresSafeArea(.keyboard)
+        .safeAreaInset(edge: .bottom) {
+            // ── BOTTOM ZONE: pinned to screen bottom ──
+            // safeAreaInset automatically:
+            // 1. Pins this view at the bottom
+            // 2. Adds content inset to ScrollView so content isn't hidden
+            if !bottomBlocks.isEmpty {
+                VStack(spacing: 8) {
+                    zoneRenderer(blocks: bottomBlocks)
+                }
+                .padding(.bottom, 8)
+            }
+        }
     }
 
     @ViewBuilder
@@ -95,35 +76,14 @@ struct ThreeZoneStepLayout: View {
         var top: [ContentBlock] = []
         var center: [ContentBlock] = []
         var bottom: [ContentBlock] = []
-
         for block in blocks {
             let effectiveZone = block.zone ?? block.vertical_align ?? "top"
             switch effectiveZone {
-            case "center":
-                center.append(block)
-            case "bottom":
-                bottom.append(block)
-            default:
-                top.append(block)
+            case "center": center.append(block)
+            case "bottom": bottom.append(block)
+            default: top.append(block)
             }
         }
-
         return (top, center, bottom)
-    }
-}
-
-// MARK: - Preference Keys for measuring zone heights
-
-private struct BottomHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-private struct CenterHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
     }
 }

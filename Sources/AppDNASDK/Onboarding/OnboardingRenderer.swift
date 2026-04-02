@@ -22,62 +22,60 @@ struct OnboardingFlowHost: View {
     @State private var configOverrides: [String: StepConfigOverride] = [:]
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Color(.systemBackground).ignoresSafeArea()
+        VStack(spacing: 0) {
+            // Progress bar (hidden per-step via hide_progress while still counting in total)
+            if flow.settings.show_progress && !(currentIndex < flow.steps.count && flow.steps[currentIndex].hide_progress == true) {
+                progressBar
+            }
 
-            VStack(spacing: 0) {
-                // Progress bar (hidden per-step via hide_progress while still counting in total)
-                if flow.settings.show_progress && !(currentIndex < flow.steps.count && flow.steps[currentIndex].hide_progress == true) {
-                    progressBar
+            // Navigation bar
+            navigationBar
+
+            // Step content — fills remaining space
+            if currentIndex < flow.steps.count {
+                let step = flow.steps[currentIndex]
+                let effectiveConfig = applyOverrides(to: step.config, stepId: step.id)
+
+                ZStack {
+                    OnboardingStepRouter(
+                        step: step,
+                        effectiveConfig: effectiveConfig,
+                        onNext: { data in
+                            handleStepCompleted(step: step, data: data)
+                        },
+                        onSkip: {
+                            handleStepSkipped(step: step)
+                        },
+                        flowId: flow.id,
+                        currentStepIndex: currentIndex,
+                        totalSteps: flow.steps.count
+                    )
+                    .id(currentIndex)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing),
+                        removal: .move(edge: .leading)
+                    ))
+
+                    // SPEC-083: Error banner
+                    if showError, let msg = errorMessage {
+                        VStack {
+                            errorBanner(message: msg)
+                            Spacer()
+                        }
+                    }
+
+                    // SPEC-083: Loading overlay
+                    if isProcessing {
+                        loadingOverlay
+                    }
                 }
-
-                // Navigation bar
-                navigationBar
-
-                // Step content
-                if currentIndex < flow.steps.count {
-                    let step = flow.steps[currentIndex]
-                    let effectiveConfig = applyOverrides(to: step.config, stepId: step.id)
-
-                    ZStack {
-                        OnboardingStepRouter(
-                            step: step,
-                            effectiveConfig: effectiveConfig,
-                            onNext: { data in
-                                handleStepCompleted(step: step, data: data)
-                            },
-                            onSkip: {
-                                handleStepSkipped(step: step)
-                            },
-                            flowId: flow.id,
-                            currentStepIndex: currentIndex,
-                            totalSteps: flow.steps.count
-                        )
-                        .id(currentIndex)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .trailing),
-                            removal: .move(edge: .leading)
-                        ))
-
-                        // SPEC-083: Error banner
-                        if showError, let msg = errorMessage {
-                            VStack {
-                                errorBanner(message: msg)
-                                Spacer()
-                            }
-                        }
-
-                        // SPEC-083: Loading overlay
-                        if isProcessing {
-                            loadingOverlay
-                        }
-                    }
-                    .onAppear {
-                        handleStepAppear(step: step)
-                    }
+                .frame(maxHeight: .infinity)
+                .onAppear {
+                    handleStepAppear(step: step)
                 }
             }
         }
+        .background(Color(.systemBackground).ignoresSafeArea())
     }
 
     // MARK: - Progress bar
@@ -749,17 +747,17 @@ struct OnboardingStepRouter: View {
     }
 
     var body: some View {
-        ZStack {
-            // SPEC-084: Step-level background
-            if let bg = effectiveConfig.background {
-                StyleEngine.backgroundView(bg).ignoresSafeArea()
-            }
-
-            // SPEC-084: Block-based vs legacy rendering
+        Group {
             if let blocks = effectiveConfig.content_blocks, !blocks.isEmpty {
                 blockBasedStepView(blocks: blocks)
             } else {
                 legacyStepView
+            }
+        }
+        // Background as modifier — does NOT corrupt safe area for content
+        .background {
+            if let bg = effectiveConfig.background {
+                StyleEngine.backgroundView(bg).ignoresSafeArea()
             }
         }
         .entryAnimation(effectiveConfig.animation?.entry_animation, durationMs: effectiveConfig.animation?.entry_duration_ms)
