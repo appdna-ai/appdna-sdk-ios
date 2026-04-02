@@ -85,7 +85,7 @@ struct PaywallRenderer: View {
                         stickyFooterView(data: footer.data, style: footer.style)
                     }
                 }
-                .padding(.bottom, 8)
+                .padding(.bottom, config.layout?.footer_padding ?? 8)
             }
             // Background as modifier — does NOT corrupt safe area (Apple HIG)
             .background { backgroundView }

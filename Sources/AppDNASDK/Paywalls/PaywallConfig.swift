@@ -41,6 +41,7 @@ struct PaywallLayout: Codable {
     let type: String? // "stack", "grid", "carousel"
     let spacing: CGFloat?
     let padding: CGFloat?
+    let footer_padding: CGFloat?  // Bottom padding for CTA/footer zone (default 8)
     let sections: [PaywallSection]?
     let background: PaywallBackground?
     let global_style: AnyCodable?
