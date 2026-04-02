@@ -184,6 +184,12 @@ struct FormInputSelectBlock: View {
     @Binding var inputValues: [String: Any]
 
     @State private var selectedValue: String = ""
+    @State private var selectedValues: Set<String> = []
+
+    private var isMultiSelect: Bool {
+        block.multi_select == true ||
+        (block.field_config?["multi_select"]?.value as? Bool) == true
+    }
 
     /// Read display_style from field_config; defaults to "dropdown".
     private var displayStyle: String {
@@ -242,13 +248,23 @@ struct FormInputSelectBlock: View {
 
         VStack(spacing: 8) {
             ForEach(options) { option in
-                let isSelected = selectedValue == option.resolvedValue
+                let isSelected = isMultiSelect
+                    ? selectedValues.contains(option.resolvedValue)
+                    : selectedValue == option.resolvedValue
                 Button {
-                    selectedValue = option.resolvedValue
-                    inputValues[fieldId] = option.resolvedValue
+                    if isMultiSelect {
+                        if selectedValues.contains(option.resolvedValue) {
+                            selectedValues.remove(option.resolvedValue)
+                        } else {
+                            selectedValues.insert(option.resolvedValue)
+                        }
+                        inputValues[fieldId] = Array(selectedValues)
+                    } else {
+                        selectedValue = option.resolvedValue
+                        inputValues[fieldId] = option.resolvedValue
+                    }
                 } label: {
                     HStack(spacing: 12) {
-                        // Optional image
                         if let imgUrl = option.image_url, let url = URL(string: imgUrl) {
                             AsyncImage(url: url) { image in
                                 image.resizable().scaledToFill()
@@ -258,7 +274,6 @@ struct FormInputSelectBlock: View {
                             .frame(width: 32, height: 32)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
-                        // Optional icon emoji
                         if let icon = option.icon, !icon.isEmpty {
                             Text(icon)
                         }
@@ -266,7 +281,9 @@ struct FormInputSelectBlock: View {
                             .font(.subheadline)
                             .foregroundColor(.primary)
                         Spacer()
-                        Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                        Image(systemName: isSelected
+                            ? (isMultiSelect ? "checkmark.circle.fill" : "largecircle.fill.circle")
+                            : "circle")
                             .foregroundColor(isSelected ? fillCol : .secondary)
                             .font(.title3)
                     }

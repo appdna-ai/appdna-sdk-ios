@@ -949,6 +949,7 @@ public struct ContentBlock: Codable, Identifiable {
     public let field_required: Bool?
     public let field_style: FormFieldBlockStyle?
     public let field_options: [InputOption]?
+    public let multi_select: Bool?
     // Form input specific config
     public let field_config: [String: AnyCodable]?
 
@@ -1019,7 +1020,7 @@ public struct ContentBlock: Codable, Identifiable {
         case pulse_color, pulse_ring_count, pulse_speed, border_width, border_color
         case pricing_plans, pricing_layout
         // SPEC-089d Phase 3: form input + advanced styling fields
-        case field_label, field_placeholder, field_required, field_style, field_options, field_config
+        case field_label, field_placeholder, field_required, field_style, field_options, multi_select, field_config
         case visibility_condition, entrance_animation, pressed_style, bindings
         case element_width, element_height
         case overflow
@@ -1206,6 +1207,7 @@ public struct ContentBlock: Codable, Identifiable {
         self.field_required = try c.decodeIfPresent(Bool.self, forKey: .field_required)
         self.field_style = try c.decodeIfPresent(FormFieldBlockStyle.self, forKey: .field_style)
         self.field_options = try c.decodeIfPresent([InputOption].self, forKey: .field_options)
+        self.multi_select = try c.decodeIfPresent(Bool.self, forKey: .multi_select)
         self.field_config = try c.decodeIfPresent([String: AnyCodable].self, forKey: .field_config)
         self.visibility_condition = try c.decodeIfPresent(VisibilityCondition.self, forKey: .visibility_condition)
         self.entrance_animation = try c.decodeIfPresent(EntranceAnimation.self, forKey: .entrance_animation)
