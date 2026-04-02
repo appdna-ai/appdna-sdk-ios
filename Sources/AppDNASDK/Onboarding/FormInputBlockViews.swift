@@ -749,37 +749,49 @@ struct FormInputLocationPlaceholderBlock: View {
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
 
-        VStack(alignment: .leading, spacing: 6) {
-            formFieldLabel(block)
+        ZStack(alignment: .topLeading) {
+            VStack(alignment: .leading, spacing: 6) {
+                formFieldLabel(block)
 
-            HStack(spacing: 8) {
-                Image(systemName: "location.fill")
-                    .foregroundColor(.secondary)
-                TextField(block.field_placeholder ?? "Search location...", text: $text)
-                    .font(.subheadline)
-                    .onChange(of: text) { newValue in
-                        searchCompleter.search(query: newValue)
-                        showResults = !newValue.isEmpty
-                        // Store raw text as fallback until a result is selected
-                        inputValues[fieldId] = newValue
+                HStack(spacing: 8) {
+                    Image(systemName: "location.fill")
+                        .foregroundColor(.secondary)
+                    TextField(block.field_placeholder ?? "Search location...", text: $text, onEditingChanged: { editing in
+                        if !editing {
+                            // Dismiss dropdown when field loses focus
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                showResults = false
+                            }
+                        }
+                    })
+                        .font(.subheadline)
+                        .onChange(of: text) { newValue in
+                            searchCompleter.search(query: newValue)
+                            showResults = !newValue.isEmpty
+                            inputValues[fieldId] = newValue
+                        }
+                    if !text.isEmpty {
+                        Button { text = ""; showResults = false; inputValues[fieldId] = "" } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                        }
                     }
-                if searchCompleter.isSearching {
-                    ProgressView()
-                        .scaleEffect(0.7)
+                    if searchCompleter.isSearching {
+                        ProgressView().scaleEffect(0.7)
+                    }
                 }
+                .padding(12)
+                .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
+                .cornerRadius(cornerRadius)
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(borderColor, lineWidth: 1)
+                )
             }
-            .padding(12)
-            .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
-            .cornerRadius(cornerRadius)
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(borderColor, lineWidth: 1)
-            )
 
-            // Autocomplete results dropdown
+            // Autocomplete results dropdown — overlays below the input
             if showResults && !searchCompleter.results.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(searchCompleter.results, id: \.self) { result in
+                    ForEach(searchCompleter.results.prefix(5), id: \.self) { result in
                         Button {
                             selectResult(result, fieldId: fieldId)
                         } label: {
@@ -801,15 +813,19 @@ struct FormInputLocationPlaceholderBlock: View {
                         Divider()
                     }
                 }
-                .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
+                .background(Color(.systemBackground))
                 .cornerRadius(cornerRadius)
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .stroke(borderColor, lineWidth: 1)
                 )
+                .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                .padding(.top, 70) // Offset below the input field
+                .zIndex(100)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .zIndex(showResults ? 10 : 0) // Ensure dropdown overlays sibling blocks
     }
 
     private func selectResult(_ result: MKLocalSearchCompletion, fieldId: String) {

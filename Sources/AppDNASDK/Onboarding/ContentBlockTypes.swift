@@ -614,9 +614,14 @@ struct RelativeSizingModifier: ViewModifier {
             case .px(let val):
                 content.frame(width: val)
             case .percent(let fraction):
-                // Use screen width for percentage — avoids GeometryReader which breaks
-                // safeAreaInset positioning by being greedy with space.
-                content.frame(width: UIScreen.main.bounds.width * fraction)
+                if fraction >= 1.0 {
+                    // 100% = fill available space (respect parent padding)
+                    content.frame(maxWidth: .infinity)
+                } else {
+                    // <100% = fraction of parent width (approximate using screen width minus global padding)
+                    let availableWidth = UIScreen.main.bounds.width - (max(24, UIScreen.main.bounds.width * 0.08) * 2)
+                    content.frame(width: availableWidth * fraction)
+                }
             case .auto_, .none:
                 content
             }
@@ -632,7 +637,11 @@ struct RelativeSizingModifier: ViewModifier {
             case .px(let val):
                 content.frame(height: val)
             case .percent(let fraction):
-                content.frame(height: UIScreen.main.bounds.height * fraction)
+                if fraction >= 1.0 {
+                    content.frame(maxHeight: .infinity)
+                } else {
+                    content.frame(height: UIScreen.main.bounds.height * fraction)
+                }
             case .auto_, .none:
                 content
             }
@@ -721,6 +730,7 @@ public struct ContentBlock: Codable, Identifiable {
     public let alt: String?
     public let corner_radius: Double?
     public let height: Double?
+    public let image_fit: String?  // "contain" | "fill" | "cover" — default fill
     // Button
     public let variant: String?
     public let action: String?     // next, skip, link, permission
@@ -963,7 +973,7 @@ public struct ContentBlock: Codable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id, type, text, style, level
-        case image_url, alt, corner_radius, height
+        case image_url, alt, corner_radius, height, image_fit
         case variant, action, action_value, bg_color, text_color, button_corner_radius
         case spacer_height, items, list_style
         case divider_color, divider_thickness, divider_margin_y
@@ -1028,6 +1038,7 @@ public struct ContentBlock: Codable, Identifiable {
         self.alt = try c.decodeIfPresent(String.self, forKey: .alt)
         self.corner_radius = try c.decodeIfPresent(Double.self, forKey: .corner_radius)
         self.height = try c.decodeIfPresent(Double.self, forKey: .height)
+        self.image_fit = try c.decodeIfPresent(String.self, forKey: .image_fit)
         self.variant = try c.decodeIfPresent(String.self, forKey: .variant)
         self.action = try c.decodeIfPresent(String.self, forKey: .action)
         self.action_value = try c.decodeIfPresent(String.self, forKey: .action_value)

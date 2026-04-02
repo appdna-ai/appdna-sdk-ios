@@ -271,47 +271,26 @@ struct ContentBlockRendererView: View {
     private func imageBlock(_ block: ContentBlock) -> some View {
         let cr = CGFloat(block.corner_radius ?? 0)
         let isCircle = (block.corner_radius ?? 0) >= 9999
-        let isOverflowVisible = block.overflow == "visible"
+        let fitMode: ContentMode = (block.image_fit == "contain" || block.image_fit == "fit") ? .fit : .fill
+        let imgHeight = CGFloat(block.height ?? 200)
 
         return Group {
             if let urlString = block.image_url, let url = URL(string: urlString) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
-                        if isOverflowVisible {
-                            // Don't clip — use mask so corners round but content can overflow parent
-                            if isCircle {
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(maxHeight: CGFloat(block.height ?? 200))
-                                    .mask(Circle())
-                                    .accessibilityLabel(block.alt ?? "Image")
-                            } else {
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(maxHeight: CGFloat(block.height ?? 200))
-                                    .mask(RoundedRectangle(cornerRadius: cr))
-                                    .accessibilityLabel(block.alt ?? "Image")
-                            }
+                        if isCircle {
+                            image.resizable()
+                                .aspectRatio(contentMode: fitMode)
+                                .frame(maxHeight: imgHeight)
+                                .clipShape(Circle())
+                                .accessibilityLabel(block.alt ?? "Image")
                         } else {
-                            // Default: clip content (hidden overflow)
-                            if isCircle {
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(maxHeight: CGFloat(block.height ?? 200))
-                                    .clipShape(Circle())
-                                    .accessibilityLabel(block.alt ?? "Image")
-                            } else {
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(maxHeight: CGFloat(block.height ?? 200))
-                                    .clipShape(RoundedRectangle(cornerRadius: cr))
-                                    .accessibilityLabel(block.alt ?? "Image")
-                            }
+                            image.resizable()
+                                .aspectRatio(contentMode: fitMode)
+                                .frame(maxHeight: imgHeight)
+                                .clipShape(RoundedRectangle(cornerRadius: cr))
+                                .accessibilityLabel(block.alt ?? "Image")
                         }
                     case .failure:
                         imagePlaceholder
