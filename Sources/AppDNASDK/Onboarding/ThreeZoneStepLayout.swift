@@ -35,7 +35,7 @@ struct ThreeZoneStepLayout: View {
             } else {
                 // Normal: top content scrollable, center below it
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(spacing: 12) {
                         if !topBlocks.isEmpty {
                             zoneRenderer(blocks: topBlocks)
                                 .padding(.top, 16)

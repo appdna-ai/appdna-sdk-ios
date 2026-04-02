@@ -43,7 +43,7 @@ struct ContentBlockRendererView: View {
             return ids
         }()
 
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(spacing: 12) {
             ForEach(visibleBlocks) { block in
                 let shouldAnimate = animatedBlockIds.contains(block.id)
                 let resolvedBlock = resolveBlockBindings(block, hookData: hookData, responses: responses)
