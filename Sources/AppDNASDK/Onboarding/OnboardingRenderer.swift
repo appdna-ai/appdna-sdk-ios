@@ -591,11 +591,21 @@ struct OnboardingFlowHost: View {
             for rule in rules {
                 let target = rule.target_step_id
 
-                // Analytics event node — fire event and skip to next rule
+                // Analytics event node — fire event, then follow downstream edge
                 if target.hasPrefix("analytics_event_") {
-                    eventTracker?.track(event: "onboarding_analytics", properties: [
+                    // Get event details from graph_nodes
+                    let nodeData = resolveGraphNode(target)
+                    let eventName = nodeData?["event_name"] as? String ?? "onboarding_analytics"
+                    eventTracker?.track(event: eventName, properties: [
                         "flow_id": flow.id, "node_id": target, "step_id": currentStep.id,
                     ])
+                    // Follow downstream edge if available
+                    if let nextTarget = nodeData?["next_target"] as? String,
+                       let targetIndex = flow.steps.firstIndex(where: { $0.id == nextTarget }) {
+                        withAnimation { currentIndex = targetIndex }
+                        return
+                    }
+                    // No downstream target — continue to next rule
                     continue
                 }
 
@@ -677,8 +687,16 @@ struct OnboardingFlowHost: View {
         }
     }
 
+    /// Resolve any graph node data by ID from graph_nodes.
+    private func resolveGraphNode(_ nodeId: String) -> [String: Any]? {
+        if let graphNodes = flow.graph_nodes?.value as? [String: Any],
+           let node = graphNodes[nodeId] as? [String: Any] {
+            return node
+        }
+        return nil
+    }
+
     /// Resolve paywall ID from a paywall_trigger graph node.
-    /// Uses graph_nodes (lightweight SDK-only extract) or falls back to full graph_layout.
     private func resolvePaywallFromTrigger(_ triggerNodeId: String) -> String? {
         return resolvePaywallTriggerData(triggerNodeId)?["paywall_id"] as? String
             ?? resolvePaywallTriggerData(triggerNodeId)?["paywallId"] as? String
