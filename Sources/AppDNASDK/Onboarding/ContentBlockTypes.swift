@@ -396,6 +396,9 @@ struct BlockPositionModifier: ViewModifier {
     let horizontalAlign: String?
     let verticalOffset: Double?
     let horizontalOffset: Double?
+    /// When true, vertical_align is handled by ThreeZoneStepLayout (zone partitioning).
+    /// The modifier only applies horizontal alignment and pixel offsets.
+    var isZoneManaged: Bool = false
 
     func body(content: Content) -> some View {
         let hasPositioning = verticalAlign != nil || horizontalAlign != nil
@@ -405,7 +408,10 @@ struct BlockPositionModifier: ViewModifier {
             content
                 .frame(
                     maxWidth: .infinity,
-                    alignment: mapAlignment(horizontal: horizontalAlign, vertical: verticalAlign)
+                    alignment: mapAlignment(
+                        horizontal: horizontalAlign,
+                        vertical: isZoneManaged ? nil : verticalAlign
+                    )
                 )
                 .offset(
                     x: CGFloat(horizontalOffset ?? 0),
@@ -441,13 +447,15 @@ extension View {
         verticalAlign: String?,
         horizontalAlign: String?,
         verticalOffset: Double?,
-        horizontalOffset: Double?
+        horizontalOffset: Double?,
+        isZoneManaged: Bool = false
     ) -> some View {
         modifier(BlockPositionModifier(
             verticalAlign: verticalAlign,
             horizontalAlign: horizontalAlign,
             verticalOffset: verticalOffset,
-            horizontalOffset: horizontalOffset
+            horizontalOffset: horizontalOffset,
+            isZoneManaged: isZoneManaged
         ))
     }
 }
@@ -772,8 +780,9 @@ public struct ContentBlock: Codable, Identifiable {
     // SPEC-089d §6.1: Per-block style design tokens
     public let block_style: BlockStyle?
 
-    // SPEC-089d §6.2: 2D positioning
-    public let vertical_align: String?
+    // Zone-based positioning
+    public let zone: String?              // "top", "center", "bottom" — explicit zone
+    public let vertical_align: String?    // Legacy, used as fallback when zone is nil
     public let horizontal_align: String?
     public let vertical_offset: Double?
     public let horizontal_offset: Double?
@@ -857,6 +866,7 @@ public struct ContentBlock: Codable, Identifiable {
     public let show_percentage: Bool?
 
     // SPEC-089d Phase F: circular_gauge fields
+    public let gauge_variant: String?    // "arc" (default), "speedometer", "radial", "linear"
     public let gauge_value: Double?
     public let max_value: Double?
     public let sublabel: String?
@@ -880,6 +890,7 @@ public struct ContentBlock: Codable, Identifiable {
 
     // SPEC-089d Phase F: stack / row fields (container blocks)
     public let children: [ContentBlock]?
+    public let stack_children: [ContentBlock]?  // Console uses this key; SDK prefers children
     public let z_index: Double?
     public let gap: Double?
     public let wrap: Bool?
@@ -968,7 +979,7 @@ public struct ContentBlock: Codable, Identifiable {
         case rive_url, artboard, state_machine, trigger_on_step_complete
         case icon_ref
         case block_style
-        case vertical_align, horizontal_align, vertical_offset, horizontal_offset
+        case zone, vertical_align, horizontal_align, vertical_offset, horizontal_offset
         // SPEC-089d Phase A: new block fields
         case dot_count, active_index, active_color, inactive_color
         case dot_size, dot_spacing, active_dot_width, alignment
@@ -987,11 +998,11 @@ public struct ContentBlock: Codable, Identifiable {
         case loading_variant, loading_items, progress_color, check_color
         case total_duration_ms, auto_advance, show_percentage
         // SPEC-089d Phase F: new block fields
-        case gauge_value, max_value, sublabel, stroke_width
+        case gauge_variant, gauge_value, max_value, sublabel, stroke_width
         case label_color, label_font_size, animate, animation_duration_ms
         case columns, default_date_value, min_date, max_date
         case highlight_color, haptic_on_scroll, orientation, wheel_orientation, picker_presentation, picker_mode
-        case children, z_index, gap, wrap, justify, align_items
+        case children, stack_children, z_index, gap, wrap, justify, align_items
         case row_direction, row_distribution, row_child_fill
         case view_key, custom_config, placeholder_image_url, placeholder_text
         case particle_type, density, speed, secondary_color, size_range, fullscreen
@@ -1061,6 +1072,7 @@ public struct ContentBlock: Codable, Identifiable {
         self.trigger_on_step_complete = try c.decodeIfPresent(String.self, forKey: .trigger_on_step_complete)
         self.icon_ref = try c.decodeIfPresent(IconReference.self, forKey: .icon_ref)
         self.block_style = try c.decodeIfPresent(BlockStyle.self, forKey: .block_style)
+        self.zone = try c.decodeIfPresent(String.self, forKey: .zone)
         self.vertical_align = try c.decodeIfPresent(String.self, forKey: .vertical_align)
         self.horizontal_align = try c.decodeIfPresent(String.self, forKey: .horizontal_align)
         self.vertical_offset = try c.decodeIfPresent(Double.self, forKey: .vertical_offset)
@@ -1127,6 +1139,7 @@ public struct ContentBlock: Codable, Identifiable {
         self.total_duration_ms = try c.decodeIfPresent(Int.self, forKey: .total_duration_ms)
         self.auto_advance = try c.decodeIfPresent(Bool.self, forKey: .auto_advance)
         self.show_percentage = try c.decodeIfPresent(Bool.self, forKey: .show_percentage)
+        self.gauge_variant = try c.decodeIfPresent(String.self, forKey: .gauge_variant)
         self.gauge_value = try c.decodeIfPresent(Double.self, forKey: .gauge_value)
         self.max_value = try c.decodeIfPresent(Double.self, forKey: .max_value)
         self.sublabel = try c.decodeIfPresent(String.self, forKey: .sublabel)
@@ -1146,6 +1159,7 @@ public struct ContentBlock: Codable, Identifiable {
         self.picker_mode = try c.decodeIfPresent(String.self, forKey: .picker_mode)
         self.haptic_on_scroll = try c.decodeIfPresent(Bool.self, forKey: .haptic_on_scroll)
         self.children = try c.decodeIfPresent([ContentBlock].self, forKey: .children)
+        self.stack_children = try c.decodeIfPresent([ContentBlock].self, forKey: .stack_children)
         self.z_index = try c.decodeIfPresent(Double.self, forKey: .z_index)
         self.gap = try c.decodeIfPresent(Double.self, forKey: .gap)
         self.wrap = try c.decodeIfPresent(Bool.self, forKey: .wrap)

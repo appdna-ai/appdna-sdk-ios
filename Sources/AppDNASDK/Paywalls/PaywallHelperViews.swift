@@ -68,6 +68,12 @@ struct CountdownTimerView: View {
 
 extension Color {
     init(hex: String) {
+        // Handle named colors
+        let lowered = hex.lowercased().trimmingCharacters(in: .whitespaces)
+        if lowered == "transparent" || lowered == "clear" {
+            self = Color.clear
+            return
+        }
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
         Scanner(string: hex).scanHexInt64(&int)
@@ -78,7 +84,7 @@ extension Color {
         case 8:
             (r, g, b, a) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
         default:
-            (r, g, b, a) = (0, 0, 0, 255)
+            (r, g, b, a) = (0, 0, 0, 0) // Default to transparent, not black
         }
         self.init(
             .sRGB,

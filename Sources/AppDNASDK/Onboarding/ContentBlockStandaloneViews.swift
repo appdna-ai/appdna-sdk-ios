@@ -181,6 +181,7 @@ struct AnimatedLoadingBlockView: View {
     @State private var completedCount: Int = 0
     @State private var overallProgress: CGFloat = 0
     @State private var timerCancellable: Timer? = nil
+    @State private var spinAngle: Double = 0
 
     var body: some View {
         let variant = block.loading_variant ?? "checklist"
@@ -213,15 +214,20 @@ struct AnimatedLoadingBlockView: View {
             return AnyView(
                 ZStack {
                     Circle()
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 8)
-                        .frame(width: 80, height: 80)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 6)
                     Circle()
-                        .trim(from: 0, to: overallProgress)
-                        .stroke(progressCol, style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                        .frame(width: 80, height: 80)
-                        .rotationEffect(.degrees(-90))
+                        .trim(from: 0, to: max(0.05, overallProgress))
+                        .stroke(progressCol, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                        .rotationEffect(.degrees(-90 + spinAngle))
                         .animation(.linear(duration: 0.3), value: overallProgress)
+                    if block.show_percentage == true {
+                        Text("\(Int(overallProgress * 100))%")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(progressCol)
+                    }
                 }
+                .frame(width: 120, height: 120)
+                .onAppear { withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) { spinAngle = 360 } }
             )
 
         case "linear":
@@ -351,15 +357,39 @@ struct CircularGaugeBlockView: View {
         let animDuration = Double(block.animation_duration_ms ?? 800) / 1000.0
         let showPct = block.show_percentage ?? false
 
+        let variant = block.gauge_variant ?? "arc"
+
         ZStack {
-            // Track
-            Circle()
-                .stroke(trackCol, lineWidth: strokeW)
-            // Filled arc
-            Circle()
-                .trim(from: 0, to: animatedProgress)
-                .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
-                .rotationEffect(.degrees(-90))
+            switch variant {
+            case "speedometer":
+                // Semi-circle gauge (180°)
+                Circle()
+                    .trim(from: 0, to: 0.5)
+                    .stroke(trackCol, lineWidth: strokeW)
+                    .rotationEffect(.degrees(180))
+                Circle()
+                    .trim(from: 0, to: animatedProgress * 0.5)
+                    .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
+                    .rotationEffect(.degrees(180))
+
+            case "radial":
+                // Thick donut gauge
+                Circle()
+                    .stroke(trackCol, lineWidth: strokeW * 2.5)
+                Circle()
+                    .trim(from: 0, to: animatedProgress)
+                    .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW * 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+
+            default: // "arc" — full circle
+                Circle()
+                    .stroke(trackCol, lineWidth: strokeW)
+                Circle()
+                    .trim(from: 0, to: animatedProgress)
+                    .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+
             // Center label
             VStack(spacing: 2) {
                 Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
@@ -372,7 +402,7 @@ struct CircularGaugeBlockView: View {
                 }
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: size, height: variant == "speedometer" ? size * 0.6 : size)
         .frame(maxWidth: .infinity)
         .onAppear {
             if shouldAnimate {

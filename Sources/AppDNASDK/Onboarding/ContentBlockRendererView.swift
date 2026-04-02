@@ -18,6 +18,9 @@ struct ContentBlockRendererView: View {
     var currentStepIndex: Int = 0
     /// Total number of steps in the onboarding flow. Used for auto-binding progress_bar.
     var totalSteps: Int = 1
+    /// When true, vertical_align is handled by the parent ThreeZoneStepLayout (zone partitioning),
+    /// so BlockPositionModifier should not map vertical_align to frame alignment.
+    var isZoneManaged: Bool = false
 
     var body: some View {
         let visibleBlocks = blocks.filter { block in
@@ -58,7 +61,8 @@ struct ContentBlockRendererView: View {
                 verticalAlign: block.vertical_align,
                 horizontalAlign: block.horizontal_align,
                 verticalOffset: block.vertical_offset,
-                horizontalOffset: block.horizontal_offset
+                horizontalOffset: block.horizontal_offset,
+                isZoneManaged: isZoneManaged
             )
 
         if animate, let anim = block.entrance_animation {
@@ -927,7 +931,7 @@ struct ContentBlockRendererView: View {
 
     @ViewBuilder
     private func rowBlock(_ block: ContentBlock) -> some View {
-        let childBlocks = block.children ?? []
+        let childBlocks = block.children ?? block.stack_children ?? []
         let rowGap = CGFloat(block.gap ?? 8)
         let direction = block.row_direction ?? "horizontal"
         let childFill = block.row_child_fill ?? true

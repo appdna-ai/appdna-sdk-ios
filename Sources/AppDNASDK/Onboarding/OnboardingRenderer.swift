@@ -773,24 +773,10 @@ struct OnboardingStepRouter: View {
 
         switch variant {
         case "image_fullscreen":
-            ZStack {
-                if let url = effectiveConfig.image_url {
-                    AsyncImage(url: URL(string: url)) { phase in
-                        if case .success(let image) = phase {
-                            image.resizable().aspectRatio(contentMode: .fill).ignoresSafeArea()
-                        }
-                    }
-                    LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .center, endPoint: .bottom)
-                        .ignoresSafeArea()
-                }
-                ScrollView {
-                    VStack(spacing: 12) {
-                        Spacer(minLength: 200)
-                        ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues, currentStepIndex: currentStepIndex, totalSteps: totalSteps)
-                            .padding(.horizontal, 20)
-                    }
-                }
-            }
+            // image_fullscreen: background image is rendered in parent ZStack via step.background.
+            // The layout_variant image_url is a legacy field — skip it here to avoid double-rendering.
+            // Just use the three-zone layout which fills the parent ZStack.
+            threeZoneLayout(blocks: blocks)
 
         case "image_split":
             // 40/60 image-to-content split (SPEC-084 Gap #15)
@@ -805,53 +791,34 @@ struct OnboardingStepRouter: View {
                         .frame(width: geometry.size.width * 0.4)
                         .clipped()
                     }
-                    ScrollView {
-                        ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues, currentStepIndex: currentStepIndex, totalSteps: totalSteps)
-                            .padding(16)
-                    }
-                    .frame(width: geometry.size.width * 0.6)
+                    threeZoneLayout(blocks: blocks)
+                        .frame(width: geometry.size.width * 0.6)
                 }
             }
 
-        case "image_bottom":
-            ScrollView {
-                VStack(spacing: 12) {
-                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues, currentStepIndex: currentStepIndex, totalSteps: totalSteps)
-                        .padding(.horizontal, 20)
-                    if let url = effectiveConfig.image_url {
-                        AsyncImage(url: URL(string: url)) { phase in
-                            if case .success(let image) = phase {
-                                image.resizable().aspectRatio(contentMode: .fit).frame(maxHeight: 240)
-                            }
-                        }
-                    }
-                }
-                .padding(.vertical, 20)
-            }
-
-        case "image_top":
-            ScrollView {
-                VStack(spacing: 12) {
-                    if let url = effectiveConfig.image_url {
-                        AsyncImage(url: URL(string: url)) { phase in
-                            if case .success(let image) = phase {
-                                image.resizable().aspectRatio(contentMode: .fit).frame(maxHeight: 240)
-                            }
-                        }
-                    }
-                    ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues, currentStepIndex: currentStepIndex, totalSteps: totalSteps)
-                        .padding(.horizontal, 20)
-                }
-                .padding(.vertical, 20)
-            }
+        case "image_bottom", "image_top":
+            // image_top/image_bottom: background images rendered by parent ZStack.
+            // layout_variant image_url is legacy — background.image_url is the source of truth.
+            threeZoneLayout(blocks: blocks)
 
         default: // no_image
-            ScrollView {
-                ContentBlockRendererView(blocks: blocks, onAction: handleBlockAction, toggleValues: $toggleValues, loc: loc, inputValues: $inputValues, currentStepIndex: currentStepIndex, totalSteps: totalSteps)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 20)
-            }
+            threeZoneLayout(blocks: blocks)
         }
+    }
+
+    // MARK: - Three-zone layout helper
+
+    @ViewBuilder
+    private func threeZoneLayout(blocks: [ContentBlock]) -> some View {
+        ThreeZoneStepLayout(
+            blocks: blocks,
+            onAction: handleBlockAction,
+            toggleValues: $toggleValues,
+            loc: loc,
+            inputValues: $inputValues,
+            currentStepIndex: currentStepIndex,
+            totalSteps: totalSteps
+        )
     }
 
     // MARK: - Legacy step view (backward compat)
