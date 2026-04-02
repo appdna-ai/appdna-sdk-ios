@@ -48,43 +48,47 @@ struct PaywallRenderer: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            backgroundView
-
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(spacing: config.layout?.spacing ?? 16) {
-                        ForEach(Array(config.sections.enumerated()), id: \.offset) { _, section in
-                            sectionView(for: section)
-                        }
+            // Scrollable content with pinned bottom CTA
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: config.layout?.spacing ?? 16) {
+                    ForEach(Array(config.sections.enumerated()), id: \.offset) { _, section in
+                        sectionView(for: section)
                     }
-                    .padding(config.layout?.padding ?? 20)
                 }
-
-                // Top-level CTA button (when no CTA section exists in layout)
-                if !config.sections.contains(where: { $0.type == "cta" }), let cta = config.cta {
-                    Button(action: handleCTATap) {
-                        if isPurchasing {
-                            ProgressView().tint(.white)
-                        } else {
-                            Text(cta.text ?? "Continue")
-                                .font(.headline)
-                                .foregroundColor(Color(hex: cta.resolvedTextColor))
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(Color(hex: cta.resolvedBgColor))
-                    .cornerRadius(CGFloat(cta.resolvedCornerRadius))
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 16)
-                    .disabled(isPurchasing || selectedPlanId == nil)
-                }
-
-                // SPEC-089d: Sticky footer pinned to bottom
-                if let footer = stickyFooterSection {
-                    stickyFooterView(data: footer.data, style: footer.style)
-                }
+                .padding(config.layout?.padding ?? 20)
             }
+            .safeAreaInset(edge: .bottom) {
+                // Bottom-pinned CTA + sticky footer (Apple HIG pattern)
+                VStack(spacing: 0) {
+                    // Top-level CTA button (when no CTA section exists in layout)
+                    if !config.sections.contains(where: { $0.type == "cta" }), let cta = config.cta {
+                        Button(action: handleCTATap) {
+                            if isPurchasing {
+                                ProgressView().tint(.white)
+                            } else {
+                                Text(cta.text ?? "Continue")
+                                    .font(.headline)
+                                    .foregroundColor(Color(hex: cta.resolvedTextColor))
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(Color(hex: cta.resolvedBgColor))
+                        .cornerRadius(CGFloat(cta.resolvedCornerRadius))
+                        .padding(.horizontal, config.layout?.padding ?? 20)
+                        .padding(.bottom, 8)
+                        .disabled(isPurchasing || selectedPlanId == nil)
+                    }
+
+                    // SPEC-089d: Sticky footer pinned to bottom
+                    if let footer = stickyFooterSection {
+                        stickyFooterView(data: footer.data, style: footer.style)
+                    }
+                }
+                .padding(.bottom, 8)
+            }
+            // Background as modifier — does NOT corrupt safe area (Apple HIG)
+            .background { backgroundView }
 
             // SPEC-085: Confetti/particle overlay
             if showConfetti, let effect = config.particle_effect {
@@ -231,12 +235,13 @@ struct PaywallRenderer: View {
 
     // MARK: - Background
 
-    private var backgroundView: AnyView {
-        // Background can be at top-level or inside layout
+    /// Background view — rendered via .background() modifier, NOT as ZStack sibling.
+    /// .ignoresSafeArea() is applied here so it extends edge-to-edge behind content.
+    @ViewBuilder
+    private var backgroundView: some View {
         let bg = config.background ?? config.layout?.background
         switch bg?.type {
         case "gradient":
-            // Structured gradient (angle + stops) or flat colors array
             if let gradient = bg?.gradient, let stops = gradient.stops, stops.count >= 2 {
                 let angle = Angle(degrees: gradient.angle ?? 180)
                 let swiftStops = stops.map { stop in
@@ -247,47 +252,40 @@ struct PaywallRenderer: View {
                 }
                 let start = UnitPoint(x: 0.5 - cos(angle.radians) * 0.5, y: 0.5 - sin(angle.radians) * 0.5)
                 let end = UnitPoint(x: 0.5 + cos(angle.radians) * 0.5, y: 0.5 + sin(angle.radians) * 0.5)
-                return AnyView(LinearGradient(
-                    stops: swiftStops,
-                    startPoint: start,
-                    endPoint: end
-                ).ignoresSafeArea())
+                LinearGradient(stops: swiftStops, startPoint: start, endPoint: end)
+                    .ignoresSafeArea()
             } else if let colors = bg?.colors, colors.count >= 2 {
-                return AnyView(LinearGradient(
-                    colors: colors.map { Color(hex: $0) },
-                    startPoint: .top,
-                    endPoint: .bottom
-                ).ignoresSafeArea())
+                LinearGradient(colors: colors.map { Color(hex: $0) }, startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
             } else {
-                return AnyView(Color.black.ignoresSafeArea())
+                Color.black.ignoresSafeArea()
             }
         case "image":
             let urlString = bg?.image_url ?? bg?.value
             if let urlString, let url = URL(string: urlString) {
-                return AnyView(AsyncImage(url: url) { image in
+                AsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
                     Color.black
                 }
-                .ignoresSafeArea())
+                .ignoresSafeArea()
             } else {
-                return AnyView(Color.black.ignoresSafeArea())
+                Color.black.ignoresSafeArea()
             }
         case "video":
-            // SPEC-085: Video background
-            return AnyView(ZStack {
+            ZStack {
                 Color.black.ignoresSafeArea()
                 if let videoUrlStr = bg?.video_url ?? bg?.value,
                    let videoUrl = URL(string: videoUrlStr) {
                     VideoBackgroundView(url: videoUrl)
                         .ignoresSafeArea()
                 }
-            })
+            }
         case "color":
-            return AnyView(Color(hex: bg?.color ?? bg?.value ?? "#FFFFFF")
-                .ignoresSafeArea())
+            Color(hex: bg?.color ?? bg?.value ?? "#FFFFFF")
+                .ignoresSafeArea()
         default:
-            return AnyView(Color(.systemBackground).ignoresSafeArea())
+            Color(.systemBackground).ignoresSafeArea()
         }
     }
 
