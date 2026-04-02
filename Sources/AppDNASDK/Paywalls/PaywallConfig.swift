@@ -79,6 +79,8 @@ struct PaywallSectionData: Codable {
     let title: String?
     let subtitle: String?
     let imageUrl: String?
+    let title_style: TextStyleConfig?
+    let subtitle_style: TextStyleConfig?
 
     // Features
     let features: [String]?
@@ -261,6 +263,7 @@ struct PaywallSectionData: Codable {
 
     enum CodingKeys: String, CodingKey {
         case title, subtitle, features, plans, cta, rating, testimonial, text, quote, height
+        case title_style, subtitle_style
         case imageUrl = "image_url"
         case reviewCount = "review_count"
         case guaranteeText = "guarantee_text"

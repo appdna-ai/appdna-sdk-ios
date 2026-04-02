@@ -866,12 +866,13 @@ struct OnboardingStepRouter: View {
                 legacyStepView
             }
         }
-        // Background as modifier — does NOT corrupt safe area for content
+        // Background fills the step content area only (not progress bar / nav bar above)
         .background {
             if let bg = effectiveConfig.background {
-                StyleEngine.backgroundView(bg).ignoresSafeArea()
+                StyleEngine.backgroundView(bg)
             }
         }
+        .clipped() // Prevent background from bleeding into progress bar area
         .entryAnimation(effectiveConfig.animation?.entry_animation, durationMs: effectiveConfig.animation?.entry_duration_ms)
     }
 

@@ -8,10 +8,10 @@ struct HeaderSection: View {
     var sectionStyle: SectionStyleConfig? = nil
 
     private var titleTextStyle: TextStyleConfig? {
-        sectionStyle?.elements?["title"]?.textStyle
+        data?.title_style ?? sectionStyle?.elements?["title"]?.textStyle
     }
     private var subtitleTextStyle: TextStyleConfig? {
-        sectionStyle?.elements?["subtitle"]?.textStyle
+        data?.subtitle_style ?? sectionStyle?.elements?["subtitle"]?.textStyle
     }
 
     var body: some View {
