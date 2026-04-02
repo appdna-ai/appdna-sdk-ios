@@ -3,8 +3,7 @@ import SwiftUI
 // MARK: - Three-Zone Step Layout
 //
 // Apple HIG pattern: ScrollView.safeAreaInset(edge: .bottom) for pinned CTA.
-// Background sibling has .ignoresSafeArea(), content layer does NOT.
-// This is Apple's first-party solution for sticky footers (WWDC 2021).
+// Background uses .background() modifier, content stays in normal safe area.
 
 struct ThreeZoneStepLayout: View {
     let blocks: [ContentBlock]
@@ -22,28 +21,35 @@ struct ThreeZoneStepLayout: View {
             evaluateVisibilityCondition($0.visibility_condition, responses: responses, hookData: hookData)
         }
         let (topBlocks, centerBlocks, bottomBlocks) = Self.partitionBlocks(visible)
+        let onlyCenterContent = topBlocks.isEmpty && !centerBlocks.isEmpty
 
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 12) {
-                // ── TOP ZONE ──
-                if !topBlocks.isEmpty {
-                    zoneRenderer(blocks: topBlocks)
-                        .padding(.top, 16)
-                }
-
-                // ── CENTER ZONE ──
-                if !centerBlocks.isEmpty {
+        Group {
+            if onlyCenterContent {
+                // Only center content (e.g. loading spinner) — vertically center it
+                VStack {
+                    Spacer()
                     zoneRenderer(blocks: centerBlocks)
-                        .padding(.top, 20)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                // Normal: top content scrollable, center below it
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if !topBlocks.isEmpty {
+                            zoneRenderer(blocks: topBlocks)
+                                .padding(.top, 16)
+                        }
+                        if !centerBlocks.isEmpty {
+                            zoneRenderer(blocks: centerBlocks)
+                                .padding(.top, 20)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .safeAreaInset(edge: .bottom) {
-            // ── BOTTOM ZONE: pinned to screen bottom ──
-            // safeAreaInset automatically:
-            // 1. Pins this view at the bottom
-            // 2. Adds content inset to ScrollView so content isn't hidden
             if !bottomBlocks.isEmpty {
                 VStack(spacing: 8) {
                     zoneRenderer(blocks: bottomBlocks)
@@ -67,10 +73,9 @@ struct ThreeZoneStepLayout: View {
             totalSteps: totalSteps,
             isZoneManaged: true
         )
-        .padding(.horizontal, 20)
+        // Use ~8% of screen width for responsive margins across all devices
+        .padding(.horizontal, max(24, UIScreen.main.bounds.width * 0.08))
     }
-
-    // MARK: - Block Partitioning
 
     static func partitionBlocks(_ blocks: [ContentBlock]) -> (top: [ContentBlock], center: [ContentBlock], bottom: [ContentBlock]) {
         var top: [ContentBlock] = []

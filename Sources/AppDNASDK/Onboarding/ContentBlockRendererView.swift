@@ -220,20 +220,50 @@ struct ContentBlockRendererView: View {
         }()
 
         let text = block.text ?? ""
+        let textAlignment: TextAlignment = {
+            switch block.horizontal_align {
+            case "center": return .center
+            case "right": return .trailing
+            default: return .leading
+            }
+        }()
+        let frameAlignment: Alignment = {
+            switch block.horizontal_align {
+            case "center": return .center
+            case "right": return .trailing
+            default: return .leading
+            }
+        }()
         return Text(loc?("block.\(block.id).text", text) ?? text)
             .font(.system(size: fontSize, weight: .bold))
+            .multilineTextAlignment(textAlignment)
             .applyTextStyle(block.style)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: frameAlignment)
     }
 
     // MARK: - Text
 
     private func textBlock(_ block: ContentBlock) -> some View {
         let text = block.text ?? ""
+        let textAlignment: TextAlignment = {
+            switch block.horizontal_align {
+            case "center": return .center
+            case "right": return .trailing
+            default: return .leading
+            }
+        }()
+        let frameAlignment: Alignment = {
+            switch block.horizontal_align {
+            case "center": return .center
+            case "right": return .trailing
+            default: return .leading
+            }
+        }()
         return Text(loc?("block.\(block.id).text", text) ?? text)
             .font(.body)
+            .multilineTextAlignment(textAlignment)
             .applyTextStyle(block.style)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: frameAlignment)
     }
 
     // MARK: - Image
@@ -290,7 +320,8 @@ struct ContentBlockRendererView: View {
                     }
                 }
             } else {
-                imagePlaceholder
+                // No image URL — render nothing (don't show broken placeholder)
+                EmptyView()
             }
         }
         .frame(maxWidth: .infinity)

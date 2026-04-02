@@ -586,76 +586,86 @@ struct OnboardingFlowHost: View {
     private func advanceOrComplete() {
         let currentStep = flow.steps[currentIndex]
 
-        // Check next_step_rules for branching / paywall triggers / end nodes
-        if let rules = currentStep.next_step_rules,
-           let firstRule = rules.first {
-            let target = firstRule.target_step_id
+        // Evaluate next_step_rules — iterate all rules, skip non-navigable graph nodes
+        if let rules = currentStep.next_step_rules {
+            for rule in rules {
+                let target = rule.target_step_id
 
-            // Check for special graph nodes
-            if target.hasPrefix("paywall_trigger_") {
-                // Extract paywall ID from graph node data and present it
-                if let paywallId = resolvePaywallFromTrigger(target) {
-                    let triggerData = resolvePaywallTriggerData(target)
-                    let onDismissBehavior = triggerData?["on_dismiss"] as? String ?? "continue"
-                    let flowCompleted = onFlowCompleted
-                    let currentResponses = responses
-                    let tracker = eventTracker
-                    let flowId = flow.id
+                // Analytics event node — fire event and skip to next rule
+                if target.hasPrefix("analytics_event_") {
+                    eventTracker?.track(event: "onboarding_analytics", properties: [
+                        "flow_id": flow.id, "node_id": target, "step_id": currentStep.id,
+                    ])
+                    continue
+                }
 
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        guard let onboardingVC = AppDNA.topViewController() else {
-                            flowCompleted(currentResponses)
-                            return
-                        }
-                        // Dismiss onboarding first
-                        onboardingVC.dismiss(animated: true) {
-                            guard let rootVC = AppDNA.topViewController() else {
+                // Paywall trigger node
+                if target.hasPrefix("paywall_trigger_") {
+                    if let paywallId = resolvePaywallFromTrigger(target) {
+                        let triggerData = resolvePaywallTriggerData(target)
+                        let onDismissBehavior = triggerData?["on_dismiss"] as? String ?? "continue"
+                        let flowCompleted = onFlowCompleted
+                        let currentResponses = responses
+                        let tracker = eventTracker
+                        let flowId = flow.id
+
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            guard let onboardingVC = AppDNA.topViewController() else {
                                 flowCompleted(currentResponses)
                                 return
                             }
-                            let bridge = OnboardingPaywallBridge(
-                                onPurchased: {
-                                    // Always complete flow on purchase
-                                    tracker?.track(event: "onboarding_completed", properties: [
-                                        "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_purchased",
-                                    ])
+                            onboardingVC.dismiss(animated: true) {
+                                guard let rootVC = AppDNA.topViewController() else {
                                     flowCompleted(currentResponses)
-                                },
-                                onDismissedWithoutPurchase: {
-                                    switch onDismissBehavior {
-                                    case "block":
-                                        // Re-present the paywall (user must purchase to continue)
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                            guard let vc = AppDNA.topViewController() else { return }
-                                            AppDNA.presentPaywall(id: paywallId, from: vc)
-                                        }
-                                    case "skip_to_end":
-                                        tracker?.track(event: "onboarding_completed", properties: [
-                                            "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_skipped",
-                                        ])
-                                        flowCompleted(currentResponses)
-                                    default: // "continue"
-                                        tracker?.track(event: "onboarding_completed", properties: [
-                                            "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_dismissed",
-                                        ])
-                                        flowCompleted(currentResponses)
-                                    }
+                                    return
                                 }
-                            )
-                            AppDNA.presentPaywall(id: paywallId, from: rootVC, delegate: bridge)
+                                let bridge = OnboardingPaywallBridge(
+                                    onPurchased: {
+                                        tracker?.track(event: "onboarding_completed", properties: [
+                                            "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_purchased",
+                                        ])
+                                        flowCompleted(currentResponses)
+                                    },
+                                    onDismissedWithoutPurchase: {
+                                        switch onDismissBehavior {
+                                        case "block":
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                                guard let vc = AppDNA.topViewController() else { return }
+                                                AppDNA.presentPaywall(id: paywallId, from: vc)
+                                            }
+                                        case "skip_to_end":
+                                            tracker?.track(event: "onboarding_completed", properties: [
+                                                "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_skipped",
+                                            ])
+                                            flowCompleted(currentResponses)
+                                        default: // "continue"
+                                            tracker?.track(event: "onboarding_completed", properties: [
+                                                "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_dismissed",
+                                            ])
+                                            flowCompleted(currentResponses)
+                                        }
+                                    }
+                                )
+                                AppDNA.presentPaywall(id: paywallId, from: rootVC, delegate: bridge)
+                            }
                         }
+                    } else {
+                        onFlowCompleted(responses)
                     }
-                } else {
-                    onFlowCompleted(responses)
+                    return
                 }
-                return
-            } else if target.hasPrefix("end_") {
-                onFlowCompleted(responses)
-                return
-            } else if let targetIndex = flow.steps.firstIndex(where: { $0.id == target }) {
-                // Navigate to specific step
-                withAnimation { currentIndex = targetIndex }
-                return
+
+                // End node
+                if target.hasPrefix("end_") {
+                    onFlowCompleted(responses)
+                    return
+                }
+
+                // Navigate to a specific step
+                if let targetIndex = flow.steps.firstIndex(where: { $0.id == target }) {
+                    withAnimation { currentIndex = targetIndex }
+                    return
+                }
             }
         }
 

@@ -75,10 +75,15 @@ public struct OnboardingSettings: Codable {
     public let progress_track_color: String?
     public let back_button_style: BackButtonStyle?
     public let dismiss_allowed: Bool?
+    /// Global horizontal content padding in points. Default 24.
+    public let content_padding: CGFloat?
+    /// Global vertical spacing between content blocks in points. Default 12.
+    public let block_spacing: CGFloat?
 
     public init(show_progress: Bool = true, allow_back: Bool = true, skip_to_step: String? = nil,
                 progress_style: String? = nil, progress_color: String? = nil, progress_track_color: String? = nil,
-                back_button_style: BackButtonStyle? = nil, dismiss_allowed: Bool? = nil) {
+                back_button_style: BackButtonStyle? = nil, dismiss_allowed: Bool? = nil,
+                content_padding: CGFloat? = nil, block_spacing: CGFloat? = nil) {
         self.show_progress = show_progress
         self.allow_back = allow_back
         self.skip_to_step = skip_to_step
@@ -87,6 +92,8 @@ public struct OnboardingSettings: Codable {
         self.progress_track_color = progress_track_color
         self.back_button_style = back_button_style
         self.dismiss_allowed = dismiss_allowed
+        self.content_padding = content_padding
+        self.block_spacing = block_spacing
     }
 
     public init(from decoder: Decoder) throws {
@@ -99,11 +106,14 @@ public struct OnboardingSettings: Codable {
         self.progress_track_color = try c.decodeIfPresent(String.self, forKey: .progress_track_color)
         self.back_button_style = try c.decodeIfPresent(BackButtonStyle.self, forKey: .back_button_style)
         self.dismiss_allowed = try c.decodeIfPresent(Bool.self, forKey: .dismiss_allowed)
+        self.content_padding = try c.decodeIfPresent(CGFloat.self, forKey: .content_padding)
+        self.block_spacing = try c.decodeIfPresent(CGFloat.self, forKey: .block_spacing)
     }
 
     enum CodingKeys: String, CodingKey {
         case show_progress, allow_back, skip_to_step, progress_style
         case progress_color, progress_track_color, back_button_style, dismiss_allowed
+        case content_padding, block_spacing
     }
 }
 

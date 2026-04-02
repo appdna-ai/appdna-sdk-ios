@@ -212,22 +212,36 @@ struct AnimatedLoadingBlockView: View {
         switch variant {
         case "circular":
             return AnyView(
-                ZStack {
-                    Circle()
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 6)
-                    Circle()
-                        .trim(from: 0, to: max(0.05, overallProgress))
-                        .stroke(progressCol, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                        .rotationEffect(.degrees(-90 + spinAngle))
-                        .animation(.linear(duration: 0.3), value: overallProgress)
-                    if block.show_percentage == true {
-                        Text("\(Int(overallProgress * 100))%")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(progressCol)
+                VStack(spacing: 16) {
+                    ZStack {
+                        Circle()
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 5)
+                        Circle()
+                            .trim(from: 0, to: max(0.05, overallProgress))
+                            .stroke(progressCol, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                            .rotationEffect(.degrees(-90 + spinAngle))
+                            .animation(.linear(duration: 0.3), value: overallProgress)
+                        if block.show_percentage == true {
+                            Text("\(Int(overallProgress * 100))%")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(progressCol)
+                        }
+                    }
+                    .frame(width: 80, height: 80)
+                    .padding(8) // Ensure circle stroke isn't clipped
+                    .onAppear { withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) { spinAngle = 360 } }
+
+                    // Show current loading item label
+                    if completedCount < itemList.count {
+                        Text(itemList[completedCount].label ?? "")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .transition(.opacity)
+                            .animation(.easeInOut, value: completedCount)
                     }
                 }
-                .frame(width: 120, height: 120)
-                .onAppear { withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) { spinAngle = 360 } }
+                .frame(maxWidth: .infinity)
             )
 
         case "linear":
