@@ -586,9 +586,13 @@ struct OnboardingFlowHost: View {
     private func advanceOrComplete() {
         let currentStep = flow.steps[currentIndex]
 
-        // Evaluate next_step_rules — iterate all rules, skip non-navigable graph nodes
+        // Evaluate next_step_rules — check conditions, skip non-matching or non-navigable rules
         if let rules = currentStep.next_step_rules {
             for rule in rules {
+                // Evaluate condition(s) before following this rule
+                if !evaluateRule(rule, stepId: currentStep.id) {
+                    continue // Condition not met, try next rule
+                }
                 let target = rule.target_step_id
 
                 // Analytics event node — fire event, then follow downstream edge
@@ -685,6 +689,86 @@ struct OnboardingFlowHost: View {
         } else {
             withAnimation { currentIndex += 1 }
         }
+    }
+
+    // MARK: - Condition Evaluation
+
+    /// Evaluate whether a navigation rule's conditions are met based on current responses.
+    private func evaluateRule(_ rule: NextStepRule, stepId: String) -> Bool {
+        // Prefer `conditions` array, fall back to single `condition`
+        let conditionList: [Any]
+        if let conditions = rule.conditions {
+            conditionList = conditions.map { $0.value }
+        } else if let condition = rule.condition {
+            conditionList = [condition.value]
+        } else {
+            return true // No condition = always match
+        }
+
+        let logic = rule.logic ?? "and"
+        let stepResponses = responses[stepId] as? [String: Any] ?? [:]
+
+        for cond in conditionList {
+            let matches: Bool
+            if let condStr = cond as? String {
+                matches = condStr == "always"
+            } else if let condDict = cond as? [String: Any] {
+                matches = evaluateCondition(condDict, responses: stepResponses)
+            } else {
+                matches = true
+            }
+
+            if logic == "or" && matches { return true }
+            if logic == "and" && !matches { return false }
+        }
+
+        return logic == "and" // All passed for "and", none passed for "or"
+    }
+
+    /// Evaluate a single condition dict against step responses.
+    private func evaluateCondition(_ cond: [String: Any], responses: [String: Any]) -> Bool {
+        guard let type = cond["type"] as? String else { return true }
+
+        switch type {
+        case "always":
+            return true
+        case "answer_equals":
+            let field = cond["field"] as? String ?? ""
+            let expected = cond["value"]
+            let actual = responses[field]
+            return isEqual(actual, expected)
+        case "answer_contains":
+            let field = cond["field"] as? String ?? ""
+            let expected = cond["value"] as? String ?? ""
+            let actual = responses[field] as? String ?? ""
+            return actual.contains(expected)
+        case "answer_not_equals":
+            let field = cond["field"] as? String ?? ""
+            let expected = cond["value"]
+            let actual = responses[field]
+            return !isEqual(actual, expected)
+        case "not_empty":
+            let field = cond["field"] as? String ?? ""
+            let actual = responses[field]
+            if let str = actual as? String { return !str.isEmpty }
+            return actual != nil
+        case "empty":
+            let field = cond["field"] as? String ?? ""
+            let actual = responses[field]
+            if let str = actual as? String { return str.isEmpty }
+            return actual == nil
+        default:
+            return true // Unknown condition type = pass
+        }
+    }
+
+    private func isEqual(_ a: Any?, _ b: Any?) -> Bool {
+        if a == nil && b == nil { return true }
+        if let aStr = a as? String, let bStr = b as? String { return aStr == bStr }
+        if let aNum = a as? Double, let bNum = b as? Double { return aNum == bNum }
+        if let aInt = a as? Int, let bInt = b as? Int { return aInt == bInt }
+        if let aBool = a as? Bool, let bBool = b as? Bool { return aBool == bBool }
+        return String(describing: a) == String(describing: b)
     }
 
     /// Resolve any graph node data by ID from graph_nodes.

@@ -120,7 +120,9 @@ public struct OnboardingSettings: Codable {
 /// A single step within a flow.
 /// Next step rule for conditional routing.
 public struct NextStepRule: Codable {
-    public let condition: AnyCodable?  // "always" or {type: "answer_equals", ...}
+    public let condition: AnyCodable?  // "always" or {type: "answer_equals", ...} — backward compat
+    public let conditions: [AnyCodable]?  // Array of conditions (preferred)
+    public let logic: String?  // "and" | "or" — how to combine conditions
     public let target_step_id: String
 }
 
