@@ -175,6 +175,7 @@ struct PlanCard: View {
                 }
             }
         }
+        .contentShape(Rectangle())
         .buttonStyle(.plain)
         .scaleEffect(isSelected ? selectedScaleValue : 1.0)
         .animation(.easeInOut(duration: 0.2), value: isSelected)

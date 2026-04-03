@@ -321,7 +321,12 @@ struct PaywallRenderer: View {
 
     private func sectionView(for section: PaywallSection) -> some View {
         let staggerDelay = config.animation?.section_stagger_delay_ms ?? 0
+        let margin = section.style?.margin
         return sectionContent(for: section)
+            .padding(.top, CGFloat(margin?.top ?? 0))
+            .padding(.bottom, CGFloat(margin?.bottom ?? 0))
+            .padding(.leading, CGFloat(margin?.leading ?? margin?.left ?? 0))
+            .padding(.trailing, CGFloat(margin?.trailing ?? margin?.right ?? 0))
             .sectionStagger(config.animation?.section_stagger, delayMs: staggerDelay)
     }
 
@@ -1476,6 +1481,7 @@ struct PaywallRenderer: View {
                         .padding(.vertical, 10)
                         .padding(.horizontal, 12)
                     }
+                    .contentShape(Rectangle())
                     .buttonStyle(.plain)
                 }
             })
@@ -1499,7 +1505,8 @@ struct PaywallRenderer: View {
                                 Capsule().fill(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.clear)
                             )
                         }
-                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 4)
@@ -1555,6 +1562,7 @@ struct PaywallRenderer: View {
                         .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
                             .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.clear, lineWidth: 2))
                     }
+                    .contentShape(Rectangle())
                     .buttonStyle(.plain)
                 }
             })
@@ -1627,7 +1635,8 @@ struct PaywallRenderer: View {
                                     .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.gray.opacity(0.2), lineWidth: selectedPlanId == plan.id ? 2 : 1)
                             )
                         }
-                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                     }
                     .padding(.bottom, index < plans.count - 1 ? 8 : 0)
                 }
@@ -1649,7 +1658,8 @@ struct PaywallRenderer: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 8)
                         }
-                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                     }
                 }
                 .background(Color.gray.opacity(0.05))
@@ -1734,7 +1744,8 @@ struct PaywallRenderer: View {
                     .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 16)
                         .stroke(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"), lineWidth: 2))
                 }
-                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 .padding(.horizontal)
             )
 
@@ -1758,6 +1769,7 @@ struct PaywallRenderer: View {
                         .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 14)
                             .fill(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1")))
                     }
+                    .contentShape(Rectangle())
                     .buttonStyle(.plain)
                 }
             })
@@ -1792,7 +1804,8 @@ struct PaywallRenderer: View {
                                 .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.gray.opacity(0.2), lineWidth: selectedPlanId == plan.id ? 2 : 1))
                             .padding(.horizontal, 8)
                         }
-                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: plans.count > 1 ? .always : .never))
@@ -1856,6 +1869,7 @@ struct PaywallRenderer: View {
                         .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
                             .stroke(isExpanded ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.gray.opacity(0.2), lineWidth: isExpanded ? 2 : 1))
                     }
+                    .contentShape(Rectangle())
                     .buttonStyle(.plain)
                     .animation(.easeInOut(duration: 0.25), value: isExpanded)
                 }

@@ -160,12 +160,13 @@ struct OnboardingFlowHost: View {
         return HStack {
             if flow.settings.allow_back && currentIndex > 0 {
                 Button {
-                    withAnimation { currentIndex -= 1 }
+                    withAnimation(.easeInOut(duration: 0.25)) { currentIndex -= 1 }
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: backSize, weight: .semibold))
                         .foregroundColor(backColor)
                         .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .disabled(isProcessing)
             } else {
@@ -728,32 +729,29 @@ struct OnboardingFlowHost: View {
     /// Evaluate a single condition dict against step responses.
     private func evaluateCondition(_ cond: [String: Any], responses: [String: Any]) -> Bool {
         guard let type = cond["type"] as? String else { return true }
+        // Console saves "answer_key", SDK also checks "field" for backward compat
+        let field = cond["answer_key"] as? String ?? cond["field"] as? String ?? ""
 
         switch type {
         case "always":
             return true
         case "answer_equals":
-            let field = cond["field"] as? String ?? ""
             let expected = cond["value"]
             let actual = responses[field]
             return isEqual(actual, expected)
         case "answer_contains":
-            let field = cond["field"] as? String ?? ""
             let expected = cond["value"] as? String ?? ""
             let actual = responses[field] as? String ?? ""
             return actual.contains(expected)
         case "answer_not_equals":
-            let field = cond["field"] as? String ?? ""
             let expected = cond["value"]
             let actual = responses[field]
             return !isEqual(actual, expected)
         case "not_empty":
-            let field = cond["field"] as? String ?? ""
             let actual = responses[field]
             if let str = actual as? String { return !str.isEmpty }
             return actual != nil
         case "empty":
-            let field = cond["field"] as? String ?? ""
             let actual = responses[field]
             if let str = actual as? String { return str.isEmpty }
             return actual == nil

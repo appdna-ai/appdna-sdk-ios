@@ -82,10 +82,21 @@ public struct ElementStyleConfig: Codable {
     }
 }
 
-/// Section-level style (container + per-element overrides).
+/// Per-section margin (top/bottom/left/right in points).
+public struct SpacingMargin: Codable {
+    public let top: Double?
+    public let bottom: Double?
+    public let left: Double?
+    public let right: Double?
+    public let leading: Double?
+    public let trailing: Double?
+}
+
+/// Section-level style (container + per-element overrides + margin).
 public struct SectionStyleConfig: Codable {
     public let container: ElementStyleConfig?
     public let elements: [String: ElementStyleConfig]?
+    public let margin: SpacingMargin?
 }
 
 /// Animation configuration.
