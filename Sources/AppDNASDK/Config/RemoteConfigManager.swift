@@ -13,6 +13,35 @@ final class RemoteConfigManager {
     /// Shared JSON decoder for all config parsing.
     private static let snakeCaseDecoder = JSONDecoder()
 
+    /// Recursively sanitize Firestore dictionaries: coerce string "true"/"false" → Bool,
+    /// string numbers → NSNumber so JSONDecoder doesn't fail on type mismatches.
+    private static func sanitize(_ value: Any) -> Any {
+        if let dict = value as? [String: Any] {
+            return dict.mapValues { sanitize($0) }
+        }
+        if let arr = value as? [Any] {
+            return arr.map { sanitize($0) }
+        }
+        if let str = value as? String {
+            let lower = str.lowercased()
+            if lower == "true" { return true }
+            if lower == "false" { return false }
+            // Coerce numeric strings (but not hex colors or UUIDs)
+            if !str.hasPrefix("#"), !str.contains("-"),
+               str.count < 20, let num = Double(str) {
+                if num == num.rounded() && !str.contains(".") { return Int(num) }
+                return num
+            }
+        }
+        return value
+    }
+
+    /// Encode a Firestore dictionary to JSON Data, sanitizing type mismatches first.
+    private static func sanitizedJSONData(_ dict: [String: Any]) throws -> Data {
+        let clean = sanitize(dict) as! [String: Any]
+        return try JSONSerialization.data(withJSONObject: clean)
+    }
+
     // In-memory caches
     private var paywalls: [String: PaywallConfig] = [:]
     private var experiments: [String: ExperimentConfig] = [:]
@@ -278,7 +307,7 @@ final class RemoteConfigManager {
         for (key, value) in paywallMap {
             guard let dict = value as? [String: Any] else { continue }
             do {
-                let jsonData = try JSONSerialization.data(withJSONObject: dict)
+                let jsonData = try Self.sanitizedJSONData(dict)
                 let config = try Self.snakeCaseDecoder.decode(PaywallConfig.self, from: jsonData)
                 parsed[key] = config
             } catch let decodingError as DecodingError {
@@ -312,7 +341,7 @@ final class RemoteConfigManager {
         for (key, value) in experimentsMap {
             guard let dict = value as? [String: Any] else { continue }
             do {
-                let jsonData = try JSONSerialization.data(withJSONObject: dict)
+                let jsonData = try Self.sanitizedJSONData(dict)
                 let config = try Self.snakeCaseDecoder.decode(ExperimentConfig.self, from: jsonData)
                 parsed[key] = config
             } catch {
@@ -336,11 +365,24 @@ final class RemoteConfigManager {
             for (key, value) in flowsDict {
                 guard let dict = value as? [String: Any] else { continue }
                 do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: dict)
+                    let jsonData = try Self.sanitizedJSONData(dict)
                     let config = try Self.snakeCaseDecoder.decode(OnboardingFlowConfig.self, from: jsonData)
                     parsed[key] = config
+                } catch let decodingError as DecodingError {
+                    switch decodingError {
+                    case .keyNotFound(let codingKey, let ctx):
+                        Log.error("Onboarding '\(key)' decode: missing key '\(codingKey.stringValue)' at \(ctx.codingPath.map(\.stringValue).joined(separator: "."))")
+                    case .typeMismatch(let type, let ctx):
+                        Log.error("Onboarding '\(key)' decode: type mismatch for \(type) at \(ctx.codingPath.map(\.stringValue).joined(separator: ".")): \(ctx.debugDescription)")
+                    case .valueNotFound(let type, let ctx):
+                        Log.error("Onboarding '\(key)' decode: null value for \(type) at \(ctx.codingPath.map(\.stringValue).joined(separator: "."))")
+                    case .dataCorrupted(let ctx):
+                        Log.error("Onboarding '\(key)' decode: corrupted at \(ctx.codingPath.map(\.stringValue).joined(separator: ".")): \(ctx.debugDescription)")
+                    @unknown default:
+                        Log.error("Onboarding '\(key)' decode: \(decodingError)")
+                    }
                 } catch {
-                    Log.error("Failed to decode onboarding flow '\(key)': \(error.localizedDescription)")
+                    Log.error("Failed to decode onboarding flow '\(key)': \(error)")
                 }
             }
         }
@@ -362,7 +404,7 @@ final class RemoteConfigManager {
         for (key, value) in messagesDict {
             guard key != "version" else { continue }
             guard let dict = value as? [String: Any],
-                  let jsonData = try? JSONSerialization.data(withJSONObject: dict),
+                  let jsonData = try? Self.sanitizedJSONData(dict),
                   let config = try? Self.snakeCaseDecoder.decode(MessageConfig.self, from: jsonData) else {
                 continue
             }
@@ -382,7 +424,7 @@ final class RemoteConfigManager {
         for (key, value) in surveysDict {
             guard key != "version" else { continue }
             guard let dict = value as? [String: Any],
-                  let jsonData = try? JSONSerialization.data(withJSONObject: dict),
+                  let jsonData = try? Self.sanitizedJSONData(dict),
                   let config = try? Self.snakeCaseDecoder.decode(SurveyConfig.self, from: jsonData) else {
                 continue
             }
@@ -403,7 +445,7 @@ final class RemoteConfigManager {
 
     private func parseScreenIndex(_ data: [String: Any]) {
         do {
-            let jsonData = try JSONSerialization.data(withJSONObject: data)
+            let jsonData = try Self.sanitizedJSONData(data)
             let index = try Self.snakeCaseDecoder.decode(ScreenIndex.self, from: jsonData)
             ScreenManager.shared.updateIndex(index)
             Log.info("Screen index loaded: \(index.screens?.count ?? 0) screens, \(index.flows?.count ?? 0) flows, \(index.slots?.count ?? 0) slots")
@@ -427,7 +469,7 @@ final class RemoteConfigManager {
                 return
             }
             do {
-                let jsonData = try JSONSerialization.data(withJSONObject: data)
+                let jsonData = try Self.sanitizedJSONData(data)
                 let wrapper = try Self.snakeCaseDecoder.decode(ScreenFirestoreWrapper.self, from: jsonData)
                 let config = wrapper.config
                 ScreenManager.shared.cacheScreen(screenId, config: config)
@@ -435,7 +477,7 @@ final class RemoteConfigManager {
             } catch {
                 // Try parsing the data directly as a ScreenConfig
                 do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: data)
+                    let jsonData = try Self.sanitizedJSONData(data)
                     let config = try Self.snakeCaseDecoder.decode(ScreenConfig.self, from: jsonData)
                     ScreenManager.shared.cacheScreen(screenId, config: config)
                     completion(config)

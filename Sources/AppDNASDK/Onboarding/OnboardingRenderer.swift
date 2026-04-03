@@ -29,8 +29,10 @@ struct OnboardingFlowHost: View {
                 progressBar
             }
 
-            // Navigation bar
-            navigationBar
+            // Navigation bar — only render when back button or dismiss button is visible
+            if (flow.settings.allow_back && !navigationHistory.isEmpty) || (flow.settings.dismiss_allowed ?? true) {
+                navigationBar
+            }
 
             // Step content — fills remaining space
             if currentIndex < flow.steps.count {
@@ -76,7 +78,36 @@ struct OnboardingFlowHost: View {
                 }
             }
         }
-        .background(Color(.systemBackground).ignoresSafeArea())
+        // Step background renders full-screen behind progress bar + nav bar + content
+        .background(
+            stepFullScreenBackground
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+        )
+    }
+
+    // MARK: - Full-screen step background
+
+    @ViewBuilder
+    private var stepFullScreenBackground: some View {
+        if currentIndex < flow.steps.count {
+            let step = flow.steps[currentIndex]
+            let cfg = applyOverrides(to: step.config, stepId: step.id)
+            if let bg = cfg.background {
+                // Step-level background (image, gradient, color)
+                StyleEngine.backgroundView(bg)
+            } else if let chatBg = cfg.chat_config?.style?.background_color {
+                // Chat steps store background in chat style config
+                Color(hex: chatBg)
+            } else if step.type == .interactive_chat {
+                // Chat step fallback default (dark)
+                Color(hex: "#0F172A")
+            } else {
+                Color(.systemBackground)
+            }
+        } else {
+            Color(.systemBackground)
+        }
     }
 
     // MARK: - Progress bar
@@ -892,14 +923,7 @@ struct OnboardingStepRouter: View {
                 legacyStepView
             }
         }
-        // Background fills the step content area only (not progress bar / nav bar above)
-        .background {
-            if let bg = effectiveConfig.background {
-                StyleEngine.backgroundView(bg)
-                    .allowsHitTesting(false)
-            }
-        }
-        .clipped()
+        // Background is rendered at the OnboardingFlowHost level (full-screen behind nav bar)
         .entryAnimation(effectiveConfig.animation?.entry_animation, durationMs: effectiveConfig.animation?.entry_duration_ms)
     }
 

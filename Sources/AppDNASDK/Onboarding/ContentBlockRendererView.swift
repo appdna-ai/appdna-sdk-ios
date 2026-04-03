@@ -582,8 +582,8 @@ struct ContentBlockRendererView: View {
 
     private func pageIndicatorBlock(_ block: ContentBlock) -> some View {
         let dotCount = block.dot_count ?? totalSteps
-        // AC-012: Auto-bind active_index to current step index when not explicitly set or 0
-        let activeIdx = (block.active_index ?? 0) == 0 ? currentStepIndex : (block.active_index ?? 0)
+        // AC-012: Auto-bind active_index to current step index when not explicitly set
+        let activeIdx = block.active_index ?? currentStepIndex
         let dotSize = CGFloat(block.dot_size ?? 8)
         let dotSpacing = CGFloat(block.dot_spacing ?? 8)
         let activeW = block.active_dot_width.map { CGFloat($0) }
