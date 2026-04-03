@@ -50,7 +50,8 @@ struct PaywallRenderer: View {
         ZStack(alignment: .topTrailing) {
             // Scrollable content with pinned bottom CTA
             ScrollView(showsIndicators: false) {
-                VStack(spacing: config.layout?.spacing ?? 16) {
+                // spacing: 0 — per-section margins handle all spacing
+                VStack(spacing: 0) {
                     ForEach(Array(config.sections.enumerated()), id: \.offset) { _, section in
                         sectionView(for: section)
                     }
@@ -322,11 +323,22 @@ struct PaywallRenderer: View {
     private func sectionView(for section: PaywallSection) -> some View {
         let staggerDelay = config.animation?.section_stagger_delay_ms ?? 0
         let margin = section.style?.margin
+        let hasExplicitMargin = margin != nil && (
+            (margin?.top != nil && margin?.top != 0) ||
+            (margin?.bottom != nil && margin?.bottom != 0) ||
+            (margin?.left != nil && margin?.left != 0) ||
+            (margin?.right != nil && margin?.right != 0) ||
+            (margin?.leading != nil && margin?.leading != 0) ||
+            (margin?.trailing != nil && margin?.trailing != 0)
+        )
+        let defaultSpacing = config.layout?.spacing ?? 16
+        // Sections with explicit margins use those; others get default layout spacing as bottom gap
+        let top = CGFloat(margin?.top ?? 0)
+        let bottom = hasExplicitMargin ? CGFloat(margin?.bottom ?? 0) : CGFloat(defaultSpacing)
+        let left = CGFloat(margin?.leading ?? margin?.left ?? 0)
+        let right = CGFloat(margin?.trailing ?? margin?.right ?? 0)
         return sectionContent(for: section)
-            .padding(.top, CGFloat(margin?.top ?? 0))
-            .padding(.bottom, CGFloat(margin?.bottom ?? 0))
-            .padding(.leading, CGFloat(margin?.leading ?? margin?.left ?? 0))
-            .padding(.trailing, CGFloat(margin?.trailing ?? margin?.right ?? 0))
+            .padding(EdgeInsets(top: top, leading: left, bottom: bottom, trailing: right))
             .sectionStagger(config.animation?.section_stagger, delayMs: staggerDelay)
     }
 

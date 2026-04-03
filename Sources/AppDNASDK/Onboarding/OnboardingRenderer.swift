@@ -591,11 +591,18 @@ struct OnboardingFlowHost: View {
 
     private func advanceOrComplete() {
         let currentStep = flow.steps[currentIndex]
+        let effectiveConfig = applyOverrides(to: currentStep.config, stepId: currentStep.id)
 
-        // Evaluate next_step_rules — check conditions, skip non-matching or non-navigable rules
+        // Prefer layout.next_step_rules (has Logic panel conditions) over step-level rules
+        let stepRules = currentStep.next_step_rules ?? []
+        let layoutRules = effectiveConfig.next_step_rules ?? []
+        let hasLayoutConditions = layoutRules.contains { $0.conditions != nil && !($0.conditions?.isEmpty ?? true) }
+        let hasStepConditions = stepRules.contains { $0.conditions != nil && !($0.conditions?.isEmpty ?? true) }
+        let rules: [NextStepRule] = hasLayoutConditions && !hasStepConditions ? layoutRules : stepRules
+
         let stepResponses = responses[currentStep.id] as? [String: Any] ?? [:]
-        Log.debug("[Onboarding] advanceOrComplete step=\(currentStep.id), responses=\(stepResponses)")
-        if let rules = currentStep.next_step_rules {
+        Log.debug("[Onboarding] advanceOrComplete step=\(currentStep.id), responses=\(stepResponses), usingLayoutRules=\(hasLayoutConditions && !hasStepConditions)")
+        if !rules.isEmpty {
             Log.debug("[Onboarding] Evaluating \(rules.count) rules")
             for (ruleIdx, rule) in rules.enumerated() {
                 let ruleMatch = evaluateRule(rule, stepId: currentStep.id)

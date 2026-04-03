@@ -146,7 +146,9 @@ public struct OnboardingStep: Codable, Identifiable {
         self.type = try c.decodeIfPresent(StepType.self, forKey: .type) ?? .custom
         self.hook = try c.decodeIfPresent(StepHookConfig.self, forKey: .hook)
         self.hide_progress = try c.decodeIfPresent(Bool.self, forKey: .hide_progress)
-        self.next_step_rules = try c.decodeIfPresent([NextStepRule].self, forKey: .next_step_rules)
+        // Read next_step_rules from step level, but also check layout.next_step_rules
+        // which may have richer conditions from the Logic panel
+        let stepRules = try c.decodeIfPresent([NextStepRule].self, forKey: .next_step_rules)
 
         // Server writes step content as "layout" or "config" depending on source.
         // Also, content_blocks may be at step level. Try all locations.
@@ -172,6 +174,7 @@ public struct OnboardingStep: Codable, Identifiable {
             }
         }
         self.config = decoded
+        self.next_step_rules = stepRules
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -260,10 +263,12 @@ public struct StepConfig: Codable {
     public let animation: AnimationConfig?
     public let localizations: [String: [String: String]]?
     public let default_locale: String?
+    // Navigation rules from layout (may have Logic panel conditions)
+    public let next_step_rules: [NextStepRule]?
 
     private enum CodingKeys: String, CodingKey {
         case title, subtitle, image_url, cta_text, skip_enabled
-        case options, selection_mode, items, layout
+        case options, selection_mode, items, layout, next_step_rules
         case fields, validation_mode, field_defaults
         case chat_config
         case content_blocks, layout_variant, background
@@ -294,6 +299,7 @@ public struct StepConfig: Codable {
         animation = try c.decodeIfPresent(AnimationConfig.self, forKey: .animation)
         localizations = try c.decodeIfPresent([String: [String: String]].self, forKey: .localizations)
         default_locale = try c.decodeIfPresent(String.self, forKey: .default_locale)
+        next_step_rules = try c.decodeIfPresent([NextStepRule].self, forKey: .next_step_rules)
     }
 
     // Public memberwise init used by applyOverrides and default construction
@@ -308,7 +314,8 @@ public struct StepConfig: Codable {
         content_blocks: [ContentBlock]? = nil, layout_variant: String? = nil,
         background: BackgroundStyleConfig? = nil, text_style: TextStyleConfig? = nil,
         element_style: ElementStyleConfig? = nil, animation: AnimationConfig? = nil,
-        localizations: [String: [String: String]]? = nil, default_locale: String? = nil
+        localizations: [String: [String: String]]? = nil, default_locale: String? = nil,
+        next_step_rules: [NextStepRule]? = nil
     ) {
         self.title = title; self.subtitle = subtitle; self.image_url = image_url
         self.cta_text = cta_text; self.skip_enabled = skip_enabled
@@ -320,6 +327,7 @@ public struct StepConfig: Codable {
         self.background = background; self.text_style = text_style
         self.element_style = element_style; self.animation = animation
         self.localizations = localizations; self.default_locale = default_locale
+        self.next_step_rules = next_step_rules
     }
 }
 
