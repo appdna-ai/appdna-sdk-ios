@@ -12,6 +12,7 @@ struct OnboardingFlowHost: View {
     let onFlowDismissed: (_ lastStepId: String, _ lastStepIndex: Int) -> Void
 
     @State private var currentIndex = 0
+    @State private var navigationHistory: [Int] = [] // Stack of visited step indices for back navigation
     @State private var responses: [String: Any] = [:]
 
     // SPEC-083: Hook state
@@ -158,9 +159,13 @@ struct OnboardingFlowHost: View {
         let backColor: Color = backStyle?.icon_color.flatMap { Color(hex: $0) } ?? Color(hex: "#6B7280")
 
         return HStack {
-            if flow.settings.allow_back && currentIndex > 0 {
+            let _ = Log.debug("[Onboarding] Nav bar: allow_back=\(flow.settings.allow_back), currentIndex=\(currentIndex), isProcessing=\(isProcessing)")
+            if flow.settings.allow_back && !navigationHistory.isEmpty {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.25)) { currentIndex -= 1 }
+                    let previousIndex = navigationHistory.last ?? max(currentIndex - 1, 0)
+                    Log.debug("[Onboarding] Back button tapped, going from \(currentIndex) to \(previousIndex)")
+                    navigationHistory.removeLast()
+                    withAnimation(.easeInOut(duration: 0.25)) { currentIndex = previousIndex }
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: backSize, weight: .semibold))
@@ -588,10 +593,15 @@ struct OnboardingFlowHost: View {
         let currentStep = flow.steps[currentIndex]
 
         // Evaluate next_step_rules — check conditions, skip non-matching or non-navigable rules
+        let stepResponses = responses[currentStep.id] as? [String: Any] ?? [:]
+        Log.debug("[Onboarding] advanceOrComplete step=\(currentStep.id), responses=\(stepResponses)")
         if let rules = currentStep.next_step_rules {
-            for rule in rules {
+            Log.debug("[Onboarding] Evaluating \(rules.count) rules")
+            for (ruleIdx, rule) in rules.enumerated() {
+                let ruleMatch = evaluateRule(rule, stepId: currentStep.id)
+                Log.debug("[Onboarding] Rule \(ruleIdx): target=\(rule.target_step_id), match=\(ruleMatch), conditions=\(String(describing: rule.conditions?.map { $0.value }))")
                 // Evaluate condition(s) before following this rule
-                if !evaluateRule(rule, stepId: currentStep.id) {
+                if !ruleMatch {
                     continue // Condition not met, try next rule
                 }
                 let target = rule.target_step_id
@@ -607,6 +617,7 @@ struct OnboardingFlowHost: View {
                     // Follow downstream edge if available
                     if let nextTarget = nodeData?["next_target"] as? String,
                        let targetIndex = flow.steps.firstIndex(where: { $0.id == nextTarget }) {
+                        navigationHistory.append(currentIndex)
                         withAnimation { currentIndex = targetIndex }
                         return
                     }
@@ -678,6 +689,7 @@ struct OnboardingFlowHost: View {
 
                 // Navigate to a specific step
                 if let targetIndex = flow.steps.firstIndex(where: { $0.id == target }) {
+                    navigationHistory.append(currentIndex)
                     withAnimation { currentIndex = targetIndex }
                     return
                 }
@@ -688,6 +700,7 @@ struct OnboardingFlowHost: View {
         if currentIndex + 1 >= flow.steps.count {
             onFlowCompleted(responses)
         } else {
+            navigationHistory.append(currentIndex)
             withAnimation { currentIndex += 1 }
         }
     }
@@ -738,6 +751,10 @@ struct OnboardingFlowHost: View {
         case "answer_equals":
             let expected = cond["value"]
             let actual = responses[field]
+            // Handle array values (multiselect stores ["opt_2"] not "opt_2")
+            if let actualArray = actual as? [String], let expectedStr = expected as? String {
+                return actualArray.contains(expectedStr)
+            }
             return isEqual(actual, expected)
         case "answer_contains":
             let expected = cond["value"] as? String ?? ""
@@ -746,6 +763,9 @@ struct OnboardingFlowHost: View {
         case "answer_not_equals":
             let expected = cond["value"]
             let actual = responses[field]
+            if let actualArray = actual as? [String], let expectedStr = expected as? String {
+                return !actualArray.contains(expectedStr)
+            }
             return !isEqual(actual, expected)
         case "not_empty":
             let actual = responses[field]
@@ -806,6 +826,7 @@ struct OnboardingFlowHost: View {
             advanceOrComplete()
             return
         }
+        navigationHistory.append(currentIndex)
         withAnimation { currentIndex = targetIndex }
     }
 
@@ -868,9 +889,10 @@ struct OnboardingStepRouter: View {
         .background {
             if let bg = effectiveConfig.background {
                 StyleEngine.backgroundView(bg)
+                    .allowsHitTesting(false)
             }
         }
-        .clipped() // Prevent background from bleeding into progress bar area
+        .clipped()
         .entryAnimation(effectiveConfig.animation?.entry_animation, durationMs: effectiveConfig.animation?.entry_duration_ms)
     }
 

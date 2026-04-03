@@ -88,7 +88,7 @@ struct PaywallRenderer: View {
                 .padding(.bottom, config.layout?.footer_padding ?? 8)
             }
             // Background as modifier — does NOT corrupt safe area (Apple HIG)
-            .background { backgroundView }
+            .background { backgroundView.allowsHitTesting(false) }
 
             // SPEC-085: Confetti/particle overlay
             if showConfetti, let effect = config.particle_effect {
@@ -1480,6 +1480,7 @@ struct PaywallRenderer: View {
                         }
                         .padding(.vertical, 10)
                         .padding(.horizontal, 12)
+                        .contentShape(Rectangle())
                     }
                     .contentShape(Rectangle())
                     .buttonStyle(.plain)

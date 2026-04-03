@@ -45,7 +45,10 @@ struct PlanCard: View {
     private var badgeFg: Color { Color(hex: cardStyle.badgeTextColor ?? "#FFFFFF") }
 
     var body: some View {
-        Button(action: onSelect) {
+        Button(action: {
+            print("[PlanCard] Tapped plan: \(plan.id ?? "nil")")
+            onSelect()
+        }) {
             ZStack(alignment: badgeAlignment) {
                 VStack(spacing: 0) {
                     // Plan image (if enabled)
@@ -154,6 +157,7 @@ struct PlanCard: View {
                         .foregroundColor(isSelected ? selectedBorder : .secondary)
                 }
                 .padding(cardPadding)
+                .contentShape(Rectangle()) // Make entire card area tappable including Spacer gaps
                 } // close VStack for image
                 .background(
                     RoundedRectangle(cornerRadius: cornerRadius)
