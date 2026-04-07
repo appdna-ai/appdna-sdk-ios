@@ -5,9 +5,12 @@ struct FormStepView: View {
     let config: StepConfig
     let onNext: ([String: Any]?) -> Void
     var apiClient: APIClient?
+    /// Previously saved responses for this step (for back-navigation restoration)
+    var savedValues: [String: Any]? = nil
 
     @State private var values: [String: Any] = [:]
     @State private var errors: [String: String] = [:]
+    @State private var showValidationToast = false
 
     private var fields: [FormField] { config.fields ?? [] }
 
@@ -60,21 +63,57 @@ struct FormStepView: View {
             }
             .scrollDismissesKeyboardCompat()
 
-            // CTA
-            Button(action: handleSubmit) {
+            // CTA — configurable styling via element_style
+            let ctaBg = config.element_style?.background?.color ?? "#6366F1"
+            let ctaDisabledBg = config.element_style?.opacity != nil
+                ? ctaBg // Use main color with reduced opacity
+                : nil as String?
+            let ctaRadius = config.element_style?.corner_radius ?? 14
+
+            Button(action: {
+                if canSubmit {
+                    handleSubmit()
+                } else {
+                    withAnimation { showValidationToast = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                        withAnimation { showValidationToast = false }
+                    }
+                }
+            }) {
                 Text((config.cta_text ?? "Continue").interpolated())
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
-                    .background(canSubmit ? Color(hex: "#6366F1") : Color.gray.opacity(0.4))
-                    .cornerRadius(14)
+                    .background(canSubmit ? Color(hex: ctaBg) : Color(hex: ctaDisabledBg ?? ctaBg).opacity(0.4))
+                    .cornerRadius(CGFloat(ctaRadius))
             }
-            .disabled(!canSubmit)
             .padding(.horizontal, 24)
             .padding(.bottom, 32)
         }
+        .overlay(alignment: .bottom) {
+            if showValidationToast {
+                let missingField = visibleFields.first(where: { f in
+                    guard f.required else { return false }
+                    let v = values[f.id]
+                    return v == nil || (v as? String)?.isEmpty == true
+                })
+                Text("Please fill in \(missingField?.label ?? "required fields")")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(12)
+                    .padding(.bottom, 100)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .simultaneousGesture(TapGesture().onEnded {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        })
         .onAppear {
+            restoreSavedValues()
             initializeDefaults()
         }
     }
@@ -122,6 +161,18 @@ struct FormStepView: View {
             if let str = value as? String, str.isEmpty { return false }
         }
         return true
+    }
+
+    // MARK: - Restore saved values (back navigation)
+
+    private func restoreSavedValues() {
+        guard let saved = savedValues else { return }
+        // Restore each field value from previously saved step responses
+        for field in fields {
+            if let val = saved[field.id], values[field.id] == nil {
+                values[field.id] = val
+            }
+        }
     }
 
     // MARK: - Default values
@@ -464,7 +515,7 @@ struct FormStepView: View {
 
 // MARK: - iOS 15 compatibility
 
-private extension View {
+extension View {
     @ViewBuilder
     func scrollDismissesKeyboardCompat() -> some View {
         if #available(iOS 16.0, *) {

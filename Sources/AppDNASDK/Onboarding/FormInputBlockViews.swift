@@ -61,6 +61,7 @@ struct FormInputTextBlock: View {
                 }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear { if text.isEmpty, let saved = inputValues[fieldId] as? String { text = saved } }
     }
 }
 
@@ -94,6 +95,7 @@ struct FormInputTextAreaBlock: View {
                 }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear { if text.isEmpty, let saved = inputValues[fieldId] as? String { text = saved } }
     }
 }
 
@@ -142,6 +144,7 @@ struct FormInputPasswordBlock: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear { if text.isEmpty, let saved = inputValues[fieldId] as? String { text = saved } }
     }
 }
 
@@ -213,6 +216,15 @@ struct FormInputSelectBlock: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear {
+            let fieldId = block.field_id ?? block.id
+            if selectedValue.isEmpty, let saved = inputValues[fieldId] as? String {
+                selectedValue = saved
+            }
+            if selectedValues.isEmpty, let saved = inputValues[fieldId] as? [String] {
+                selectedValues = Set(saved)
+            }
+        }
     }
 
     // MARK: - Dropdown (default)
@@ -390,8 +402,8 @@ struct FormInputSliderBlock: View {
                 }
         }
         .onAppear {
-            value = block.default_picker_value ?? minVal
-            inputValues[fieldId] = value
+            if let saved = inputValues[fieldId] as? Double { value = saved }
+            else { value = block.default_picker_value ?? minVal; inputValues[fieldId] = value }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -421,8 +433,8 @@ struct FormInputToggleBlock: View {
                 }
         }
         .onAppear {
-            isOn = block.toggle_default ?? false
-            inputValues[fieldId] = isOn
+            if let saved = inputValues[fieldId] as? Bool { isOn = saved }
+            else { isOn = block.toggle_default ?? false; inputValues[fieldId] = isOn }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -454,8 +466,8 @@ struct FormInputStepperBlock: View {
             }
         }
         .onAppear {
-            value = Int(block.default_picker_value ?? Double(minVal))
-            inputValues[fieldId] = value
+            if let saved = inputValues[fieldId] as? Int { value = saved }
+            else { value = Int(block.default_picker_value ?? Double(minVal)); inputValues[fieldId] = value }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -486,7 +498,8 @@ struct FormInputSegmentedBlock: View {
             }
         }
         .onAppear {
-            if selectedValue.isEmpty, let first = options.first {
+            if let saved = inputValues[fieldId] as? String, !saved.isEmpty { selectedValue = saved }
+            else if selectedValue.isEmpty, let first = options.first {
                 selectedValue = first.resolvedValue
                 inputValues[fieldId] = first.resolvedValue
             }
@@ -525,7 +538,9 @@ struct FormInputRatingBlock: View {
             }
         }
         .onAppear {
-            selectedRating = block.default_rating ?? 0
+            let fieldId = block.field_id ?? block.id
+            if let saved = inputValues[fieldId] as? Double { selectedRating = saved }
+            else { selectedRating = block.default_rating ?? 0 }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -581,9 +596,14 @@ struct FormInputRangeSliderBlock: View {
             }
         }
         .onAppear {
-            lowValue = block.min_value ?? 0
-            highValue = block.max_value_picker ?? 100
-            inputValues[fieldId] = ["min": lowValue, "max": highValue]
+            if let saved = inputValues[fieldId] as? [String: Any] {
+                lowValue = saved["min"] as? Double ?? block.min_value ?? 0
+                highValue = saved["max"] as? Double ?? block.max_value_picker ?? 100
+            } else {
+                lowValue = block.min_value ?? 0
+                highValue = block.max_value_picker ?? 100
+                inputValues[fieldId] = ["min": lowValue, "max": highValue]
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -635,6 +655,10 @@ struct FormInputChipsBlock: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear {
+            let fieldId = block.field_id ?? block.id
+            if let saved = inputValues[fieldId] as? [String] { selectedValues = Set(saved) }
+        }
     }
 }
 
@@ -675,6 +699,10 @@ struct FormInputColorBlock: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear {
+            let fieldId = block.field_id ?? block.id
+            if let saved = inputValues[fieldId] as? String { selectedColor = saved }
+        }
     }
 }
 
@@ -812,19 +840,26 @@ struct FormInputLocationPlaceholderBlock: View {
                         Button {
                             selectResult(result, fieldId: fieldId)
                         } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(result.title)
-                                    .font(.subheadline)
-                                    .foregroundColor(.primary)
-                                if !result.subtitle.isEmpty {
-                                    Text(result.subtitle)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                            HStack(spacing: 8) {
+                                Image(systemName: "mappin")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(result.title)
+                                        .font(.subheadline)
+                                        .foregroundColor(.primary)
+                                    if !result.subtitle.isEmpty {
+                                        Text(result.subtitle)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
+                                Spacer()
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         Divider()
@@ -843,6 +878,16 @@ struct FormInputLocationPlaceholderBlock: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .zIndex(showResults ? 10 : 0) // Ensure dropdown overlays sibling blocks
+        .onAppear {
+            if text.isEmpty {
+                let fieldId = block.field_id ?? block.id
+                if let saved = inputValues[fieldId] as? [String: Any], let addr = saved["address"] as? String {
+                    text = addr
+                } else if let saved = inputValues[fieldId] as? String, !saved.isEmpty {
+                    text = saved
+                }
+            }
+        }
     }
 
     private func selectResult(_ result: MKLocalSearchCompletion, fieldId: String) {

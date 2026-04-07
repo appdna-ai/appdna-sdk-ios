@@ -435,9 +435,65 @@ struct CircularGaugeBlockView: View {
 /// Multi-column date picker using native iOS wheel picker style.
 struct DateWheelPickerBlockView: View {
     let block: ContentBlock
+    @Binding var inputValues: [String: Any]
 
-    @State private var selectedDate = Date()
+    @State private var selectedDate: Date = {
+        let cal = Calendar.current
+        return cal.date(bySettingHour: 12, minute: 0, second: 0, of: Date()) ?? Date()
+    }()
     @State private var showPicker = false
+    @State private var showDateToast = false
+
+    /// Parse relative date strings like "today", "-18y", "-100y", "+1y", "-30d", or ISO date "2000-01-01"
+    private static func parseDate(_ str: String?) -> Date? {
+        guard let str, !str.isEmpty else { return nil }
+        let trimmed = str.trimmingCharacters(in: .whitespaces).lowercased()
+        if trimmed == "today" || trimmed == "now" { return Date() }
+        let cal = Calendar.current
+        // Relative: -18y, +1y, -30d, -6m
+        let lastChar = trimmed.last
+        if let lastChar, "dmy".contains(lastChar) {
+            let numStr = String(trimmed.dropLast())
+            if let amount = Int(numStr) {
+                switch lastChar {
+                case "d": return cal.date(byAdding: .day, value: amount, to: Date())
+                case "m": return cal.date(byAdding: .month, value: amount, to: Date())
+                case "y": return cal.date(byAdding: .year, value: amount, to: Date())
+                default: break
+                }
+            }
+        }
+        // Absolute ISO date
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f.date(from: str)
+    }
+
+    private var dateRange: ClosedRange<Date> {
+        let cal = Calendar.current
+        var minDate: Date
+        var maxDate: Date
+
+        // Start with wide defaults
+        minDate = cal.date(byAdding: .year, value: -150, to: Date()) ?? Date.distantPast
+        maxDate = cal.date(byAdding: .year, value: 50, to: Date()) ?? Date.distantFuture
+
+        // Apply explicit min/max
+        if let parsed = Self.parseDate(block.min_date) { minDate = parsed }
+        if let parsed = Self.parseDate(block.max_date) { maxDate = parsed }
+
+        // Apply allow_future / allow_past toggles
+        if block.allow_future == false {
+            let today = cal.startOfDay(for: Date())
+            maxDate = min(maxDate, today)
+        }
+        if block.allow_past == false {
+            let today = cal.startOfDay(for: Date())
+            minDate = max(minDate, today)
+        }
+
+        return minDate...maxDate
+    }
 
     var body: some View {
         let highlightCol = Color(hex: block.highlight_color ?? "#6366F1")
@@ -478,19 +534,21 @@ struct DateWheelPickerBlockView: View {
                 if showPicker {
                     if components.contains(.date) && components.contains(.hourAndMinute) {
                         // Date+Time: use graphical for date (shows year) + wheel for time
-                        DatePicker("", selection: $selectedDate, displayedComponents: [.date])
+                        DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
                             .datePickerStyle(.graphical)
                             .labelsHidden()
                             .accentColor(highlightCol)
+                            .tint(highlightCol)
                         DatePicker("", selection: $selectedDate, displayedComponents: [.hourAndMinute])
                             .datePickerStyle(.wheel)
                             .labelsHidden()
                             .frame(height: 100)
                     } else if components.contains(.date) {
-                        DatePicker("", selection: $selectedDate, displayedComponents: [.date])
+                        DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
                             .datePickerStyle(.graphical)
                             .labelsHidden()
                             .accentColor(highlightCol)
+                            .tint(highlightCol)
                     } else {
                         DatePicker("", selection: $selectedDate, displayedComponents: components)
                             .datePickerStyle(.wheel)
@@ -500,27 +558,85 @@ struct DateWheelPickerBlockView: View {
             } else {
                 // Inline mode (default)
                 if components.contains(.date) && components.contains(.hourAndMinute) {
-                    DatePicker("", selection: $selectedDate, displayedComponents: [.date])
+                    DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
                         .datePickerStyle(.graphical)
                         .labelsHidden()
                         .accentColor(highlightCol)
+                        .tint(highlightCol)
                     DatePicker("", selection: $selectedDate, displayedComponents: [.hourAndMinute])
                         .datePickerStyle(.wheel)
                         .labelsHidden()
                         .frame(height: 100)
                 } else if components.contains(.date) {
-                    DatePicker("", selection: $selectedDate, displayedComponents: [.date])
+                    DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
                         .datePickerStyle(.graphical)
                         .labelsHidden()
                         .accentColor(highlightCol)
+                        .tint(highlightCol)
                         .frame(maxWidth: .infinity)
                 } else {
                     DatePicker("", selection: $selectedDate, displayedComponents: components)
                         .datePickerStyle(.wheel)
                         .labelsHidden()
                         .accentColor(highlightCol)
+                        .tint(highlightCol)
                         .frame(maxWidth: .infinity)
                 }
+            }
+        }
+        .onChange(of: selectedDate) { newDate in
+            // Clamp to valid range and show toast if out of bounds
+            let range = dateRange
+            if newDate < range.lowerBound {
+                selectedDate = range.lowerBound
+                showDateValidationToast()
+            } else if newDate > range.upperBound {
+                selectedDate = range.upperBound
+                showDateValidationToast()
+            }
+            persistDate()
+        }
+        .onAppear { restoreDate() }
+        .overlay(alignment: .bottom) {
+            if showDateToast {
+                Text(block.date_validation_message ?? defaultValidationMessage)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(12)
+                    .padding(.bottom, 16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+    }
+
+    private var defaultValidationMessage: String {
+        if block.allow_future == false { return "Please select a date in the past" }
+        if block.allow_past == false { return "Please select a future date" }
+        return "Please select a valid date"
+    }
+
+    private func showDateValidationToast() {
+        withAnimation { showDateToast = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            withAnimation { showDateToast = false }
+        }
+    }
+
+    private func persistDate() {
+        let fieldId = block.field_id ?? block.id
+        let formatter = ISO8601DateFormatter()
+        inputValues[fieldId] = formatter.string(from: selectedDate)
+    }
+
+    private func restoreDate() {
+        let fieldId = block.field_id ?? block.id
+        if let saved = inputValues[fieldId] as? String {
+            let formatter = ISO8601DateFormatter()
+            if let date = formatter.date(from: saved) {
+                selectedDate = date
             }
         }
     }

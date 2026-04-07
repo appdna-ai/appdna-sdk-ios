@@ -47,6 +47,7 @@ struct ThreeZoneStepLayout: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .scrollDismissesKeyboardCompat()
             }
         }
         .safeAreaInset(edge: .bottom) {

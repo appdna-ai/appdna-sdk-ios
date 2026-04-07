@@ -51,7 +51,8 @@ struct OnboardingFlowHost: View {
                         },
                         flowId: flow.id,
                         currentStepIndex: currentIndex,
-                        totalSteps: flow.steps.count
+                        totalSteps: flow.steps.count,
+                        savedResponses: responses[step.id] as? [String: Any]
                     )
                     .id(currentIndex)
                     .transition(.asymmetric(
@@ -903,9 +904,25 @@ struct OnboardingStepRouter: View {
     var currentStepIndex: Int = 0
     /// Total steps in the flow for auto-binding page_indicator / progress_bar.
     var totalSteps: Int = 1
+    /// Previously saved responses for this step (for input retention on back navigation).
+    var savedResponses: [String: Any]? = nil
 
     @State private var toggleValues: [String: Bool] = [:]
-    @State private var inputValues: [String: Any] = [:]
+    @State private var inputValues: [String: Any]
+    @State private var showValidationToast = false
+
+    init(step: OnboardingStep, effectiveConfig: StepConfig, onNext: @escaping ([String: Any]?) -> Void, onSkip: @escaping () -> Void, flowId: String = "", currentStepIndex: Int = 0, totalSteps: Int = 1, savedResponses: [String: Any]? = nil) {
+        self.step = step
+        self.effectiveConfig = effectiveConfig
+        self.onNext = onNext
+        self.onSkip = onSkip
+        self.flowId = flowId
+        self.currentStepIndex = currentStepIndex
+        self.totalSteps = totalSteps
+        self.savedResponses = savedResponses
+        // Pre-populate inputValues from saved responses so child views see data immediately
+        _inputValues = State(initialValue: savedResponses ?? [:])
+    }
 
     // SPEC-084: Localization helper for step text
     // SPEC-087: Also interpolates {{variables}} after localization
@@ -924,6 +941,34 @@ struct OnboardingStepRouter: View {
             }
         }
         // Background is rendered at the OnboardingFlowHost level (full-screen behind nav bar)
+        // Keyboard dismiss handled by ScrollView .scrollDismissesKeyboard in ThreeZoneStepLayout
+        // Intercept links to open in-app instead of Safari
+        .environment(\.openURL, OpenURLAction { url in
+            InAppBrowser.present(url: url)
+            return .handled
+        })
+        // inputValues pre-populated from savedResponses in init()
+        // Validation toast overlay
+        .overlay(alignment: .bottom) {
+            if showValidationToast {
+                let blocks = effectiveConfig.content_blocks ?? []
+                let missingBlock = blocks.first(where: { b in
+                    guard b.field_required == true else { return false }
+                    let fieldId = b.field_id ?? b.id
+                    let v = inputValues[fieldId]
+                    return v == nil || (v as? String)?.isEmpty == true
+                })
+                Text("Please fill in \(missingBlock?.field_label ?? "required fields")")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(12)
+                    .padding(.bottom, 100)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .entryAnimation(effectiveConfig.animation?.entry_animation, durationMs: effectiveConfig.animation?.entry_duration_ms)
     }
 
@@ -998,7 +1043,7 @@ struct OnboardingStepRouter: View {
             case .custom:
                 CustomStepView(config: effectiveConfig, onNext: { onNext(nil) })
             case .form:
-                FormStepView(config: effectiveConfig, onNext: onNext, apiClient: AppDNA.geocodeClient)
+                FormStepView(config: effectiveConfig, onNext: onNext, apiClient: AppDNA.geocodeClient, savedValues: savedResponses)
             case .interactive_chat:
                 ChatStepView(step: step, flowId: flowId, onNext: { data in onNext(data) }, onSkip: onSkip)
             }
@@ -1014,9 +1059,30 @@ struct OnboardingStepRouter: View {
 
     // MARK: - Block action handler
 
+    /// Check if all required input blocks have values
+    private var canAdvance: Bool {
+        guard let blocks = effectiveConfig.content_blocks else { return true }
+        for block in blocks where block.field_required == true {
+            let fieldId = block.field_id ?? block.id
+            let value = inputValues[fieldId]
+            if value == nil { return false }
+            if let str = value as? String, str.isEmpty { return false }
+            if let dict = value as? [String: Any], dict.isEmpty { return false }
+        }
+        return true
+    }
+
     private func handleBlockAction(_ action: String, _ actionValue: String?) {
         switch action {
         case "next":
+            // Validate required fields before advancing
+            guard canAdvance else {
+                withAnimation { showValidationToast = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    withAnimation { showValidationToast = false }
+                }
+                return
+            }
             // Collect toggle values and input values into response
             var data: [String: Any] = [:]
             for (key, value) in toggleValues {
@@ -1032,10 +1098,10 @@ struct OnboardingStepRouter: View {
         case "link":
             if let urlString = actionValue, let url = URL(string: urlString) {
                 DispatchQueue.main.async {
-                    UIApplication.shared.open(url)
+                    InAppBrowser.present(url: url)
                 }
             }
-            onNext(nil)
+            // Don't advance — user will return from in-app browser
         case "social_login":
             // SPEC-089d AC-015: Social login fires onBeforeStepAdvance with provider info.
             // The app delegate handles auth and returns .proceedWithData or .block.

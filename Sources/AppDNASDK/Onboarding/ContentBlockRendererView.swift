@@ -160,7 +160,7 @@ struct ContentBlockRendererView: View {
         case .progress_bar: return AnyView(progressBarBlock(block))
         case .stack: return AnyView(stackBlock(block))
         case .custom_view: return AnyView(customViewBlock(block))
-        case .date_wheel_picker: return AnyView(DateWheelPickerBlockView(block: block))
+        case .date_wheel_picker: return AnyView(DateWheelPickerBlockView(block: block, inputValues: $inputValues))
         case .circular_gauge: return AnyView(CircularGaugeBlockView(block: block))
         case .row: return AnyView(rowBlock(block))
         case .pricing_card: return AnyView(PricingCardBlockView(block: block, onAction: onAction))

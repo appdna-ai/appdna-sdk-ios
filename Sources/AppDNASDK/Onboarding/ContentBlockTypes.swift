@@ -889,6 +889,9 @@ public struct ContentBlock: Codable, Identifiable {
     public let default_date_value: String?
     public let min_date: String?
     public let max_date: String?
+    public let allow_future: Bool?
+    public let allow_past: Bool?
+    public let date_validation_message: String?
     public let highlight_color: String?
     public let haptic_on_scroll: Bool?
     public let orientation: String?              // "vertical" | "horizontal" for wheel picker
@@ -1009,7 +1012,7 @@ public struct ContentBlock: Codable, Identifiable {
         // SPEC-089d Phase F: new block fields
         case gauge_variant, gauge_value, max_value, sublabel, stroke_width
         case label_color, label_font_size, animate, animation_duration_ms
-        case columns, default_date_value, min_date, max_date
+        case columns, default_date_value, min_date, max_date, allow_future, allow_past, date_validation_message
         case highlight_color, haptic_on_scroll, orientation, wheel_orientation, picker_presentation, picker_mode
         case children, stack_children, z_index, gap, wrap, justify, align_items
         case row_direction, row_distribution, row_child_fill
@@ -1162,6 +1165,9 @@ public struct ContentBlock: Codable, Identifiable {
         self.default_date_value = try c.decodeIfPresent(String.self, forKey: .default_date_value)
         self.min_date = try c.decodeIfPresent(String.self, forKey: .min_date)
         self.max_date = try c.decodeIfPresent(String.self, forKey: .max_date)
+        self.allow_future = try c.decodeIfPresent(Bool.self, forKey: .allow_future)
+        self.allow_past = try c.decodeIfPresent(Bool.self, forKey: .allow_past)
+        self.date_validation_message = try c.decodeIfPresent(String.self, forKey: .date_validation_message)
         self.highlight_color = try c.decodeIfPresent(String.self, forKey: .highlight_color)
         self.orientation = try c.decodeIfPresent(String.self, forKey: .orientation)
         self.wheel_orientation = try c.decodeIfPresent(String.self, forKey: .wheel_orientation)
