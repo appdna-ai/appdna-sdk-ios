@@ -945,7 +945,7 @@ struct OnboardingStepRouter: View {
             GeometryReader { geometry in
                 HStack(spacing: 0) {
                     if let url = effectiveConfig.image_url {
-                        AsyncImage(url: URL(string: url)) { phase in
+                        BundledAsyncPhaseImage(url: URL(string: url)) { phase in
                             if case .success(let image) = phase {
                                 image.resizable().aspectRatio(contentMode: .fill)
                             }

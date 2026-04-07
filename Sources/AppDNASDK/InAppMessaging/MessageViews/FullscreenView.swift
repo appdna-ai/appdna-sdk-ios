@@ -48,7 +48,7 @@ struct FullscreenView: View {
                 }
                 // Optional image
                 else if let urlString = content.image_url, let url = URL(string: urlString) {
-                    AsyncImage(url: url) { phase in
+                    BundledAsyncPhaseImage(url: url) { phase in
                         if case .success(let image) = phase {
                             image
                                 .resizable()

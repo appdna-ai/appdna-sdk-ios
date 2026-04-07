@@ -17,7 +17,7 @@ struct FormStepView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     // Header
                     if let imageUrl = config.image_url, let url = URL(string: imageUrl) {
-                        AsyncImage(url: url) { phase in
+                        BundledAsyncPhaseImage(url: url) { phase in
                             if case .success(let image) = phase {
                                 image
                                     .resizable()

@@ -124,7 +124,7 @@ struct ChatStepView: View {
             if let personaName = persona?.name, let role = persona?.role {
                 HStack(spacing: 8) {
                     if let avatarUrl = persona?.avatar_url, let url = URL(string: avatarUrl) {
-                        AsyncImage(url: url) { img in img.resizable().scaledToFill() } placeholder: { Circle().fill(Color.gray.opacity(0.3)) }
+                        BundledAsyncImage(url: url) { img in img.resizable().scaledToFill() } placeholder: { Circle().fill(Color.gray.opacity(0.3)) }
                             .frame(width: 28, height: 28).clipShape(Circle())
                     }
                     Text("\(personaName) - \(role)")
@@ -146,7 +146,7 @@ struct ChatStepView: View {
             HStack(alignment: .top, spacing: 8) {
                 // Avatar
                 if let avatarUrl = persona?.avatar_url, let url = URL(string: avatarUrl) {
-                    AsyncImage(url: url) { img in img.resizable().scaledToFill() } placeholder: { Circle().fill(Color.gray.opacity(0.3)) }
+                    BundledAsyncImage(url: url) { img in img.resizable().scaledToFill() } placeholder: { Circle().fill(Color.gray.opacity(0.3)) }
                         .frame(width: 32, height: 32).clipShape(Circle())
                 } else {
                     Circle().fill(aiBubbleBg).frame(width: 32, height: 32)
@@ -161,7 +161,7 @@ struct ChatStepView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                     // Media
                     if let media = msg.media, media.type == "image", let url = media.url.flatMap(URL.init) {
-                        AsyncImage(url: url) { img in img.resizable().scaledToFit() } placeholder: { ProgressView() }
+                        BundledAsyncImage(url: url) { img in img.resizable().scaledToFit() } placeholder: { ProgressView() }
                             .frame(maxHeight: 150)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     }

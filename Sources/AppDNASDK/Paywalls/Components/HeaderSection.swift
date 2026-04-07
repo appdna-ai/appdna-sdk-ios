@@ -17,7 +17,7 @@ struct HeaderSection: View {
     var body: some View {
         VStack(spacing: 8) {
             if let imageUrl = data?.imageUrl, let url = URL(string: imageUrl) {
-                AsyncImage(url: url) { image in
+                BundledAsyncImage(url: url) { image in
                     image
                         .resizable()
                         .scaledToFit()

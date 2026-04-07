@@ -264,7 +264,7 @@ struct PaywallRenderer: View {
         case "image":
             let urlString = bg?.image_url ?? bg?.value
             if let urlString, let url = URL(string: urlString) {
-                AsyncImage(url: url) { image in
+                BundledAsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
                     Color.black
@@ -533,7 +533,7 @@ struct PaywallRenderer: View {
     @ViewBuilder
     private func imageSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
         if let urlString = data?.imageUrl, let url = URL(string: urlString) {
-            AsyncImage(url: url) { phase in
+            BundledAsyncPhaseImage(url: url) { phase in
                 switch phase {
                 case .success(let image):
                     image
@@ -579,7 +579,7 @@ struct PaywallRenderer: View {
             if layout != "minimal" {
                 HStack(spacing: 12) {
                     if let avatarUrl = data?.avatarUrl, let url = URL(string: avatarUrl) {
-                        AsyncImage(url: url) { phase in
+                        BundledAsyncPhaseImage(url: url) { phase in
                             if case .success(let image) = phase {
                                 image.resizable().aspectRatio(contentMode: .fill)
                             }
@@ -984,7 +984,7 @@ struct PaywallRenderer: View {
     private func singleCardView(card: PaywallCardItem, radius: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if let imgUrl = card.image_url, let url = URL(string: imgUrl) {
-                AsyncImage(url: url) { img in img.resizable().scaledToFill() } placeholder: { Color.gray.opacity(0.1) }
+                BundledAsyncImage(url: url) { img in img.resizable().scaledToFill() } placeholder: { Color.gray.opacity(0.1) }
                     .frame(height: 80).clipped()
             }
             if let icon = card.icon, !icon.isEmpty {

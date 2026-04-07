@@ -95,6 +95,55 @@ final class RemoteConfigManager {
         getAllFlags()
     }
 
+    // MARK: - Bundled config (offline-first)
+
+    /// Load config from the bundled appdna-config.json embedded in the app binary.
+    /// Only populates empty caches — remote and cached data take priority.
+    func loadBundledConfig(_ json: [String: Any]) {
+        queue.sync {
+            // Paywalls
+            if self.paywalls.isEmpty, let data = json["paywalls"] as? [String: Any], !data.isEmpty {
+                self.parsePaywalls(data)
+                Log.debug("Loaded paywalls from bundled config")
+            }
+            // Onboarding
+            if self.onboardingFlows.isEmpty, let data = json["onboarding"] as? [String: Any], !data.isEmpty {
+                self.parseOnboarding(data)
+                Log.debug("Loaded onboarding from bundled config")
+            }
+            // Experiments
+            if self.experiments.isEmpty, let data = json["experiments"] as? [String: Any], !data.isEmpty {
+                self.parseExperiments(data)
+                Log.debug("Loaded experiments from bundled config")
+            }
+            // Messages
+            if self.messages.isEmpty, let data = json["messages"] as? [String: Any], !data.isEmpty {
+                self.parseMessages(data)
+                Log.debug("Loaded messages from bundled config")
+            }
+            // Surveys
+            if self.surveys.isEmpty, let data = json["surveys"] as? [String: Any], !data.isEmpty {
+                self.parseSurveys(data)
+                Log.debug("Loaded surveys from bundled config")
+            }
+            // Flags / remote config
+            if self.flags.isEmpty {
+                if let data = json["remote_config"] as? [String: Any], !data.isEmpty {
+                    self.flags = data
+                    Log.debug("Loaded remote_config from bundled config")
+                } else if let data = json["feature_flags"] as? [String: Any], !data.isEmpty {
+                    self.flags = data
+                    Log.debug("Loaded feature_flags from bundled config")
+                }
+            }
+            // Screen index
+            if let data = json["screen_index"] as? [String: Any], !data.isEmpty {
+                self.parseScreenIndex(data)
+                Log.debug("Loaded screen_index from bundled config")
+            }
+        }
+    }
+
     // MARK: - Onboarding (v0.2)
 
     /// Get an onboarding flow by ID, or the active flow if id is nil.
@@ -177,8 +226,10 @@ final class RemoteConfigManager {
         db.document("\(basePath)/flags").getDocument { [weak self] snapshot, error in
             defer { group.leave() }
             if let data = snapshot?.data() {
-                self?.queue.async { self?.flags = data }
-                if let jsonData = try? JSONSerialization.data(withJSONObject: data) {
+                // Unwrap "flags" wrapper: Firestore doc is { flags: { key1: {...}, key2: {...} } }
+                let unwrapped = (data["flags"] as? [String: Any]) ?? data
+                self?.queue.async { self?.flags = unwrapped }
+                if let jsonData = try? JSONSerialization.data(withJSONObject: unwrapped) {
                     self?.configCache.storeFlags(jsonData)
                 }
             } else if let error {

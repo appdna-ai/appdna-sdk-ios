@@ -11,7 +11,7 @@ import FirebaseFirestore
 public final class AppDNA: @unchecked Sendable {
 
     /// SDK version string.
-    public static let sdkVersion = "1.0.30"
+    public static let sdkVersion = "1.0.31"
 
     /// Firestore instance used by the SDK.
     /// Uses a secondary Firebase app ("appdna") if GoogleService-Info-AppDNA.plist is found,
@@ -974,6 +974,9 @@ public final class AppDNA: @unchecked Sendable {
 
         let bundleVersion = json["bundle_version"] as? Int ?? 0
         AppDNA.currentBundleVersion = bundleVersion
+
+        // Feed bundled config to RemoteConfigManager — only fills empty caches
+        remoteConfigManager?.loadBundledConfig(json)
         Log.info("Loaded bundled config (version \(bundleVersion))")
     }
 

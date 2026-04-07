@@ -266,7 +266,7 @@ struct FormInputSelectBlock: View {
                 } label: {
                     HStack(spacing: 12) {
                         if let imgUrl = option.image_url, let url = URL(string: imgUrl) {
-                            AsyncImage(url: url) { image in
+                            BundledAsyncImage(url: url) { image in
                                 image.resizable().scaledToFill()
                             } placeholder: {
                                 Color.gray.opacity(0.2)
@@ -320,7 +320,7 @@ struct FormInputSelectBlock: View {
                     VStack(spacing: 6) {
                         // Optional image
                         if let imgUrl = option.image_url, let url = URL(string: imgUrl) {
-                            AsyncImage(url: url) { image in
+                            BundledAsyncImage(url: url) { image in
                                 image.resizable().scaledToFill()
                             } placeholder: {
                                 Color.gray.opacity(0.2)

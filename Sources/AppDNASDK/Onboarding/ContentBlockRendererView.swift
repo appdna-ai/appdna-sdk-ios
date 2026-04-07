@@ -276,7 +276,7 @@ struct ContentBlockRendererView: View {
 
         return Group {
             if let urlString = block.image_url, let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
+                BundledAsyncPhaseImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
                         if isCircle {
@@ -333,7 +333,7 @@ struct ContentBlockRendererView: View {
                 }
                 // Gap 6: image_url icon
                 if let imageUrl = block.image_url, let url = URL(string: imageUrl) {
-                    AsyncImage(url: url) { image in
+                    BundledAsyncImage(url: url) { image in
                         image.resizable().aspectRatio(contentMode: .fit).frame(width: 20, height: 20)
                     } placeholder: {
                         EmptyView()
@@ -502,7 +502,7 @@ struct ContentBlockRendererView: View {
             } else if let thumbUrl = block.video_thumbnail_url ?? block.image_url,
                       let url = URL(string: thumbUrl) {
                 // Fallback: thumbnail-only display when no video_url
-                AsyncImage(url: url) { phase in
+                BundledAsyncPhaseImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
                         ZStack {
@@ -995,7 +995,7 @@ struct ContentBlockRendererView: View {
                     maxHeight: block.height.map { CGFloat($0) }
                 )
         } else if let placeholderUrl = block.placeholder_image_url, let url = URL(string: placeholderUrl) {
-            AsyncImage(url: url) { phase in
+            BundledAsyncPhaseImage(url: url) { phase in
                 switch phase {
                 case .success(let image):
                     image.resizable().aspectRatio(contentMode: .fit)

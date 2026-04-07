@@ -11,7 +11,7 @@ struct WelcomeStepView: View {
 
             // Optional image
             if let urlString = config.image_url, let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
+                BundledAsyncPhaseImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
                         image

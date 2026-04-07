@@ -145,7 +145,7 @@ internal struct ScreenRenderer: View {
                 }
             case "image":
                 if let url = bg.image_url, let imageUrl = URL(string: url) {
-                    AsyncImage(url: imageUrl) { image in
+                    BundledAsyncImage(url: imageUrl) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
                     } placeholder: {
                         Color.clear

@@ -37,7 +37,7 @@ public struct VideoBlockView: View {
                 // Thumbnail with play button overlay
                 ZStack {
                     if let thumb = block.video_thumbnail_url, let url = URL(string: thumb) {
-                        AsyncImage(url: url) { image in
+                        BundledAsyncImage(url: url) { image in
                             image.resizable().aspectRatio(contentMode: .fill)
                         } placeholder: {
                             Color.black.opacity(0.3)

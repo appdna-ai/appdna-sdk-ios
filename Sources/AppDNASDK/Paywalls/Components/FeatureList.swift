@@ -70,7 +70,7 @@ struct FeatureList: View {
                     .foregroundColor(iconColor ?? (isIncluded ? Color(hex: "#6366F1") : Color(hex: "#EF4444")))
                     .font(.body)
             } else if let imageUrl = item.image_url, let url = URL(string: imageUrl) {
-                AsyncImage(url: url) { img in
+                BundledAsyncImage(url: url) { img in
                     img.resizable().scaledToFit()
                 } placeholder: {
                     Color.clear

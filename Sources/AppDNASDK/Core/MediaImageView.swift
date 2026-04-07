@@ -20,7 +20,7 @@ public struct MediaImageView: View {
         // For GIF: In production, use SDWebImageSwiftUI for animation
         // Both fall back to AsyncImage which handles static rendering
         if let imageURL = URL(string: url) {
-            AsyncImage(url: imageURL) { phase in
+            BundledAsyncPhaseImage(url: imageURL) { phase in
                 switch phase {
                 case .success(let image):
                     image

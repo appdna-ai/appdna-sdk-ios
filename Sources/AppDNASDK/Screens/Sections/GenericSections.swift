@@ -126,7 +126,7 @@ internal enum HeroSectionRenderer: SectionRenderer {
             ZStack(alignment: verticalAlignment(contentPosition)) {
                 // Media background
                 if let url = imageURL, let imageUrl = URL(string: url) {
-                    AsyncImage(url: imageUrl) { image in
+                    BundledAsyncImage(url: imageUrl) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
                     } placeholder: {
                         Color.gray.opacity(0.2)
@@ -300,7 +300,7 @@ internal enum ImageSectionRenderer: SectionRenderer {
         return AnyView(
             Group {
                 if let url = imageURL, let imageUrl = URL(string: url) {
-                    AsyncImage(url: imageUrl) { image in
+                    BundledAsyncImage(url: imageUrl) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
                     } placeholder: {
                         Color.gray.opacity(0.2)

@@ -262,7 +262,7 @@ enum StyleEngine {
         case "image":
             ZStack {
                 if let urlString = bg?.image_url, let url = URL(string: urlString) {
-                    AsyncImage(url: url) { phase in
+                    BundledAsyncPhaseImage(url: url) { phase in
                         switch phase {
                         case .success(let image):
                             image.resizable().aspectRatio(contentMode: imageFit(bg?.image_fit))

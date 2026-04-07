@@ -53,7 +53,7 @@ struct PlanCard: View {
                 VStack(spacing: 0) {
                     // Plan image (if enabled)
                     if showImage, let imgUrl = plan.image_url, let url = URL(string: imgUrl) {
-                        AsyncImage(url: url) { img in
+                        BundledAsyncImage(url: url) { img in
                             img.resizable().scaledToFill()
                         } placeholder: {
                             Color.gray.opacity(0.1)

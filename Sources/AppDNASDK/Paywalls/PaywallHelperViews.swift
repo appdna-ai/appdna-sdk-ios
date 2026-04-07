@@ -194,7 +194,7 @@ struct CarouselView: View {
                                         .foregroundColor(.secondary)
                                 }
                                 if let imageUrl = child.data?.imageUrl, let url = URL(string: imageUrl) {
-                                    AsyncImage(url: url) { image in
+                                    BundledAsyncImage(url: url) { image in
                                         image.resizable().scaledToFit()
                                     } placeholder: {
                                         ProgressView()
@@ -288,7 +288,7 @@ struct ReviewsCarouselView: View {
                         // Author
                         HStack(spacing: 8) {
                             if let avatarUrl = review.avatarUrl, let url = URL(string: avatarUrl) {
-                                AsyncImage(url: url) { image in
+                                BundledAsyncImage(url: url) { image in
                                     image.resizable().scaledToFill()
                                 } placeholder: {
                                     Circle().fill(Color.gray.opacity(0.3))
