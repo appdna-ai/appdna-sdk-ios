@@ -54,7 +54,9 @@ struct OnboardingFlowHost: View {
                         totalSteps: flow.steps.count,
                         savedResponses: responses[step.id] as? [String: Any]
                     )
-                    .id(currentIndex)
+                    // Chat steps use stable step.id so back-navigation preserves chat transcript;
+                    // other steps use currentIndex to force view recreation for transition animations.
+                    .id(step.type == .interactive_chat ? AnyHashable(step.id) : AnyHashable(currentIndex))
                     .transition(.asymmetric(
                         insertion: .move(edge: .trailing),
                         removal: .move(edge: .leading)
@@ -342,13 +344,20 @@ struct OnboardingFlowHost: View {
         SessionDataStore.shared.setOnboardingResponses(responses)
         onStepCompleted(step.id, currentIndex, data)
 
+        let isSocialLogin = (data?["action"] as? String) == "social_login"
+
         // SPEC-083: Determine hook type — client delegate takes priority over server hook
         if delegate != nil {
-            // Client-side hook
+            // Client-side hook — for social_login, the delegate handles auth and returns
+            // .proceed/.proceedWithData to advance, or .block to stay, or dismisses the host.
             executeClientHook(step: step, data: data)
         } else if let hook = step.hook, hook.enabled == true {
             // Server-side hook (P1)
             executeServerHook(step: step, data: data, hookConfig: hook)
+        } else if isSocialLogin {
+            // Social login without a delegate: do NOT auto-advance.
+            // The app must implement AppDNAOnboardingDelegate to handle social auth.
+            Log.warning("[Onboarding] social_login action received but no delegate is set. Implement AppDNAOnboardingDelegate to handle social auth.")
         } else {
             // No hook — advance immediately
             advanceOrComplete()
@@ -1045,7 +1054,7 @@ struct OnboardingStepRouter: View {
             case .form:
                 FormStepView(config: effectiveConfig, onNext: onNext, apiClient: AppDNA.geocodeClient, savedValues: savedResponses)
             case .interactive_chat:
-                ChatStepView(step: step, flowId: flowId, onNext: { data in onNext(data) }, onSkip: onSkip)
+                ChatStepView(step: step, flowId: flowId, onNext: { data in onNext(data) }, onSkip: onSkip, savedTranscript: savedResponses)
             }
 
             if step.config.skip_enabled == true {
@@ -1103,12 +1112,22 @@ struct OnboardingStepRouter: View {
             }
             // Don't advance — user will return from in-app browser
         case "social_login":
-            // SPEC-089d AC-015: Social login fires onBeforeStepAdvance with provider info.
-            // The app delegate handles auth and returns .proceedWithData or .block.
-            let data: [String: Any] = [
+            // Social login: pass provider info via onNext but mark as social_login.
+            // The flow host's handleStepCompleted will fire onBeforeStepAdvance hook.
+            // The delegate handles auth and returns:
+            //   - .proceedWithData to advance with auth data
+            //   - .block("Signing in...") to stay on step while auth happens
+            //   - .proceed to advance immediately
+            // The data includes "action": "social_login" so the flow host knows not to
+            // auto-advance if no delegate is set.
+            var data: [String: Any] = [
                 "provider": actionValue ?? "unknown",
                 "action": "social_login",
             ]
+            // Include any form input values collected on this step
+            for (key, value) in inputValues {
+                data[key] = value
+            }
             onNext(data)
         case "permission":
             // P1: Requires runtime permission request infrastructure.

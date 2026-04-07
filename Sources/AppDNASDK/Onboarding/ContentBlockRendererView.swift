@@ -238,6 +238,7 @@ struct ContentBlockRendererView: View {
             .font(.system(size: fontSize, weight: .bold))
             .multilineTextAlignment(textAlignment)
             .applyTextStyle(block.style)
+            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: frameAlignment)
     }
 
@@ -263,6 +264,7 @@ struct ContentBlockRendererView: View {
             .font(.body)
             .multilineTextAlignment(textAlignment)
             .applyTextStyle(block.style)
+            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: frameAlignment)
     }
 

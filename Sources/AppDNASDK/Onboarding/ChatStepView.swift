@@ -7,6 +7,8 @@ struct ChatStepView: View {
     let flowId: String
     let onNext: ([String: Any]) -> Void
     let onSkip: () -> Void
+    /// Previously saved transcript for restoring chat on back navigation
+    var savedTranscript: [String: Any]? = nil
 
     private var chatConfig: ChatConfig? { step.config.chat_config }
     private var style: ChatStyleConfig? { chatConfig?.style }
@@ -22,6 +24,7 @@ struct ChatStepView: View {
     @State private var webhookData: [String: AnyCodable] = [:]
     @State private var startTime: Date = Date()
     @State private var showSoftLimitWarning: Bool = false
+    @State private var didRestore = false
 
     // Colors — defaults MUST match console preview defaults exactly
     private var aiBubbleBg: Color { Color(hex: style?.ai_bubble_bg ?? "#1E293B") }
@@ -108,7 +111,25 @@ struct ChatStepView: View {
         .background(Color(hex: style?.background_color ?? "#0F172A"))
         .onAppear {
             startTime = Date()
-            playAutoMessages()
+            if !didRestore, let saved = savedTranscript, let transcript = saved["transcript"] as? [[String: Any]] {
+                // Restore chat from saved transcript
+                didRestore = true
+                for msg in transcript {
+                    let role = msg["role"] as? String ?? "ai"
+                    let content = msg["content"] as? String ?? ""
+                    let msgId = msg["id"] as? String ?? UUID().uuidString
+                    let ts: Date = {
+                        if let s = msg["timestamp"] as? String { return ISO8601DateFormatter().date(from: s) ?? Date() }
+                        return Date()
+                    }()
+                    messages.append(ChatMessage(id: msgId, role: role == "user" ? .user : .ai, content: content, media: nil, timestamp: ts))
+                }
+                userTurnCount = saved["user_turn_count"] as? Int ?? messages.filter { $0.role == .user }.count
+                isCompleted = true
+                Log.debug("[Chat] Restored \(messages.count) messages from saved transcript")
+            } else if messages.isEmpty {
+                playAutoMessages()
+            }
         }
     }
 

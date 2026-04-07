@@ -823,6 +823,11 @@ struct PulsingAvatarBlockView: View {
                     .offset(x: avatarSize * 0.35, y: -avatarSize * 0.35)
             }
         }
+        // Ensure enough space for the outermost pulsing ring at max scale
+        .frame(
+            width: avatarSize + CGFloat(ringCount + 1) * 20 * 1.3,
+            height: avatarSize + CGFloat(ringCount + 1) * 20 * 1.3
+        )
         .frame(maxWidth: .infinity, alignment: align)
         .onAppear {
             isPulsing = true

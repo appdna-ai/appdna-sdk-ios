@@ -168,9 +168,13 @@ struct PlanCard: View {
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .stroke(isSelected ? selectedBorder : Color.clear, lineWidth: 2)
                 )
-                .if(cardStyle.cardShadow ?? false) { view in
-                    view.shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                }
+                .shadow(
+                    color: (cardStyle.cardShadow != nil && cardStyle.cardShadow != "none" && cardStyle.cardShadow != "false")
+                        ? .black.opacity(0.1) : .clear,
+                    radius: cardStyle.cardShadow == "sm" ? 2 : cardStyle.cardShadow == "lg" ? 8 : 4,
+                    x: 0,
+                    y: cardStyle.cardShadow == "sm" ? 1 : cardStyle.cardShadow == "lg" ? 4 : 2
+                )
 
                 // Positioned badge (top_left / top_right)
                 if let badge = plan.badge, badgePositionValue != "inline" {
@@ -243,7 +247,7 @@ struct PlanCardStyle {
     var cardCornerRadius: CGFloat? = nil
     var cardPadding: CGFloat? = nil
     var cardGap: CGFloat? = nil
-    var cardShadow: Bool? = nil
+    var cardShadow: String? = nil  // "none", "sm", "md", "lg", or "true"/"false"
     var badgePosition: String? = nil
     var badgeStyle: String? = nil
     var badgeBgColor: String? = nil
@@ -264,7 +268,11 @@ struct PlanCardStyle {
         self.cardCornerRadius = data?.cardCornerRadius
         self.cardPadding = data?.cardPadding
         self.cardGap = data?.cardGap
-        self.cardShadow = data?.cardShadow
+        // card_shadow can be Bool or String ("none", "sm", "md", "lg")
+        if let val = data?.cardShadow?.value {
+            if let b = val as? Bool { self.cardShadow = b ? "md" : "none" }
+            else if let s = val as? String { self.cardShadow = s }
+        }
         self.badgePosition = data?.badgePosition
         self.badgeStyle = data?.badgeStyle
         self.badgeBgColor = data?.badgeBgColor

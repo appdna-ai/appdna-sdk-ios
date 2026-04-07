@@ -257,6 +257,12 @@ struct FormInputSelectBlock: View {
     private func stackedSelectView(options: [InputOption], fieldId: String) -> some View {
         let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
         let cornerR = CGFloat(block.field_style?.corner_radius ?? 10)
+        let optionBg: Color = block.field_style?.background_color.map { Color(hex: $0) } ?? Color.white.opacity(0.08)
+        let textCol: Color = block.field_style?.text_color.map { Color(hex: $0) }
+            ?? block.text_color.map { Color(hex: $0) }
+            ?? block.style?.color.map { Color(hex: $0) }
+            ?? .primary
+        let borderCol: Color = Color(hex: block.field_style?.border_color ?? "").opacity(block.field_style?.border_color != nil ? 1 : 0.2)
 
         VStack(spacing: 8) {
             ForEach(options) { option in
@@ -291,22 +297,22 @@ struct FormInputSelectBlock: View {
                         }
                         Text(option.label ?? "")
                             .font(.subheadline)
-                            .foregroundColor(.primary)
+                            .foregroundColor(textCol)
                         Spacer()
                         Image(systemName: isSelected
                             ? (isMultiSelect ? "checkmark.circle.fill" : "largecircle.fill.circle")
                             : "circle")
-                            .foregroundColor(isSelected ? fillCol : .secondary)
+                            .foregroundColor(isSelected ? fillCol : textCol.opacity(0.5))
                             .font(.title3)
                     }
                     .padding(12)
                     .background(
                         RoundedRectangle(cornerRadius: cornerR)
-                            .fill(isSelected ? fillCol.opacity(0.08) : Color(.secondarySystemBackground))
+                            .fill(isSelected ? fillCol.opacity(0.15) : optionBg)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerR)
-                            .stroke(isSelected ? fillCol : Color(hex: block.field_style?.border_color ?? "#D1D5DB"), lineWidth: isSelected ? 2 : 1)
+                            .stroke(isSelected ? fillCol : borderCol, lineWidth: isSelected ? 2 : 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -320,6 +326,12 @@ struct FormInputSelectBlock: View {
     private func gridSelectView(options: [InputOption], fieldId: String) -> some View {
         let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
         let cornerR = CGFloat(block.field_style?.corner_radius ?? 10)
+        let optionBg: Color = block.field_style?.background_color.map { Color(hex: $0) } ?? Color.white.opacity(0.08)
+        let textCol: Color = block.field_style?.text_color.map { Color(hex: $0) }
+            ?? block.text_color.map { Color(hex: $0) }
+            ?? block.style?.color.map { Color(hex: $0) }
+            ?? .primary
+        let borderCol: Color = Color(hex: block.field_style?.border_color ?? "").opacity(block.field_style?.border_color != nil ? 1 : 0.2)
         let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
 
         LazyVGrid(columns: columns, spacing: 8) {
@@ -346,18 +358,18 @@ struct FormInputSelectBlock: View {
                         }
                         Text(option.label ?? "")
                             .font(.subheadline)
-                            .foregroundColor(.primary)
+                            .foregroundColor(textCol)
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity, minHeight: 60)
                     .padding(10)
                     .background(
                         RoundedRectangle(cornerRadius: cornerR)
-                            .fill(isSelected ? fillCol.opacity(0.08) : Color(.secondarySystemBackground))
+                            .fill(isSelected ? fillCol.opacity(0.15) : optionBg)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerR)
-                            .stroke(isSelected ? fillCol : Color(hex: block.field_style?.border_color ?? "#D1D5DB"), lineWidth: isSelected ? 2 : 1)
+                            .stroke(isSelected ? fillCol : borderCol, lineWidth: isSelected ? 2 : 1)
                     )
                 }
                 .buttonStyle(.plain)

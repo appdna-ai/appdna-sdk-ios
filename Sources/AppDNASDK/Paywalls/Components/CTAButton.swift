@@ -50,7 +50,7 @@ struct CTAButton: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, CGFloat(cta?.resolvedPaddingVertical ?? 16))
             .background(
                 Group {
                     if let grad = ctaGradient, let stops = grad.stops, stops.count >= 2 {

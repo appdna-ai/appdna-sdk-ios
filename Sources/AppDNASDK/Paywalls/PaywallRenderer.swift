@@ -68,12 +68,12 @@ struct PaywallRenderer: View {
                                 ProgressView().tint(.white)
                             } else {
                                 Text(cta.text ?? "Continue")
-                                    .font(.headline)
+                                    .font(cta.resolvedFontSize.map { .system(size: CGFloat($0), weight: .semibold) } ?? .headline)
                                     .foregroundColor(Color(hex: cta.resolvedTextColor))
                             }
                         }
                         .frame(maxWidth: .infinity)
-                        .frame(height: 52)
+                        .frame(height: CGFloat(cta.resolvedHeight))
                         .background(Color(hex: cta.resolvedBgColor))
                         .cornerRadius(CGFloat(cta.resolvedCornerRadius))
                         .padding(.horizontal, config.layout?.padding ?? 20)
@@ -885,12 +885,12 @@ struct PaywallRenderer: View {
                             .tint(.white)
                     } else {
                         Text(loc("sticky_footer.cta", ctaText))
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.system(size: data?.ctaFontSize ?? 17, weight: .semibold))
                             .foregroundColor(Color(hex: data?.ctaTextColor ?? "#FFFFFF"))
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 52)
+                .frame(height: data?.ctaHeight ?? 52)
                 .background(Color(hex: data?.ctaBgColor ?? "#6366F1"))
                 .clipShape(RoundedRectangle(cornerRadius: data?.ctaCornerRadius ?? 14))
                 .disabled(isPurchasing)

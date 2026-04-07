@@ -162,6 +162,8 @@ struct PaywallSectionData: Codable {
     let ctaBgColor: String?
     let ctaTextColor: String?
     let ctaCornerRadius: CGFloat?
+    let ctaHeight: CGFloat?
+    let ctaFontSize: CGFloat?
     let secondaryText: String?
     let secondaryAction: String?   // restore | link
     let secondaryUrl: String?
@@ -252,7 +254,7 @@ struct PaywallSectionData: Codable {
     let cardCornerRadius: CGFloat?
     let cardPadding: CGFloat?
     let cardGap: CGFloat?
-    let cardShadow: Bool?
+    let cardShadow: AnyCodable?  // Bool or String ("none", "sm", "md", "lg")
     let badgePosition: String?       // top_left, top_right, inline (default)
     let badgeStyle: String?          // capsule, rectangle, rounded
     let badgeBgColor: String?
@@ -309,6 +311,8 @@ struct PaywallSectionData: Codable {
         case ctaBgColor = "cta_bg_color"
         case ctaTextColor = "cta_text_color"
         case ctaCornerRadius = "cta_corner_radius"
+        case ctaHeight = "cta_height"
+        case ctaFontSize = "cta_font_size"
         case secondaryText = "secondary_text"
         case secondaryAction = "secondary_action"
         case secondaryUrl = "secondary_url"
@@ -441,6 +445,9 @@ struct PaywallCTAStyle: Codable {
     let bg_color: String?
     let text_color: String?
     let corner_radius: Double?
+    let height: Double?
+    let font_size: Double?
+    let padding_vertical: Double?
 }
 
 struct PaywallCTA: Codable {
@@ -449,6 +456,9 @@ struct PaywallCTA: Codable {
     let bg_color: String?
     let text_color: String?
     let corner_radius: Double?
+    let height: Double?
+    let font_size: Double?
+    let padding_vertical: Double?
 
     /// Resolved bg_color — from style object, direct field, or default
     var resolvedBgColor: String { styleObj?.bg_color ?? bg_color ?? "#6366F1" }
@@ -456,6 +466,12 @@ struct PaywallCTA: Codable {
     var resolvedTextColor: String { styleObj?.text_color ?? text_color ?? "#FFFFFF" }
     /// Resolved corner_radius — from style object, direct field, or default
     var resolvedCornerRadius: Double { styleObj?.corner_radius ?? corner_radius ?? 12.0 }
+    /// Resolved height — from style object, direct field, or default (52)
+    var resolvedHeight: Double { styleObj?.height ?? height ?? 52.0 }
+    /// Resolved font_size — from style object, direct field, or nil (uses system .headline)
+    var resolvedFontSize: Double? { styleObj?.font_size ?? font_size }
+    /// Resolved vertical padding — from style object, direct field, or default (16)
+    var resolvedPaddingVertical: Double { styleObj?.padding_vertical ?? padding_vertical ?? 16.0 }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -463,6 +479,9 @@ struct PaywallCTA: Codable {
         bg_color = try container.decodeIfPresent(String.self, forKey: .bg_color)
         text_color = try container.decodeIfPresent(String.self, forKey: .text_color)
         corner_radius = try container.decodeIfPresent(Double.self, forKey: .corner_radius)
+        height = try container.decodeIfPresent(Double.self, forKey: .height)
+        font_size = try container.decodeIfPresent(Double.self, forKey: .font_size)
+        padding_vertical = try container.decodeIfPresent(Double.self, forKey: .padding_vertical)
         // Try decoding style as object first, then as string (ignore string variant)
         styleObj = try? container.decodeIfPresent(PaywallCTAStyle.self, forKey: .styleObj)
     }
@@ -473,11 +492,15 @@ struct PaywallCTA: Codable {
         try container.encodeIfPresent(bg_color, forKey: .bg_color)
         try container.encodeIfPresent(text_color, forKey: .text_color)
         try container.encodeIfPresent(corner_radius, forKey: .corner_radius)
+        try container.encodeIfPresent(height, forKey: .height)
+        try container.encodeIfPresent(font_size, forKey: .font_size)
+        try container.encodeIfPresent(padding_vertical, forKey: .padding_vertical)
         try container.encodeIfPresent(styleObj, forKey: .styleObj)
     }
 
     enum CodingKeys: String, CodingKey {
         case text, bg_color, text_color, corner_radius
+        case height, font_size, padding_vertical
         case styleObj = "style"
     }
 }
