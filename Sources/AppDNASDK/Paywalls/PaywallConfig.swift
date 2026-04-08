@@ -98,6 +98,8 @@ struct PaywallSectionData: Codable {
     let subType: String?       // "app_rating", "countdown", "trial_badge"
     let countdownSeconds: Int?
     let text: String?
+    let restoreText: String?        // CTA section: restore purchase text
+    let showRestore: Bool?          // CTA section: show restore button
 
     // Guarantee
     let guaranteeText: String?
@@ -265,6 +267,8 @@ struct PaywallSectionData: Codable {
 
     enum CodingKeys: String, CodingKey {
         case title, subtitle, features, plans, cta, rating, testimonial, text, quote, height
+        case restoreText = "restore_text"
+        case showRestore = "show_restore"
         case title_style, subtitle_style
         case imageUrl = "image_url"
         case reviewCount = "review_count"
@@ -584,6 +588,7 @@ struct PaywallGenericItem: Codable {
     let image_url: String?     // features
     let included: Bool?        // features (false = excluded)
     let emoji: String?         // features
+    let color: String?         // timeline item color
 
     /// Display text — try text, title, label
     var displayText: String? { text ?? title ?? label }

@@ -362,13 +362,20 @@ struct PaywallRenderer: View {
             return AnyView(plansSection(plans: effectivePlans, style: section.style)
                 .applyContainerStyle(section.style?.container))
         case "cta":
+            // CTA section: top-level cta.text takes priority, then section config text
+            let topLevelText = config.cta?.text
+            let sectionText = section.data?.ctaText ?? section.data?.text
+            let ctaText = topLevelText ?? sectionText
             return AnyView(CTAButton(
-                cta: section.data?.cta,
+                cta: config.cta,
                 isPurchasing: isPurchasing,
                 onTap: handleCTATap,
                 loc: loc,
                 sectionStyle: section.style,
-                ctaGradient: section.data?.ctaGradient
+                ctaGradient: section.data?.ctaGradient,
+                textOverride: ctaText,
+                restoreText: section.data?.restoreText,
+                showRestore: section.data?.showRestore ?? false
             )
             .ctaAnimation(config.animation?.cta_animation)
             .applyContainerStyle(section.style?.container))
@@ -1075,52 +1082,57 @@ struct PaywallRenderer: View {
             }
         } else {
         // Vertical timeline (default)
-        VStack(spacing: isCompact ? 12 : 24) {
-            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                HStack(spacing: 16) {
-                    // Left: status indicator + connecting line
-                    VStack(spacing: 0) {
-                        let statusColor = timelineStatusColor(
-                            status: item.status ?? "upcoming",
-                            completedColor: data?.completedColor ?? "#22C55E",
-                            currentColor: data?.currentColor ?? "#6366F1",
-                            upcomingColor: data?.upcomingColor ?? "#666666"
-                        )
+        let connectorColor = Color(hex: data?.lineColor ?? style?.elements?["connector"]?.textStyle?.color ?? "#FFFFFF")
+        let titleFontSize = CGFloat(data?.fontSize ?? 14)
+        let itemSpacing: CGFloat = isCompact ? 12 : 20
 
-                        ZStack {
-                            Circle()
-                                .fill(statusColor)
-                                .frame(width: 24, height: 24)
-                            if item.status == "completed" {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(.primary)
-                            }
-                        }
+        HStack(alignment: .top, spacing: 12) {
+            // Left column: continuous line with dots
+            VStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    let itemColor = item.color.map { Color(hex: $0) } ?? timelineStatusColor(
+                        status: item.status ?? "upcoming",
+                        completedColor: data?.completedColor ?? "#22C55E",
+                        currentColor: data?.currentColor ?? "#6366F1",
+                        upcomingColor: data?.upcomingColor ?? "#666666"
+                    )
 
-                        if showLine && index < items.count - 1 {
-                            Rectangle()
-                                .fill(Color(hex: data?.lineColor ?? "#D1D5DB"))
-                                .frame(width: 2)
-                                .frame(maxHeight: .infinity)
-                        }
+                    Circle()
+                        .fill(itemColor.opacity(0.6))
+                        .frame(width: 8, height: 8)
+
+                    if showLine && index < items.count - 1 {
+                        Rectangle()
+                            .fill(connectorColor.opacity(0.25))
+                            .frame(width: 1, height: itemSpacing)
                     }
-                    .frame(width: 24)
+                }
+            }
+            .padding(.top, 5) // Align dots with text center
 
-                    // Right: content
-                    VStack(alignment: .leading, spacing: 4) {
+            // Right column: text labels
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    let itemColor = item.color.map { Color(hex: $0) } ?? timelineStatusColor(
+                        status: item.status ?? "upcoming",
+                        completedColor: data?.completedColor ?? "#22C55E",
+                        currentColor: data?.currentColor ?? "#6366F1",
+                        upcomingColor: data?.upcomingColor ?? "#666666"
+                    )
+
+                    VStack(alignment: .leading, spacing: 2) {
                         if let title = item.title {
                             Text(title)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundColor(.primary)
+                                .font(.system(size: titleFontSize, weight: .medium))
+                                .foregroundColor(itemColor)
                         }
                         if let subtitle = item.subtitle {
                             Text(subtitle)
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(itemColor.opacity(0.7))
                         }
                     }
-                    .padding(.bottom, isCompact ? 0 : 8)
+                    .frame(height: 8 + (index < items.count - 1 ? itemSpacing : 0), alignment: .top)
                 }
             }
         }
@@ -1416,14 +1428,18 @@ struct PaywallRenderer: View {
         let cardStyle = PlanCardStyle(from: sectionData)
         let cardGap = cardStyle.cardGap ?? 12
 
+        let hasCTASection = config.sections.contains(where: { $0.type == "cta" })
         return VStack(spacing: cardGap) {
             planLayoutView(plans: plans, displayStyle: displayStyle, style: style, cardStyle: cardStyle)
 
-            Button(loc("restore.text", "Restore Purchases")) {
-                onRestore()
+            // Only show inline restore when no CTA section handles it
+            if !hasCTASection {
+                Button(loc("restore.text", "Restore Purchases")) {
+                    onRestore()
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
             }
-            .font(.caption)
-            .foregroundColor(.secondary)
         }
     }
 
@@ -1721,6 +1737,8 @@ struct PaywallRenderer: View {
             let hero = plans.first(where: { $0.isDefault == true }) ?? plans.first
             guard let plan = hero else { return planLayoutFallbackStack(plans: plans, style: style, cardStyle: cardStyle) }
             let idx = plans.firstIndex(where: { $0.id == plan.id }) ?? 0
+            let labelStyle = style?.elements?["label"]?.textStyle ?? style?.elements?["plan_name"]?.textStyle
+            let priceStyle = style?.elements?["price"]?.textStyle
             return AnyView(
                 Button { selectPlan(plan.id) } label: {
                     VStack(spacing: 12) {
@@ -1729,8 +1747,12 @@ struct PaywallRenderer: View {
                                 .font(.caption.bold()).foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
                                 .tracking(0.5)
                         }
-                        Text(plan.displayName).font(.title2.bold()).foregroundColor(.primary)
-                        Text(plan.displayPrice).font(.title.bold()).foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
+                        Text(plan.displayName)
+                            .font(labelStyle?.font_size.map { .system(size: CGFloat($0), weight: .bold) } ?? .title2.bold())
+                            .foregroundColor(labelStyle?.color.map { Color(hex: $0) } ?? .primary)
+                        Text(plan.displayPrice)
+                            .font(priceStyle?.font_size.map { .system(size: CGFloat($0), weight: .bold) } ?? .title.bold())
+                            .foregroundColor(priceStyle?.color.map { Color(hex: $0) } ?? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
                         if let badge = plan.badge, !badge.isEmpty {
                             Text(badge).font(.caption.bold()).foregroundColor(Color(hex: cardStyle.badgeTextColor ?? "#FFF"))
                                 .padding(.horizontal, 14).padding(.vertical, 6)

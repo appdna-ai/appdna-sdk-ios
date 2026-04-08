@@ -19,7 +19,7 @@ struct PlanCard: View {
     private var showSavings: Bool { cardStyle.showSavings }
 
     private var planNameTextStyle: TextStyleConfig? {
-        sectionStyle?.elements?["plan_name"]?.textStyle
+        sectionStyle?.elements?["plan_name"]?.textStyle ?? sectionStyle?.elements?["label"]?.textStyle
     }
     private var priceTextStyle: TextStyleConfig? {
         sectionStyle?.elements?["price"]?.textStyle
@@ -64,6 +64,7 @@ struct PlanCard: View {
 
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
+                        // Row 1: Name + inline badge
                         HStack(spacing: 8) {
                             if let ts = planNameTextStyle {
                                 Text(loc?("plan.\(planIndex).name", plan.displayName) ?? plan.displayName)
@@ -74,12 +75,12 @@ struct PlanCard: View {
                                     .foregroundColor(.primary)
                             }
 
-                            // Inline badge (default position)
                             if let badge = plan.badge, badgePositionValue == "inline" {
                                 badgeView(badge)
                             }
                         }
 
+                        // Row 2: Price display
                         HStack(spacing: 4) {
                             if let ts = priceTextStyle {
                                 Text(loc?("plan.\(planIndex).price", plan.displayPrice) ?? plan.displayPrice)
@@ -88,16 +89,6 @@ struct PlanCard: View {
                                 Text(loc?("plan.\(planIndex).price", plan.displayPrice) ?? plan.displayPrice)
                                     .font(.subheadline.bold())
                                     .foregroundColor(.primary)
-                            }
-                            if let period = plan.period {
-                                if let ts = periodTextStyle {
-                                    Text(loc?("plan.\(planIndex).period", "/ \(period)") ?? "/ \(period)")
-                                        .applyTextStyle(ts)
-                                } else {
-                                    Text(loc?("plan.\(planIndex).period", "/ \(period)") ?? "/ \(period)")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
                             }
                         }
 
@@ -154,19 +145,19 @@ struct PlanCard: View {
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .font(.title2)
-                        .foregroundColor(isSelected ? selectedBorder : .secondary)
+                        .foregroundColor(isSelected ? selectedBorder : Color.white.opacity(0.3))
                 }
                 .padding(cardPadding)
                 .contentShape(Rectangle()) // Make entire card area tappable including Spacer gaps
                 } // close VStack for image
                 .background(
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(isSelected ? (selectedBg ?? Color.clear) : Color.clear)
+                        .fill(isSelected ? (selectedBg ?? Color.white.opacity(0.08)) : Color.white.opacity(0.05))
                 )
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(isSelected ? selectedBorder : Color.clear, lineWidth: 2)
+                        .stroke(isSelected ? selectedBorder : Color.white.opacity(0.15), lineWidth: isSelected ? 2 : 1)
                 )
                 .shadow(
                     color: (cardStyle.cardShadow != nil && cardStyle.cardShadow != "none" && cardStyle.cardShadow != "false")
@@ -191,7 +182,7 @@ struct PlanCard: View {
 
     // MARK: - Badge helpers
 
-    private var badgePositionValue: String { cardStyle.badgePosition ?? "inline" }
+    private var badgePositionValue: String { cardStyle.badgePosition ?? "top_right" }
 
     private var badgeAlignment: Alignment {
         switch badgePositionValue {

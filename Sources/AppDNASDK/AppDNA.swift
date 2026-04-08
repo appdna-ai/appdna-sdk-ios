@@ -11,7 +11,7 @@ import FirebaseFirestore
 public final class AppDNA: @unchecked Sendable {
 
     /// SDK version string.
-    public static let sdkVersion = "1.0.33"
+    public static let sdkVersion = "1.0.34"
 
     /// Firestore instance used by the SDK.
     /// Uses a secondary Firebase app ("appdna") if GoogleService-Info-AppDNA.plist is found,
@@ -497,6 +497,10 @@ public final class AppDNA: @unchecked Sendable {
     /// Checks: API key format, bootstrap status, Firebase initialization, Firestore connectivity, event queue health.
     public static func diagnose() {
         shared.queue.async {
+            let isOffline = NetworkMonitor.shared.currentConnectionType == .none
+            let hasBundledConfig = currentBundleVersion > 0
+            let hasBootstrap = shared.bootstrapData != nil
+
             var lines: [String] = []
             lines.append("╔══════════════════════════════════════════")
             lines.append("║  AppDNA SDK Diagnostic Report  v\(sdkVersion)")
@@ -518,15 +522,28 @@ public final class AppDNA: @unchecked Sendable {
             // 2. Environment
             lines.append("║ ✅ Environment: \(shared.environment.rawValue)")
 
-            // 3. Bootstrap
-            if let data = shared.bootstrapData {
-                lines.append("║ ✅ Bootstrap: orgId=\(data.orgId), appId=\(data.appId)")
-                lines.append("║    Firestore path: \(data.firestorePath)")
-            } else {
-                lines.append("║ ❌ Bootstrap: failed or not completed — check API key and network")
+            // 3. Network
+            switch NetworkMonitor.shared.currentConnectionType {
+            case .wifi:
+                lines.append("║ ✅ Network: WiFi")
+            case .cellular:
+                lines.append("║ ✅ Network: Cellular")
+            case .none:
+                lines.append("║ ⚠️ Network: offline")
             }
 
-            // 4. Firebase
+            // 4. Bootstrap
+            if hasBootstrap {
+                let data = shared.bootstrapData!
+                lines.append("║ ✅ Bootstrap: orgId=\(data.orgId), appId=\(data.appId)")
+                lines.append("║    Firestore path: \(data.firestorePath)")
+            } else if isOffline {
+                lines.append("║ ⚠️ Bootstrap: offline — using cached/bundled config")
+            } else {
+                lines.append("║ ❌ Bootstrap: failed — check API key and network")
+            }
+
+            // 5. Firebase
             if FirebaseApp.app(name: "appdna") != nil {
                 lines.append("║ ✅ Firebase: secondary app 'appdna' configured")
             } else if FirebaseApp.app() != nil {
@@ -535,7 +552,7 @@ public final class AppDNA: @unchecked Sendable {
                 lines.append("║ ❌ Firebase: no Firebase app configured")
             }
 
-            // 5. Identity
+            // 6. Identity
             if let identity = shared.identityManager {
                 let id = identity.currentIdentity
                 lines.append("║ ✅ Identity: anonId=\(String(id.anonId.prefix(8)))..., userId=\(id.userId ?? "none")")
@@ -543,21 +560,36 @@ public final class AppDNA: @unchecked Sendable {
                 lines.append("║ ❌ Identity: not initialized")
             }
 
-            // 6. Event Queue
+            // 7. Event Queue
             if shared.eventQueue != nil {
-                lines.append("║ ✅ Event Queue: initialized")
+                lines.append("║ ✅ Event Queue: initialized\(isOffline ? " (events queued for later)" : "")")
             } else {
                 lines.append("║ ❌ Event Queue: not initialized")
             }
 
-            // 7. Remote Config
+            // 8. Remote Config
             if shared.remoteConfigManager != nil {
-                lines.append("║ ✅ Remote Config: initialized")
+                if hasBootstrap {
+                    lines.append("║ ✅ Remote Config: live (Firestore)")
+                } else if hasBundledConfig {
+                    lines.append("║ ✅ Remote Config: bundled (v\(currentBundleVersion))")
+                } else {
+                    lines.append("║ ⚠️ Remote Config: cached only")
+                }
             } else {
                 lines.append("║ ❌ Remote Config: not initialized")
             }
 
-            // 8. Modules
+            // 9. Config Source
+            if hasBootstrap {
+                lines.append("║ ✅ Config Source: remote (Firestore)")
+            } else if hasBundledConfig {
+                lines.append("║ ✅ Config Source: bundled config (v\(currentBundleVersion))")
+            } else {
+                lines.append("║ ⚠️ Config Source: disk cache")
+            }
+
+            // 10. Modules
             var modules: [String] = []
             if shared.paywallManager != nil { modules.append("paywalls") }
             if shared.onboardingFlowManager != nil { modules.append("onboarding") }
@@ -568,16 +600,20 @@ public final class AppDNA: @unchecked Sendable {
             if shared.experimentManager != nil { modules.append("experiments") }
             lines.append("║ ✅ Modules: \(modules.isEmpty ? "none" : modules.joined(separator: ", "))")
 
+            // Summary
             lines.append("╠══════════════════════════════════════════")
-            let allGood = shared.apiKey != nil && shared.bootstrapData != nil && FirebaseApp.app(name: "appdna") != nil
+            let allGood = shared.apiKey != nil && hasBootstrap && FirebaseApp.app(name: "appdna") != nil
             if allGood {
                 lines.append("║ ✅ SDK is fully operational")
+            } else if isOffline && (hasBundledConfig || shared.remoteConfigManager != nil) {
+                lines.append("║ ✅ SDK is operational (offline mode)")
+            } else if isOffline {
+                lines.append("║ ⚠️ SDK is offline — add bundled config for offline support")
             } else {
                 lines.append("║ ⚠️ SDK has issues — review items marked ❌ above")
             }
             lines.append("╚══════════════════════════════════════════")
 
-            // Always print regardless of log level — diagnose() is an explicit developer call
             for line in lines {
                 print("[AppDNA] \(line)")
             }

@@ -10,6 +10,14 @@ struct CTAButton: View {
     var sectionStyle: SectionStyleConfig? = nil
     /// CTA gradient (from section data)
     var ctaGradient: PaywallGradient? = nil
+    /// Override CTA text (from section config.text)
+    var textOverride: String? = nil
+    /// Restore purchase text (from section config)
+    var restoreText: String? = nil
+    /// Whether to show restore button
+    var showRestore: Bool = false
+    /// Restore action
+    var onRestore: (() -> Void)? = nil
 
     private var buttonElement: ElementStyleConfig? {
         sectionStyle?.elements?["button"]
@@ -33,7 +41,12 @@ struct CTAButton: View {
         CGFloat(cta?.resolvedCornerRadius ?? 12.0)
     }
 
+    private var restoreTextStyle: TextStyleConfig? {
+        sectionStyle?.elements?["restore_text"]?.textStyle
+    }
+
     var body: some View {
+        VStack(spacing: 8) {
         Button(action: onTap) {
             HStack(spacing: 8) {
                 if isPurchasing {
@@ -41,10 +54,10 @@ struct CTAButton: View {
                         .tint(.white)
                 }
                 if let ts = buttonTextStyle {
-                    Text(isPurchasing ? "Processing..." : (loc?("cta.text", cta?.text ?? "Subscribe") ?? cta?.text ?? "Subscribe"))
+                    Text(isPurchasing ? "Processing..." : (loc?("cta.text", textOverride ?? cta?.text ?? "Subscribe") ?? textOverride ?? cta?.text ?? "Subscribe"))
                         .applyTextStyle(ts)
                 } else {
-                    Text(isPurchasing ? "Processing..." : (loc?("cta.text", cta?.text ?? "Subscribe") ?? cta?.text ?? "Subscribe"))
+                    Text(isPurchasing ? "Processing..." : (loc?("cta.text", textOverride ?? cta?.text ?? "Subscribe") ?? textOverride ?? cta?.text ?? "Subscribe"))
                         .font(.headline)
                         .foregroundColor(buttonTextColor)
                 }
@@ -69,5 +82,18 @@ struct CTAButton: View {
         }
         .disabled(isPurchasing)
         .padding(.horizontal)
+
+        if showRestore, let text = restoreText, !text.isEmpty {
+            Button(action: { onRestore?() }) {
+                if let ts = restoreTextStyle {
+                    Text(text).applyTextStyle(ts)
+                } else {
+                    Text(text)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        } // close VStack
     }
 }

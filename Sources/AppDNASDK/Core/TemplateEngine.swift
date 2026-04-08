@@ -104,6 +104,17 @@ final class TemplateEngine {
             let fieldId = parts[2]
             return (context.onboardingResponses[stepId])?[fieldId].flatMap(Self.stringify)
 
+        case "input":
+            // Shorthand: {{input.fieldId}} — searches all step responses for the field
+            guard parts.count >= 2 else { return nil }
+            let fieldId = parts[1]
+            for (_, stepData) in context.onboardingResponses {
+                if let value = stepData[fieldId] {
+                    return Self.stringify(value)
+                }
+            }
+            return nil
+
         case "computed":
             guard parts.count >= 2 else { return nil }
             let key = parts[1]

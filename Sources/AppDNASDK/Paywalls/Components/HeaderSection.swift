@@ -46,7 +46,7 @@ struct HeaderSection: View {
                 } else {
                     Text(loc?("section-header.subtitle", subtitle) ?? subtitle)
                         .font(.body)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color.white.opacity(0.6))
                         .multilineTextAlignment(.center)
                 }
             }
