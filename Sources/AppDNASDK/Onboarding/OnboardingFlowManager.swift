@@ -97,6 +97,34 @@ final class OnboardingFlowManager {
     // MARK: - Private
 
     private func resolveFlow(flowId: String?) -> OnboardingFlowConfig? {
-        return remoteConfigManager.getOnboardingFlow(id: flowId)
+        // If explicit flowId, use it directly
+        if let flowId {
+            return remoteConfigManager.getOnboardingFlow(id: flowId)
+        }
+
+        // Try audience-based selection: evaluate all flows, pick highest priority match
+        let userTraits = AppDNA.getUserTraits()
+        if !userTraits.isEmpty {
+            let allFlows = remoteConfigManager.getAllOnboardingFlows()
+            let matching = allFlows.values
+                .filter { flow in
+                    guard flow.audience_rules != nil else { return false }
+                    return AudienceRuleEvaluator.evaluate(rules: flow.audience_rules, traits: userTraits)
+                }
+                .sorted {
+                    let p0 = ($0.audience_rules?.value as? [String: Any])?["priority"] as? Int ?? 0
+                    let p1 = ($1.audience_rules?.value as? [String: Any])?["priority"] as? Int ?? 0
+                    return p0 > p1
+                }
+
+            if let bestMatch = matching.first {
+                let priority = (bestMatch.audience_rules?.value as? [String: Any])?["priority"] as? Int ?? 0
+                Log.info("[Onboarding] Audience-matched flow: \(bestMatch.id) (priority: \(priority))")
+                return bestMatch
+            }
+        }
+
+        // Fallback: active flow
+        return remoteConfigManager.getOnboardingFlow(id: nil)
     }
 }

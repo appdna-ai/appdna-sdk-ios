@@ -146,6 +146,16 @@ final class RemoteConfigManager {
 
     // MARK: - Onboarding (v0.2)
 
+    /// Get all onboarding flows (for audience-based selection).
+    func getAllOnboardingFlows() -> [String: OnboardingFlowConfig] {
+        queue.sync { onboardingFlows }
+    }
+
+    /// Get all paywall configs (for audience-based selection).
+    func getAllPaywalls() -> [String: PaywallConfig] {
+        queue.sync { paywalls }
+    }
+
     /// Get an onboarding flow by ID, or the active flow if id is nil.
     func getOnboardingFlow(id: String?) -> OnboardingFlowConfig? {
         queue.sync {

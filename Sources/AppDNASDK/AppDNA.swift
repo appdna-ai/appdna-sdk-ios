@@ -11,7 +11,7 @@ import FirebaseFirestore
 public final class AppDNA: @unchecked Sendable {
 
     /// SDK version string.
-    public static let sdkVersion = "1.0.34"
+    public static let sdkVersion = "1.0.35"
 
     /// Firestore instance used by the SDK.
     /// Uses a secondary Firebase app ("appdna") if GoogleService-Info-AppDNA.plist is found,
@@ -299,6 +299,24 @@ public final class AppDNA: @unchecked Sendable {
                 id: id,
                 from: viewController,
                 context: context,
+                delegate: delegate
+            )
+        }
+    }
+
+    /// Present a paywall by placement — auto-selects based on audience rules.
+    /// Multiple paywalls can share the same placement; the best audience match wins.
+    public static func presentPaywall(
+        placement: String,
+        from viewController: UIViewController,
+        context: PaywallContext? = nil,
+        delegate: AppDNAPaywallDelegate? = nil
+    ) {
+        DispatchQueue.main.async {
+            shared.paywallManager?.presentByPlacement(
+                placement: placement,
+                from: viewController,
+                context: PaywallContext(placement: placement, experiment: context?.experiment, variant: context?.variant),
                 delegate: delegate
             )
         }
@@ -848,6 +866,19 @@ public final class AppDNA: @unchecked Sendable {
             }
             Log.info("Bootstrap successful: orgId=\(data.orgId), appId=\(data.appId)")
 
+            // Auto-inject geo traits from bootstrap response
+            if let geo = data.geo {
+                var geoTraits: [String: Any] = [:]
+                if let country = geo.country, !country.isEmpty { geoTraits["country"] = country }
+                if let region = geo.region, !region.isEmpty { geoTraits["region"] = region }
+                if let city = geo.city, !city.isEmpty { geoTraits["city"] = city }
+                if let tz = geo.timezone, !tz.isEmpty { geoTraits["timezone"] = tz }
+                if !geoTraits.isEmpty {
+                    identityMgr.mergeTraits(geoTraits)
+                    Log.info("Geo traits injected: \(geoTraits.keys.joined(separator: ", "))")
+                }
+            }
+
             queue.async { [weak self] in
                 guard let self else { return }
                 self.initializeManagers(
@@ -1078,10 +1109,20 @@ struct BootstrapData: Codable {
     let appId: String
     let firestorePath: String
     let settings: BootstrapSettings
+    let geo: BootstrapGeo?
 }
 
 struct BootstrapSettings: Codable {
     let flushInterval: Int
     let batchSize: Int
     let configTTL: Int
+}
+
+struct BootstrapGeo: Codable {
+    let country: String?
+    let region: String?
+    let city: String?
+    let timezone: String?
+    let latitude: Double?
+    let longitude: Double?
 }

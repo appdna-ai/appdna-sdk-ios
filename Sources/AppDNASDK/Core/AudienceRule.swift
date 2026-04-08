@@ -36,6 +36,17 @@ internal enum AudienceRuleEvaluator {
         }
     }
 
+    /// Evaluate audience rules from AnyCodable (decoded from Firestore).
+    static func evaluate(rules anyCodable: AnyCodable?, traits: [String: Any]) -> Bool {
+        guard let dict = anyCodable?.value as? [String: Any] else { return true }
+        // Try to decode as AudienceRuleSet
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: dict),
+              let ruleSet = try? JSONDecoder().decode(AudienceRuleSet.self, from: jsonData) else {
+            return true // Can't parse = pass
+        }
+        return evaluate(rules: ruleSet, userTraits: traits)
+    }
+
     static func evaluate(ruleArray: [AudienceRule]?, userTraits: [String: Any]) -> Bool {
         guard let rules = ruleArray, !rules.isEmpty else { return true }
         return rules.allSatisfy { evaluateRule($0, userTraits: userTraits) }

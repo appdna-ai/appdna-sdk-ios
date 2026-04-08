@@ -23,6 +23,40 @@ final class PaywallManager {
         self.eventTracker = eventTracker
     }
 
+    /// Present a paywall by placement — selects best match using audience rules.
+    /// Falls back to first paywall with matching placement if no audience rules match.
+    func presentByPlacement(
+        placement: String,
+        from viewController: UIViewController,
+        context: PaywallContext?,
+        delegate: AppDNAPaywallDelegate?
+    ) {
+        let allPaywalls = remoteConfigManager.getAllPaywalls()
+        let userTraits = AppDNA.getUserTraits()
+
+        // Filter by placement, then by audience rules, sort by priority
+        let candidates = allPaywalls.values
+            .filter { $0.placement == placement }
+            .sorted {
+                let p0 = ($0.audience_rules?.value as? [String: Any])?["priority"] as? Int ?? 0
+                let p1 = ($1.audience_rules?.value as? [String: Any])?["priority"] as? Int ?? 0
+                return p0 > p1
+            }
+
+        // Find first that matches audience rules
+        let match = candidates.first { pw in
+            guard pw.audience_rules != nil else { return true } // No rules = matches all
+            return AudienceRuleEvaluator.evaluate(rules: pw.audience_rules, traits: userTraits)
+        }
+
+        guard let config = match else {
+            Log.warning("No paywall found for placement: \(placement)")
+            return
+        }
+
+        present(id: config.id ?? "", from: viewController, context: context, delegate: delegate)
+    }
+
     /// Present a paywall modally. Must be called on main thread.
     func present(
         id: String,

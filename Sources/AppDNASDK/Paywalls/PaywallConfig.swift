@@ -22,6 +22,8 @@ struct PaywallConfig: Codable {
     let particle_effect: ParticleEffect?
     // Post-purchase actions
     let post_purchase: PostPurchaseConfig?
+    // Audience-based targeting
+    let audience_rules: AnyCodable?
 
     enum CodingKeys: String, CodingKey {
         case id, name, layout, _sections = "sections", plans, cta, dismiss, background
@@ -29,6 +31,7 @@ struct PaywallConfig: Codable {
         case animation = "animation_config"
         case localizations, default_locale
         case haptic, particle_effect, post_purchase
+        case audience_rules
     }
 
     /// Sections resolved from top-level or inside layout (non-optional for renderer compat)

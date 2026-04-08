@@ -57,6 +57,21 @@ final class IdentityManager {
         }
     }
 
+    /// Merge additional traits without overwriting existing ones.
+    /// Used for auto-injected geo traits from bootstrap.
+    func mergeTraits(_ newTraits: [String: Any]) {
+        queue.sync {
+            var merged = _traits ?? [:]
+            for (key, value) in newTraits {
+                if merged[key] == nil { // Don't overwrite user-set traits
+                    merged[key] = value
+                }
+            }
+            _traits = merged
+            keychainStore.setUserTraits(merged)
+        }
+    }
+
     /// Clear user identity. Keeps anonymous ID.
     func reset() {
         queue.sync {
