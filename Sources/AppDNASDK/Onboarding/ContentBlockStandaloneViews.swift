@@ -191,11 +191,8 @@ struct AnimatedLoadingBlockView: View {
         let totalMs = block.total_duration_ms ?? itemList.reduce(0) { $0 + ($1.duration_ms ?? 1000) }
 
         VStack(spacing: 16) {
-            if block.show_percentage == true {
-                Text("\(Int(overallProgress * 100))%")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(progressCol)
-            }
+            // Percentage is rendered inside each variant (circular ring center, linear bar, etc.)
+            // to avoid duplicate display. See loadingVariantView for per-variant rendering.
 
             loadingVariantView(variant: variant, itemList: itemList, progressCol: progressCol, checkCol: checkCol)
         }
@@ -359,64 +356,122 @@ struct CircularGaugeBlockView: View {
 
     var body: some View {
         let value = CGFloat(block.gauge_value ?? block.progress_value ?? 0)
+        let minVal = CGFloat(block.min_value ?? 0)
         let maxVal = CGFloat(block.max_value ?? 100)
-        let targetProgress = maxVal > 0 ? min(value / maxVal, 1.0) : 0
-        let size = CGFloat(block.height ?? 120)
-        let strokeW = CGFloat(block.stroke_width ?? 10)
+        let targetProgress = (maxVal - minVal) > 0 ? min((value - minVal) / (maxVal - minVal), 1.0) : 0
+        let size = CGFloat(block.height ?? 200)
+        let strokeW = CGFloat(block.stroke_width ?? 12)
         let fillCol = Color(hex: block.bar_color ?? block.active_color ?? "#6366F1")
         let trackCol = Color(hex: block.track_color ?? "#E5E7EB")
         let labelCol = Color(hex: block.label_color ?? block.text_color ?? "#000000")
-        let labelFontSz = CGFloat(block.label_font_size ?? block.font_size ?? 20)
+        let labelFontSz = CGFloat(block.label_font_size ?? block.font_size ?? 24)
         let shouldAnimate = block.animate ?? true
         let animDuration = Double(block.animation_duration_ms ?? 800) / 1000.0
         let showPct = block.show_percentage ?? false
 
         let variant = block.gauge_variant ?? "arc"
 
-        ZStack {
-            switch variant {
-            case "speedometer":
-                // Semi-circle gauge (180°)
-                Circle()
-                    .trim(from: 0, to: 0.5)
-                    .stroke(trackCol, lineWidth: strokeW)
-                    .rotationEffect(.degrees(180))
-                Circle()
-                    .trim(from: 0, to: animatedProgress * 0.5)
-                    .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
-                    .rotationEffect(.degrees(180))
+        let needleCol = Color(hex: block.border_color ?? block.label_color ?? block.text_color ?? "#1F2937")
+        let minLabel = block.min_label ?? "\(Int(minVal))"
+        let maxLabel = block.max_label ?? "\(Int(maxVal))"
+        let minMaxFontSz = CGFloat(block.min_max_font_size ?? 13)
 
-            case "radial":
-                // Thick donut gauge
-                Circle()
-                    .stroke(trackCol, lineWidth: strokeW * 2.5)
-                Circle()
-                    .trim(from: 0, to: animatedProgress)
-                    .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW * 2.5, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
+        VStack(spacing: 8) {
+            ZStack {
+                switch variant {
+                case "speedometer":
+                    // Thick semi-circle arc (220° sweep for a wider speedometer look)
+                    let sweepAngle: Double = 220
+                    let startAngle: Double = 160 // Start from lower-left
+                    let trimStart: CGFloat = CGFloat(startAngle) / 360.0
+                    let trimEnd: CGFloat = CGFloat(startAngle + sweepAngle) / 360.0
 
-            default: // "arc" — full circle
-                Circle()
-                    .stroke(trackCol, lineWidth: strokeW)
-                Circle()
-                    .trim(from: 0, to: animatedProgress)
-                    .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            }
+                    // Track
+                    Circle()
+                        .trim(from: trimStart, to: trimEnd)
+                        .stroke(trackCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
+                    // Fill
+                    Circle()
+                        .trim(from: trimStart, to: trimStart + (trimEnd - trimStart) * animatedProgress)
+                        .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
+                    // Needle
+                    let needleAngle = startAngle + sweepAngle * Double(animatedProgress)
+                    let needleLen = size / 2 - strokeW * 1.5 - 12
+                    ZStack {
+                        // Needle line
+                        Capsule()
+                            .fill(needleCol)
+                            .frame(width: 3, height: needleLen)
+                            .offset(y: -needleLen / 2)
+                            .rotationEffect(.degrees(needleAngle + 90))
+                        // Center dot
+                        Circle()
+                            .fill(needleCol)
+                            .frame(width: 10, height: 10)
+                    }
 
-            // Center label
-            VStack(spacing: 2) {
-                Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
-                    .font(.system(size: labelFontSz, weight: .bold))
-                    .foregroundColor(labelCol)
-                if let sub = block.sublabel {
-                    Text(sub)
-                        .font(.caption)
-                        .foregroundColor(labelCol.opacity(0.7))
+                    // Center value below needle
+                    VStack(spacing: 2) {
+                        Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
+                            .font(.system(size: labelFontSz, weight: .bold))
+                            .foregroundColor(labelCol)
+                        if let sub = block.sublabel {
+                            Text(sub)
+                                .font(.system(size: min(labelFontSz * 0.5, 13)))
+                                .foregroundColor(labelCol.opacity(0.6))
+                        }
+                    }
+                    .offset(y: size * 0.12)
+
+                case "radial":
+                    Circle()
+                        .stroke(trackCol, lineWidth: strokeW * 2)
+                    Circle()
+                        .trim(from: 0, to: animatedProgress)
+                        .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW * 2, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    VStack(spacing: 2) {
+                        Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
+                            .font(.system(size: labelFontSz, weight: .bold))
+                            .foregroundColor(labelCol)
+                        if let sub = block.sublabel {
+                            Text(sub).font(.caption).foregroundColor(labelCol.opacity(0.7))
+                        }
+                    }
+
+                default: // "arc"
+                    Circle()
+                        .stroke(trackCol, lineWidth: strokeW)
+                    Circle()
+                        .trim(from: 0, to: animatedProgress)
+                        .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    VStack(spacing: 2) {
+                        Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
+                            .font(.system(size: labelFontSz, weight: .bold))
+                            .foregroundColor(labelCol)
+                        if let sub = block.sublabel {
+                            Text(sub).font(.caption).foregroundColor(labelCol.opacity(0.7))
+                        }
+                    }
                 }
             }
+            .frame(width: size, height: variant == "speedometer" ? size * 0.65 : size)
+
+            // Min/Max labels
+            if variant == "speedometer" {
+                HStack {
+                    Text(minLabel)
+                        .font(.system(size: minMaxFontSz, weight: .medium))
+                        .foregroundColor(labelCol.opacity(0.5))
+                    Spacer()
+                    Text(maxLabel)
+                        .font(.system(size: minMaxFontSz, weight: .medium))
+                        .foregroundColor(labelCol.opacity(0.5))
+                }
+                .frame(width: size * 0.75)
+            }
         }
-        .frame(width: size, height: variant == "speedometer" ? size * 0.6 : size)
         .frame(maxWidth: .infinity)
         .onAppear {
             if shouldAnimate {
@@ -428,6 +483,7 @@ struct CircularGaugeBlockView: View {
             }
         }
     }
+
 }
 
 // MARK: - Date Wheel Picker Block View (SPEC-089d AC-023)
@@ -533,46 +589,67 @@ struct DateWheelPickerBlockView: View {
 
                 if showPicker {
                     if components.contains(.date) && components.contains(.hourAndMinute) {
-                        // Date+Time: use graphical for date (shows year) + wheel for time
-                        DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
-                            .datePickerStyle(.graphical)
-                            .labelsHidden()
-                            .accentColor(highlightCol)
-                            .tint(highlightCol)
-                        DatePicker("", selection: $selectedDate, displayedComponents: [.hourAndMinute])
-                            .datePickerStyle(.wheel)
-                            .labelsHidden()
-                            .frame(height: 100)
+                        // DateTime: time wheel first (top), then date graphical below
+                        let spacing = CGFloat(block.picker_spacing ?? 8)
+                        VStack(spacing: spacing) {
+                            DatePicker("", selection: $selectedDate, displayedComponents: [.hourAndMinute])
+                                .datePickerStyle(.wheel)
+                                .labelsHidden()
+                                .frame(height: 100)
+                                .frame(maxWidth: .infinity)
+                            DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
+                                .datePickerStyle(.graphical)
+                                .labelsHidden()
+                                .accentColor(highlightCol)
+                                .tint(highlightCol)
+                                .background(Color(hex: block.calendar_bg_color ?? "#FFFFFF"))
+                                .cornerRadius(12)
+                        }
                     } else if components.contains(.date) {
+                        // Note: iOS .graphical DatePicker cannot be resized — size is system-controlled.
+                        // Use wheel_height and font_size only for .wheel style pickers.
                         DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
                             .datePickerStyle(.graphical)
                             .labelsHidden()
                             .accentColor(highlightCol)
                             .tint(highlightCol)
+                            .background(Color(hex: block.calendar_bg_color ?? "#FFFFFF"))
+                            .cornerRadius(12)
                     } else {
                         DatePicker("", selection: $selectedDate, displayedComponents: components)
                             .datePickerStyle(.wheel)
                             .labelsHidden()
+                            .frame(maxWidth: .infinity)
                     }
                 }
             } else {
                 // Inline mode (default)
                 if components.contains(.date) && components.contains(.hourAndMinute) {
-                    DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
-                        .datePickerStyle(.graphical)
-                        .labelsHidden()
-                        .accentColor(highlightCol)
-                        .tint(highlightCol)
-                    DatePicker("", selection: $selectedDate, displayedComponents: [.hourAndMinute])
-                        .datePickerStyle(.wheel)
-                        .labelsHidden()
-                        .frame(height: 100)
+                    // DateTime: time wheel first (top), then date graphical below
+                    let spacing = CGFloat(block.picker_spacing ?? 8)
+                    VStack(spacing: spacing) {
+                        DatePicker("", selection: $selectedDate, displayedComponents: [.hourAndMinute])
+                            .datePickerStyle(.wheel)
+                            .labelsHidden()
+                            .frame(height: 100)
+                            .frame(maxWidth: .infinity)
+                        DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
+                            .datePickerStyle(.graphical)
+                            .labelsHidden()
+                            .accentColor(highlightCol)
+                            .tint(highlightCol)
+                            .background(Color(hex: block.calendar_bg_color ?? "#FFFFFF"))
+                            .cornerRadius(12)
+                    }
                 } else if components.contains(.date) {
+                    // Note: iOS .graphical DatePicker cannot be resized — size is system-controlled.
                     DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
                         .datePickerStyle(.graphical)
                         .labelsHidden()
                         .accentColor(highlightCol)
                         .tint(highlightCol)
+                        .background(Color(hex: block.calendar_bg_color ?? "#FFFFFF"))
+                        .cornerRadius(12)
                         .frame(maxWidth: .infinity)
                 } else {
                     DatePicker("", selection: $selectedDate, displayedComponents: components)

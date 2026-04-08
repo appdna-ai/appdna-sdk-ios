@@ -702,7 +702,7 @@ struct ContentBlockRendererView: View {
         if style == "outlined" || style == "minimal" { return .clear }
         switch type {
         case "apple": return .black
-        case "google": return .white
+        case "google": return Color(hex: "#4285F4") // Google brand blue
         case "facebook": return Color(hex: "#1877F2")
         case "github": return Color(hex: "#24292E")
         default: return Color(hex: "#6366F1")
@@ -715,7 +715,7 @@ struct ContentBlockRendererView: View {
         }
         switch type {
         case "apple": return .white
-        case "google": return Color(hex: "#3C4043")
+        case "google": return .white // White text on Google brand blue
         case "facebook": return .white
         case "github": return .white
         default: return .white

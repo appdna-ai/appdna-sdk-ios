@@ -262,7 +262,9 @@ struct FormInputSelectBlock: View {
             ?? block.text_color.map { Color(hex: $0) }
             ?? block.style?.color.map { Color(hex: $0) }
             ?? .primary
-        let borderCol: Color = Color(hex: block.field_style?.border_color ?? "").opacity(block.field_style?.border_color != nil ? 1 : 0.2)
+        // border_color applies to BOTH selected and unselected states
+        let configuredBorderCol: Color? = block.field_style?.border_color.map { Color(hex: $0) }
+        let borderCol: Color = configuredBorderCol ?? Color.gray.opacity(0.2)
 
         VStack(spacing: 8) {
             ForEach(options) { option in
@@ -331,7 +333,7 @@ struct FormInputSelectBlock: View {
             ?? block.text_color.map { Color(hex: $0) }
             ?? block.style?.color.map { Color(hex: $0) }
             ?? .primary
-        let borderCol: Color = Color(hex: block.field_style?.border_color ?? "").opacity(block.field_style?.border_color != nil ? 1 : 0.2)
+        let borderCol: Color = block.field_style?.border_color.map { Color(hex: $0) } ?? Color.gray.opacity(0.2)
         let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
 
         LazyVGrid(columns: columns, spacing: 8) {

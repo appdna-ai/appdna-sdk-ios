@@ -881,6 +881,9 @@ public struct ContentBlock: Codable, Identifiable {
     public let stroke_width: Double?
     public let label_color: String?
     public let label_font_size: Double?
+    public let min_label: String?
+    public let max_label: String?
+    public let min_max_font_size: Double?
     public let animate: Bool?
     public let animation_duration_ms: Int?
 
@@ -898,6 +901,8 @@ public struct ContentBlock: Codable, Identifiable {
     public let wheel_orientation: String?        // console saves this instead of orientation
     public let picker_presentation: String?      // "inline" | "field" for date picker
     public let picker_mode: String?              // "date" | "datetime" | "time" for date picker
+    public let picker_spacing: Double?           // spacing between time wheel and date graphical in datetime mode
+    public let calendar_bg_color: String?        // explicit background color for graphical date picker
 
     // SPEC-089d Phase F: stack / row fields (container blocks)
     public let children: [ContentBlock]?
@@ -1010,10 +1015,11 @@ public struct ContentBlock: Codable, Identifiable {
         case loading_variant, loading_items, progress_color, check_color
         case total_duration_ms, auto_advance, show_percentage
         // SPEC-089d Phase F: new block fields
-        case gauge_variant, gauge_value, max_value, sublabel, stroke_width
+        case gauge_variant, gauge_value, max_value, sublabel, stroke_width, min_label, max_label, min_max_font_size
         case label_color, label_font_size, animate, animation_duration_ms
         case columns, default_date_value, min_date, max_date, allow_future, allow_past, date_validation_message
         case highlight_color, haptic_on_scroll, orientation, wheel_orientation, picker_presentation, picker_mode
+        case picker_spacing, calendar_bg_color
         case children, stack_children, z_index, gap, wrap, justify, align_items
         case row_direction, row_distribution, row_child_fill
         case view_key, custom_config, placeholder_image_url, placeholder_text
@@ -1159,6 +1165,9 @@ public struct ContentBlock: Codable, Identifiable {
         self.stroke_width = try c.decodeIfPresent(Double.self, forKey: .stroke_width)
         self.label_color = try c.decodeIfPresent(String.self, forKey: .label_color)
         self.label_font_size = try c.decodeIfPresent(Double.self, forKey: .label_font_size)
+        self.min_label = try c.decodeIfPresent(String.self, forKey: .min_label)
+        self.max_label = try c.decodeIfPresent(String.self, forKey: .max_label)
+        self.min_max_font_size = try c.decodeIfPresent(Double.self, forKey: .min_max_font_size)
         self.animate = try c.decodeIfPresent(Bool.self, forKey: .animate)
         self.animation_duration_ms = try c.decodeIfPresent(Int.self, forKey: .animation_duration_ms)
         self.columns = try c.decodeIfPresent([DateWheelColumnConfig].self, forKey: .columns)
@@ -1173,6 +1182,8 @@ public struct ContentBlock: Codable, Identifiable {
         self.wheel_orientation = try c.decodeIfPresent(String.self, forKey: .wheel_orientation)
         self.picker_presentation = try c.decodeIfPresent(String.self, forKey: .picker_presentation)
         self.picker_mode = try c.decodeIfPresent(String.self, forKey: .picker_mode)
+        self.picker_spacing = try c.decodeIfPresent(Double.self, forKey: .picker_spacing)
+        self.calendar_bg_color = try c.decodeIfPresent(String.self, forKey: .calendar_bg_color)
         self.haptic_on_scroll = try c.decodeIfPresent(Bool.self, forKey: .haptic_on_scroll)
         self.children = try c.decodeIfPresent([ContentBlock].self, forKey: .children)
         self.stack_children = try c.decodeIfPresent([ContentBlock].self, forKey: .stack_children)

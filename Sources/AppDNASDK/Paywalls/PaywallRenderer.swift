@@ -40,6 +40,11 @@ struct PaywallRenderer: View {
         config.sections.first(where: { $0.type == "sticky_footer" })
     }
 
+    // Extract CTA section if present (for bottom pinning outside scroll)
+    private var ctaSection: PaywallSection? {
+        config.sections.first(where: { $0.type == "cta" })
+    }
+
     // SPEC-089d: Toggle state for toggle sections
     @State private var toggleStates: [String: Bool] = [:]
     // SPEC-089d: Promo input state
@@ -52,8 +57,11 @@ struct PaywallRenderer: View {
             ScrollView(showsIndicators: false) {
                 // spacing: 0 — per-section margins handle all spacing
                 VStack(spacing: 0) {
+                    // CTA and sticky_footer are pinned outside scroll via safeAreaInset
                     ForEach(Array(config.sections.enumerated()), id: \.offset) { _, section in
-                        sectionView(for: section)
+                        if section.type != "cta" {
+                            sectionView(for: section)
+                        }
                     }
                 }
                 .padding(config.layout?.padding ?? 20)
@@ -61,8 +69,28 @@ struct PaywallRenderer: View {
             .safeAreaInset(edge: .bottom) {
                 // Bottom-pinned CTA + sticky footer (Apple HIG pattern)
                 VStack(spacing: 0) {
-                    // Top-level CTA button (when no CTA section exists in layout)
-                    if !config.sections.contains(where: { $0.type == "cta" }), let cta = config.cta {
+                    // CTA section from layout — pinned to bottom, outside scroll
+                    if let ctaSec = ctaSection {
+                        let topLevelText = config.cta?.text
+                        let sectionText = ctaSec.data?.ctaText ?? ctaSec.data?.text
+                        let ctaText = topLevelText ?? sectionText
+                        CTAButton(
+                            cta: config.cta,
+                            isPurchasing: isPurchasing,
+                            onTap: handleCTATap,
+                            loc: loc,
+                            sectionStyle: ctaSec.style,
+                            ctaGradient: ctaSec.data?.ctaGradient,
+                            textOverride: ctaText,
+                            restoreText: ctaSec.data?.restoreText,
+                            showRestore: ctaSec.data?.showRestore ?? false,
+                            onRestore: onRestore
+                        )
+                        .ctaAnimation(config.animation?.cta_animation)
+                        .applyContainerStyle(ctaSec.style?.container)
+                        .padding(.bottom, 8)
+                    } else if let cta = config.cta {
+                        // Fallback: top-level CTA button (when no CTA section exists in layout)
                         Button(action: handleCTATap) {
                             if isPurchasing {
                                 ProgressView().tint(.white)
