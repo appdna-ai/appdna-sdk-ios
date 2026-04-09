@@ -255,16 +255,27 @@ struct FormInputSelectBlock: View {
 
     @ViewBuilder
     private func stackedSelectView(options: [InputOption], fieldId: String) -> some View {
-        let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
+        // Accent color — prefer fill_color, fall back to focused_border_color (console uses this), then label_color, then block active_color
+        let accentHex = block.field_style?.fill_color
+            ?? block.field_style?.focused_border_color
+            ?? block.field_style?.label_color
+            ?? block.active_color
+            ?? "#6366F1"
+        let fillCol = Color(hex: accentHex)
         let cornerR = CGFloat(block.field_style?.corner_radius ?? 10)
-        let optionBg: Color = block.field_style?.background_color.map { Color(hex: $0) } ?? Color.white.opacity(0.08)
+        // Selected bg = accent at 15% opacity (like console preview)
+        let selectedBgCol = fillCol.opacity(0.15)
+        // Unselected bg
+        let optionBg: Color = block.field_style?.background_color.map { Color(hex: $0) } ?? Color.white
+        // Text color chain: field_style.text_color → block.text_color → label_color → style.color → primary
         let textCol: Color = block.field_style?.text_color.map { Color(hex: $0) }
             ?? block.text_color.map { Color(hex: $0) }
+            ?? block.field_style?.label_color.map { Color(hex: $0) }
             ?? block.style?.color.map { Color(hex: $0) }
             ?? .primary
-        // border_color applies to BOTH selected and unselected states
+        // Unselected border color — prefer border_color, fall back to a subtle version of accent
         let configuredBorderCol: Color? = block.field_style?.border_color.map { Color(hex: $0) }
-        let borderCol: Color = configuredBorderCol ?? Color.gray.opacity(0.2)
+        let unselectedBorderCol: Color = configuredBorderCol ?? fillCol.opacity(0.3)
 
         VStack(spacing: 8) {
             ForEach(options) { option in
@@ -310,11 +321,11 @@ struct FormInputSelectBlock: View {
                     .padding(12)
                     .background(
                         RoundedRectangle(cornerRadius: cornerR)
-                            .fill(isSelected ? fillCol.opacity(0.15) : optionBg)
+                            .fill(isSelected ? selectedBgCol : optionBg)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerR)
-                            .stroke(isSelected ? fillCol : borderCol, lineWidth: isSelected ? 2 : 1)
+                            .stroke(isSelected ? fillCol : unselectedBorderCol, lineWidth: isSelected ? 2 : 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -326,14 +337,21 @@ struct FormInputSelectBlock: View {
 
     @ViewBuilder
     private func gridSelectView(options: [InputOption], fieldId: String) -> some View {
-        let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
+        let accentHex = block.field_style?.fill_color
+            ?? block.field_style?.focused_border_color
+            ?? block.field_style?.label_color
+            ?? block.active_color
+            ?? "#6366F1"
+        let fillCol = Color(hex: accentHex)
         let cornerR = CGFloat(block.field_style?.corner_radius ?? 10)
-        let optionBg: Color = block.field_style?.background_color.map { Color(hex: $0) } ?? Color.white.opacity(0.08)
+        let selectedBgCol = fillCol.opacity(0.15)
+        let optionBg: Color = block.field_style?.background_color.map { Color(hex: $0) } ?? Color.white
         let textCol: Color = block.field_style?.text_color.map { Color(hex: $0) }
             ?? block.text_color.map { Color(hex: $0) }
+            ?? block.field_style?.label_color.map { Color(hex: $0) }
             ?? block.style?.color.map { Color(hex: $0) }
             ?? .primary
-        let borderCol: Color = block.field_style?.border_color.map { Color(hex: $0) } ?? Color.gray.opacity(0.2)
+        let unselectedBorderCol: Color = block.field_style?.border_color.map { Color(hex: $0) } ?? fillCol.opacity(0.3)
         let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
 
         LazyVGrid(columns: columns, spacing: 8) {
@@ -367,11 +385,11 @@ struct FormInputSelectBlock: View {
                     .padding(10)
                     .background(
                         RoundedRectangle(cornerRadius: cornerR)
-                            .fill(isSelected ? fillCol.opacity(0.15) : optionBg)
+                            .fill(isSelected ? selectedBgCol : optionBg)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerR)
-                            .stroke(isSelected ? fillCol : borderCol, lineWidth: isSelected ? 2 : 1)
+                            .stroke(isSelected ? fillCol : unselectedBorderCol, lineWidth: isSelected ? 2 : 1)
                     )
                 }
                 .buttonStyle(.plain)

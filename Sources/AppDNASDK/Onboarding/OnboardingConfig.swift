@@ -265,6 +265,8 @@ public struct StepConfig: Codable {
     public let default_locale: String?
     // Navigation rules from layout (may have Logic panel conditions)
     public let next_step_rules: [NextStepRule]?
+    // Per-step progress bar color override (overrides flow.settings.progress_color)
+    public let progress_color: String?
 
     private enum CodingKeys: String, CodingKey {
         case title, subtitle, image_url, cta_text, skip_enabled
@@ -274,6 +276,7 @@ public struct StepConfig: Codable {
         case content_blocks, layout_variant, background
         case text_style, element_style, animation
         case localizations, default_locale
+        case progress_color
     }
 
     public init(from decoder: Decoder) throws {
@@ -300,6 +303,7 @@ public struct StepConfig: Codable {
         localizations = try c.decodeIfPresent([String: [String: String]].self, forKey: .localizations)
         default_locale = try c.decodeIfPresent(String.self, forKey: .default_locale)
         next_step_rules = try c.decodeIfPresent([NextStepRule].self, forKey: .next_step_rules)
+        progress_color = try c.decodeIfPresent(String.self, forKey: .progress_color)
     }
 
     // Public memberwise init used by applyOverrides and default construction
@@ -315,7 +319,8 @@ public struct StepConfig: Codable {
         background: BackgroundStyleConfig? = nil, text_style: TextStyleConfig? = nil,
         element_style: ElementStyleConfig? = nil, animation: AnimationConfig? = nil,
         localizations: [String: [String: String]]? = nil, default_locale: String? = nil,
-        next_step_rules: [NextStepRule]? = nil
+        next_step_rules: [NextStepRule]? = nil,
+        progress_color: String? = nil
     ) {
         self.title = title; self.subtitle = subtitle; self.image_url = image_url
         self.cta_text = cta_text; self.skip_enabled = skip_enabled
@@ -328,6 +333,7 @@ public struct StepConfig: Codable {
         self.element_style = element_style; self.animation = animation
         self.localizations = localizations; self.default_locale = default_locale
         self.next_step_rules = next_step_rules
+        self.progress_color = progress_color
     }
 }
 

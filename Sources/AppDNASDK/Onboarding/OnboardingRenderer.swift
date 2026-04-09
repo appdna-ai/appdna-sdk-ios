@@ -121,10 +121,13 @@ struct OnboardingFlowHost: View {
             if let hex = flow.settings.progress_track_color { return Color(hex: hex) }
             return Color.gray.opacity(0.2)
         }()
-        // Per-step progress color override: step.config.element_style.background.color > flow.settings.progress_color
+        // Per-step progress color override: step.config.progress_color > element_style.background.color > flow.settings.progress_color
         let fillColor: Color = {
             if currentIndex < flow.steps.count {
                 let step = flow.steps[currentIndex]
+                if let stepColor = step.config.progress_color, !stepColor.isEmpty {
+                    return Color(hex: stepColor)
+                }
                 if let stepColor = step.config.element_style?.background?.color {
                     return Color(hex: stepColor)
                 }
