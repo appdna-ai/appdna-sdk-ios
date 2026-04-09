@@ -205,7 +205,7 @@ struct SurveyContainerView: View {
             .padding()
             .background(backgroundColor)
             .applyBlurBackdrop(config.appearance?.theme?.blur_backdrop)
-            .accentColor(accentColor)
+            .tint(accentColor)
             .onAppear {
                 computeVisibleQuestions()
                 // Skip intro if no lottie URL

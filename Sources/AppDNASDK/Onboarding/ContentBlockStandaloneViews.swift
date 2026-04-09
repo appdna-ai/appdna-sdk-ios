@@ -1143,7 +1143,6 @@ struct DateWheelPickerBlockView: View {
                 let base = DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: components)
                     .datePickerStyle(.wheel)
                     .labelsHidden()
-                    .accentColor(highlightCol)
                     .tint(highlightCol)
                     .frame(maxWidth: .infinity)
                 if let hex = wheelTextColorHex {
@@ -1155,7 +1154,6 @@ struct DateWheelPickerBlockView: View {
                     DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: components)
                         .datePickerStyle(.compact)
                         .labelsHidden()
-                        .accentColor(highlightCol)
                         .tint(highlightCol)
                         .frame(maxWidth: .infinity)
                 )
@@ -1165,7 +1163,6 @@ struct DateWheelPickerBlockView: View {
                     DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: components)
                         .datePickerStyle(.graphical)
                         .labelsHidden()
-                        .accentColor(highlightCol)
                         .tint(highlightCol)
                 )
             }
@@ -1264,7 +1261,7 @@ struct WheelPickerBlockView: View {
                 }
                 .pickerStyle(.wheel)
                 .frame(maxWidth: .infinity)
-                .accentColor(highlightCol)
+                .tint(highlightCol)
             }
         }
         .onAppear {

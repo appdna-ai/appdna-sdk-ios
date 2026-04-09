@@ -42,23 +42,42 @@ struct FormInputTextBlock: View {
         let placeholder = block.field_placeholder ?? block.text ?? ""
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
+        // Read keyboard appearance from field_config (console option):
+        // "default" (respect device) | "light" | "dark"
+        let keyboardAppearanceRaw = block.field_config?["keyboard_appearance"]?.value as? String
+        let useUIKitField = keyboardAppearanceRaw == "light" || keyboardAppearanceRaw == "dark"
 
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
 
-            TextField(placeholder, text: $text)
-                .keyboardType(keyboardType)
-                .textFieldStyle(.plain)
-                .padding(12)
-                .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
-                .cornerRadius(cornerRadius)
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(borderColor, lineWidth: CGFloat(block.field_style?.border_width ?? 1))
-                )
-                .onChange(of: text) { newValue in
-                    inputValues[fieldId] = newValue
+            Group {
+                if useUIKitField {
+                    // Use UIKit-backed field to get explicit keyboardAppearance control
+                    UIKitTextField(
+                        text: $text,
+                        placeholder: placeholder,
+                        keyboardType: keyboardType,
+                        keyboardAppearance: .from(keyboardAppearanceRaw),
+                        returnKeyType: .done
+                    )
+                    .frame(height: 24)
+                } else {
+                    // Default SwiftUI TextField — unchanged behavior
+                    TextField(placeholder, text: $text)
+                        .keyboardType(keyboardType)
+                        .textFieldStyle(.plain)
                 }
+            }
+            .padding(12)
+            .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
+            .cornerRadius(cornerRadius)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(borderColor, lineWidth: CGFloat(block.field_style?.border_width ?? 1))
+            )
+            .onChange(of: text) { newValue in
+                inputValues[fieldId] = newValue
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear { if text.isEmpty, let saved = inputValues[fieldId] as? String { text = saved } }
@@ -112,17 +131,33 @@ struct FormInputPasswordBlock: View {
         let placeholder = block.field_placeholder ?? "Password"
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
+        let keyboardAppearanceRaw = block.field_config?["keyboard_appearance"]?.value as? String
+        let useUIKitField = keyboardAppearanceRaw == "light" || keyboardAppearanceRaw == "dark"
 
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
 
             HStack {
-                if showPassword {
-                    TextField(placeholder, text: $text)
-                        .textFieldStyle(.plain)
-                } else {
-                    SecureField(placeholder, text: $text)
-                        .textFieldStyle(.plain)
+                Group {
+                    if useUIKitField {
+                        UIKitTextField(
+                            text: $text,
+                            placeholder: placeholder,
+                            keyboardAppearance: .from(keyboardAppearanceRaw),
+                            isSecure: !showPassword,
+                            textContentType: .password,
+                            autocorrection: false,
+                            autocapitalization: .none,
+                            returnKeyType: .done
+                        )
+                        .frame(height: 24)
+                    } else if showPassword {
+                        TextField(placeholder, text: $text)
+                            .textFieldStyle(.plain)
+                    } else {
+                        SecureField(placeholder, text: $text)
+                            .textFieldStyle(.plain)
+                    }
                 }
 
                 Button {
@@ -170,7 +205,7 @@ struct FormInputDateBlock: View {
             )
             .datePickerStyle(.compact)
             .labelsHidden()
-            .accentColor(accentColor)
+            .tint(accentColor)
             .frame(maxWidth: .infinity, alignment: .leading)
             .onChange(of: selectedDate) { newValue in
                 let formatter = ISO8601DateFormatter()
@@ -908,6 +943,15 @@ struct FormInputLocationPlaceholderBlock: View {
         let fieldId = block.field_id ?? block.id
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
+        let borderWidth = CGFloat(block.field_style?.border_width ?? 1)
+        // Same default background as FormInputTextBlock — location must look
+        // like any other iOS text field, not a differently-styled widget.
+        let bgColor = Color(hex: block.field_style?.background_color ?? "#FFFFFF")
+        // Keyboard appearance override — matches text input blocks
+        let keyboardAppearanceRaw = block.field_config?["keyboard_appearance"]?.value as? String
+        let useUIKitField = keyboardAppearanceRaw == "light" || keyboardAppearanceRaw == "dark"
+        // Show prefix location icon? (default true — user can opt out per-block)
+        let showIcon = (block.field_config?["show_prefix_icon"]?.value as? Bool) ?? true
 
         // Inline layout — dropdown is a real VStack child, which grows the
         // location block downward (siblings BELOW get pushed; siblings ABOVE
@@ -917,25 +961,44 @@ struct FormInputLocationPlaceholderBlock: View {
             formFieldLabel(block)
 
             HStack(spacing: 8) {
-                Image(systemName: "location.fill")
-                    .foregroundColor(.secondary)
-                TextField(block.field_placeholder ?? "Search location...", text: $text)
-                    .focused($isFocused)
-                    .font(.subheadline)
-                    .onChange(of: text) { newValue in
-                        // Skip the onChange that fires when we programmatically set
-                        // text from a saved dict — we must NOT overwrite the full
-                        // dict with the raw string. Same when a suggestion is
-                        // selected (we set text before storing the dict).
-                        if isRestoringFromSaved { return }
-                        searchCompleter.search(query: newValue)
-                        showResults = isFocused && !newValue.isEmpty
-                        // Only store the raw string if the user is ACTIVELY typing.
-                        // Once a suggestion is selected, selectResult writes the
-                        // structured dict and this onChange won't fire again until
-                        // the user starts typing over it.
-                        inputValues[fieldId] = newValue
+                if showIcon {
+                    Image(systemName: "location.fill")
+                        .foregroundColor(.secondary)
+                }
+                Group {
+                    if useUIKitField {
+                        UIKitTextField(
+                            text: $text,
+                            placeholder: block.field_placeholder ?? "Search location...",
+                            keyboardAppearance: .from(keyboardAppearanceRaw),
+                            autocorrection: false,
+                            autocapitalization: .words,
+                            returnKeyType: .search,
+                            isFocused: Binding(
+                                get: { isFocused },
+                                set: { isFocused = $0 }
+                            )
+                        )
+                        .frame(height: 24)
+                    } else {
+                        TextField(block.field_placeholder ?? "Search location...", text: $text)
+                            .focused($isFocused)
                     }
+                }
+                .onChange(of: text) { newValue in
+                    // Skip the onChange that fires when we programmatically set
+                    // text from a saved dict — we must NOT overwrite the full
+                    // dict with the raw string. Same when a suggestion is
+                    // selected (we set text before storing the dict).
+                    if isRestoringFromSaved { return }
+                    searchCompleter.search(query: newValue)
+                    showResults = isFocused && !newValue.isEmpty
+                    // Only store the raw string if the user is ACTIVELY typing.
+                    // Once a suggestion is selected, selectResult writes the
+                    // structured dict and this onChange won't fire again until
+                    // the user starts typing over it.
+                    inputValues[fieldId] = newValue
+                }
                 if !text.isEmpty {
                     Button {
                         text = ""
@@ -950,11 +1013,11 @@ struct FormInputLocationPlaceholderBlock: View {
                 }
             }
             .padding(12)
-            .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
+            .background(bgColor)
             .cornerRadius(cornerRadius)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(borderColor, lineWidth: 1)
+                    .stroke(borderColor, lineWidth: borderWidth)
             )
 
             if showResults && !searchCompleter.results.isEmpty {
