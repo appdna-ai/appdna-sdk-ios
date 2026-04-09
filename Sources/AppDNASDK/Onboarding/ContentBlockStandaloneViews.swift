@@ -528,13 +528,14 @@ private struct OrbitingIconView: View {
                 }
                 .frame(width: size * 0.55, height: size * 0.55)
             } else if let icon = item.icon, !icon.isEmpty {
-                // Emoji or SF Symbol
-                if icon.count <= 2 || icon.contains(where: { $0.isLetter == false && $0.isNumber == false }) {
-                    Text(icon).font(.system(size: size * 0.45))
-                } else {
+                // Emoji vs SF Symbol: SF Symbol names are always ASCII
+                // ("heart.fill", "mars", "venus"). Emoji are non-ASCII.
+                if icon.allSatisfy({ $0.isASCII }) {
                     Image(systemName: icon)
                         .font(.system(size: size * 0.45, weight: .semibold))
                         .foregroundColor(.white)
+                } else {
+                    Text(icon).font(.system(size: size * 0.45))
                 }
             }
         }

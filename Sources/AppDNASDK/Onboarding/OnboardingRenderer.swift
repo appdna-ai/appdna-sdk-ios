@@ -930,10 +930,16 @@ struct OnboardingFlowHost: View {
         case "previous_step_in":
             // Match if the previous step ID is one of the listed IDs.
             guard let prevId = previousStepId else { return false }
-            // Console may save as "previous_step_ids" (array) or "value" (comma-separated string)
+            // Console saves as "previous_step_ids" array. AnyCodable decodes JSON arrays
+            // as [Any] under the hood, so we accept both [String] and [Any] casts.
             if let ids = cond["previous_step_ids"] as? [String] {
                 return ids.contains(prevId)
             }
+            if let anyArray = cond["previous_step_ids"] as? [Any] {
+                let ids = anyArray.compactMap { $0 as? String }
+                return ids.contains(prevId)
+            }
+            // Fallback: comma-separated string in "value" (legacy/manual edit)
             if let csv = cond["value"] as? String {
                 let ids = csv.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                 return ids.contains(prevId)
@@ -990,8 +996,9 @@ struct OnboardingFlowHost: View {
             advanceOrComplete()
             return
         }
-        navigationHistory.append(currentIndex)
-        withAnimation { currentIndex = targetIndex }
+        // Route through navigate(to:) so images for the target step are
+        // prefetched before the transition animates.
+        navigate(to: targetIndex)
     }
 
     private func mergeData(_ extraData: [String: Any], forStepId stepId: String) {
