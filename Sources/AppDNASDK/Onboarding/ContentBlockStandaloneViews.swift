@@ -590,7 +590,7 @@ struct DateWheelPickerBlockView: View {
                 if showPicker {
                     if components.contains(.date) && components.contains(.hourAndMinute) {
                         // DateTime: time wheel first (top), then date graphical below
-                        let spacing = CGFloat(block.picker_spacing ?? 8)
+                        let spacing = CGFloat(block.picker_spacing ?? 16)
                         VStack(spacing: spacing) {
                             DatePicker("", selection: $selectedDate, displayedComponents: [.hourAndMinute])
                                 .datePickerStyle(.wheel)
@@ -631,7 +631,6 @@ struct DateWheelPickerBlockView: View {
                         DatePicker("", selection: $selectedDate, displayedComponents: [.hourAndMinute])
                             .datePickerStyle(.wheel)
                             .labelsHidden()
-                            .frame(height: 100)
                             .frame(maxWidth: .infinity)
                         DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
                             .datePickerStyle(.graphical)
