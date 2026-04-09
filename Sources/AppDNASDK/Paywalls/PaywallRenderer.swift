@@ -45,6 +45,27 @@ struct PaywallRenderer: View {
         config.sections.first(where: { $0.type == "cta" })
     }
 
+    /// Sections that should render INSIDE the pinned bottom area, BELOW the
+    /// CTA + restore button. Currently only applies to `legal` sections that
+    /// appear AFTER the cta section in the original `config.sections` array.
+    /// This lets users put "Terms & Conditions" text directly below the
+    /// Restore Purchase button by placing the legal section after the CTA
+    /// in the flow editor, instead of having it float between plans and CTA.
+    private var pinnedFooterLegalSections: [PaywallSection] {
+        guard let ctaIdx = config.sections.firstIndex(where: { $0.type == "cta" }) else {
+            return []
+        }
+        return config.sections.enumerated()
+            .filter { $0.offset > ctaIdx && $0.element.type == "legal" }
+            .map { $0.element }
+    }
+
+    /// IDs of legal sections that have been moved to the pinned footer —
+    /// used to exclude them from the scrollable content so they don't render twice.
+    private var pinnedFooterLegalIds: Set<String> {
+        Set(pinnedFooterLegalSections.map { $0.id ?? "" })
+    }
+
     /// Sections sorted by `style.position.vertical_align` — top bucket first, then middle
     /// (unspecified / center), then bottom. Within each bucket, original array order is preserved.
     /// This makes the console's "Position → Vertical Align" actually move sections within the layout.
@@ -79,7 +100,12 @@ struct PaywallRenderer: View {
                     // Sections are bucket-sorted by position.vertical_align so
                     // "top" renders first, "bottom" renders last within the scroll area.
                     ForEach(Array(orderedSections.enumerated()), id: \.offset) { _, section in
-                        if section.type != "cta" && section.type != "sticky_footer" {
+                        // CTA and sticky_footer are pinned via safeAreaInset.
+                        // Legal sections that come AFTER cta in the original
+                        // section array are pinned INSIDE the bottom inset
+                        // below the CTA, so skip them here too.
+                        let isPinnedLegal = section.type == "legal" && pinnedFooterLegalIds.contains(section.id ?? "")
+                        if section.type != "cta" && section.type != "sticky_footer" && !isPinnedLegal {
                             sectionView(for: section)
                         }
                     }
@@ -130,6 +156,22 @@ struct PaywallRenderer: View {
                         .padding(.horizontal, config.layout?.padding ?? 20)
                         .padding(.bottom, 8)
                         .disabled(isPurchasing || selectedPlanId == nil)
+                    }
+
+                    // Pinned legal sections — rendered INSIDE the bottom inset
+                    // below the CTA + restore button. Activated when a legal
+                    // section appears AFTER the cta section in the original
+                    // sections array. Uses the horizontal padding from layout
+                    // so it matches the CTA's alignment.
+                    if !pinnedFooterLegalSections.isEmpty {
+                        VStack(spacing: 4) {
+                            ForEach(Array(pinnedFooterLegalSections.enumerated()), id: \.offset) { _, legalSec in
+                                legalSectionView(data: legalSec.data, style: legalSec.style)
+                                    .applyContainerStyle(legalSec.style?.container)
+                            }
+                        }
+                        .padding(.horizontal, CGFloat(config.layout?.padding ?? 20))
+                        .padding(.top, 4)
                     }
 
                     // SPEC-089d: Sticky footer pinned to bottom
@@ -1520,17 +1562,28 @@ struct PaywallRenderer: View {
     private func planLayoutView(plans: [PaywallPlan], displayStyle: String, style: SectionStyleConfig?, cardStyle: PlanCardStyle) -> AnyView {
         switch displayStyle {
 
-        // Grid: 2-column grid
+        // Grid: 2-column grid.
+        // Horizontal padding (8pt) on the grid gives scaleEffect room to breathe —
+        // otherwise a selected card with selected_scale > 1.0 renders past the
+        // grid cell width and gets clipped / pushed off-screen on narrow devices.
+        // Cell spacing is kept at the configured cardGap.
         case "grid":
-            let columns = [GridItem(.flexible()), GridItem(.flexible())]
-            return AnyView(LazyVGrid(columns: columns, spacing: cardStyle.cardGap ?? 12) {
-                ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                    PlanCard(plan: plan, isSelected: selectedPlanId == plan.id,
-                             onSelect: { selectPlan(plan.id) }, planIndex: index,
-                             loc: loc, sectionStyle: style, cardStyle: cardStyle)
-                    .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
+            let gap = cardStyle.cardGap ?? 10
+            let columns = [
+                GridItem(.flexible(), spacing: gap),
+                GridItem(.flexible(), spacing: gap),
+            ]
+            return AnyView(
+                LazyVGrid(columns: columns, spacing: gap) {
+                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                        PlanCard(plan: plan, isSelected: selectedPlanId == plan.id,
+                                 onSelect: { selectPlan(plan.id) }, planIndex: index,
+                                 loc: loc, sectionStyle: style, cardStyle: cardStyle)
+                        .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
+                    }
                 }
-            })
+                .padding(.horizontal, 8)
+            )
 
         // Carousel / horizontal_scroll: horizontally scrollable plans
         case "carousel", "horizontal_scroll":
