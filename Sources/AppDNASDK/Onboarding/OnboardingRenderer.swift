@@ -877,6 +877,14 @@ struct OnboardingFlowHost: View {
         return logic == "and" // All passed for "and", none passed for "or"
     }
 
+    /// The step ID the user navigated FROM to reach the current step, or nil
+    /// if there is no previous step (i.e. this is the first step).
+    private var previousStepId: String? {
+        guard let lastIdx = navigationHistory.last,
+              lastIdx >= 0, lastIdx < flow.steps.count else { return nil }
+        return flow.steps[lastIdx].id
+    }
+
     /// Evaluate a single condition dict against step responses.
     private func evaluateCondition(_ cond: [String: Any], responses: [String: Any]) -> Bool {
         guard let type = cond["type"] as? String else { return true }
@@ -913,6 +921,24 @@ struct OnboardingFlowHost: View {
             let actual = responses[field]
             if let str = actual as? String { return str.isEmpty }
             return actual == nil
+        case "previous_step_equals":
+            // Match if the step the user came FROM equals the given step ID.
+            // Used for conditional paywall routing: "if came from 12a → paywall_a".
+            guard let prevId = previousStepId else { return false }
+            let expected = cond["value"] as? String ?? ""
+            return prevId == expected
+        case "previous_step_in":
+            // Match if the previous step ID is one of the listed IDs.
+            guard let prevId = previousStepId else { return false }
+            // Console may save as "previous_step_ids" (array) or "value" (comma-separated string)
+            if let ids = cond["previous_step_ids"] as? [String] {
+                return ids.contains(prevId)
+            }
+            if let csv = cond["value"] as? String {
+                let ids = csv.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                return ids.contains(prevId)
+            }
+            return false
         default:
             return true // Unknown condition type = pass
         }
