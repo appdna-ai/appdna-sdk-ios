@@ -30,6 +30,7 @@ struct LocationFieldView: View {
     @State private var isLoading = false
     @State private var isExpanded = false
     @State private var debounceTask: Task<Void, Never>?
+    @FocusState private var isFocused: Bool
 
     private var selectedLocation: LocationData? {
         if let loc = value as? LocationData { return loc }
@@ -48,86 +49,94 @@ struct LocationFieldView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Search input
-            HStack {
-                Image(systemName: "mappin.circle.fill")
-                    .foregroundColor(.secondary)
-                    .font(.system(size: 14))
+        // Search input — dropdown attached as overlay below so it doesn't
+        // grow the layout when shown (prevents ScrollView reflow).
+        HStack {
+            Image(systemName: "mappin.circle.fill")
+                .foregroundColor(.secondary)
+                .font(.system(size: 14))
 
-                TextField(placeholder, text: $query)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 15))
-                    .onChange(of: query) { newValue in
-                        onQueryChanged(newValue)
-                    }
-
-                if isLoading {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                } else if selectedLocation != nil {
-                    Button(action: clearSelection) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 14))
-                    }
-                    .buttonStyle(.plain)
+            TextField(placeholder, text: $query)
+                .textFieldStyle(.plain)
+                .font(.system(size: 15))
+                .focused($isFocused)
+                .onChange(of: query) { newValue in
+                    onQueryChanged(newValue)
                 }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Color(.systemGray6))
-            .cornerRadius(10)
 
-            // Selected location display
-            if let location = selectedLocation {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                        .font(.system(size: 12))
-                    Text(location.formatted_address)
-                        .font(.system(size: 12))
+            if isLoading {
+                ProgressView()
+                    .scaleEffect(0.7)
+            } else if selectedLocation != nil {
+                Button(action: clearSelection) {
+                    Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.secondary)
-                        .lineLimit(1)
+                        .font(.system(size: 14))
                 }
-                .padding(.horizontal, 4)
+                .buttonStyle(.plain)
             }
-
-            // Suggestions dropdown
-            if isExpanded && !suggestions.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(suggestions, id: \.formatted_address) { suggestion in
-                        Button(action: { selectSuggestion(suggestion) }) {
-                            HStack {
-                                Image(systemName: "mappin")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(suggestion.city.isEmpty ? suggestion.formatted_address : suggestion.city)
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(.primary)
-                                    if !suggestion.city.isEmpty {
-                                        Text(suggestion.formatted_address)
-                                            .font(.system(size: 11))
-                                            .foregroundColor(.secondary)
-                                            .lineLimit(1)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color(.systemGray6))
+        .cornerRadius(10)
+        // Dropdown as overlay attached to the input HStack — doesn't affect layout
+        .overlay(alignment: .topLeading) {
+            if isExpanded && !suggestions.isEmpty && isFocused {
+                GeometryReader { inputGeo in
+                    VStack(spacing: 0) {
+                        ForEach(Array(suggestions.prefix(5).enumerated()), id: \.offset) { idx, suggestion in
+                            Button(action: { selectSuggestion(suggestion) }) {
+                                HStack {
+                                    Image(systemName: "mappin")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(suggestion.city.isEmpty ? suggestion.formatted_address : suggestion.city)
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.primary)
+                                        if !suggestion.city.isEmpty {
+                                            Text(suggestion.formatted_address)
+                                                .font(.system(size: 11))
+                                                .foregroundColor(.secondary)
+                                                .lineLimit(1)
+                                        }
                                     }
+                                    Spacer()
                                 }
-                                Spacer()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .contentShape(Rectangle())
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                        }
-                        .buttonStyle(.plain)
-
-                        if suggestion.formatted_address != suggestions.last?.formatted_address {
-                            Divider().padding(.leading, 36)
+                            .buttonStyle(.plain)
+                            if idx < min(suggestions.count, 5) - 1 {
+                                Divider().padding(.leading, 36)
+                            }
                         }
                     }
+                    .frame(width: inputGeo.size.width)
+                    .background(Color(.systemBackground))
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                    .offset(y: inputGeo.size.height + 4)
                 }
-                .background(Color(.systemBackground))
-                .cornerRadius(10)
-                .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                .zIndex(1000)
+            }
+        }
+        .zIndex(isExpanded ? 10 : 0)
+        .onChange(of: isFocused) { focused in
+            if !focused {
+                // Delay slightly so button taps on dropdown items register first
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    if !isFocused {
+                        isExpanded = false
+                    }
+                }
             }
         }
     }
