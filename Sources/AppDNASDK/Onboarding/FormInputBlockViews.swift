@@ -841,6 +841,15 @@ class LocationSearchCompleter: NSObject, ObservableObject, MKLocalSearchComplete
     }
 }
 
+/// Preference key that measures the label+input VStack height so the dropdown
+/// overlay can be positioned precisely below the input without affecting layout.
+private struct LocationInputHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 /// Location input with autocomplete powered by MKLocalSearchCompleter.
 /// User types to search, selects a result, and the formatted address + coordinates are stored.
 struct FormInputLocationPlaceholderBlock: View {
@@ -849,6 +858,7 @@ struct FormInputLocationPlaceholderBlock: View {
 
     @State private var text: String = ""
     @State private var showResults = false
+    @State private var inputAreaHeight: CGFloat = 80
     @StateObject private var searchCompleter = LocationSearchCompleter()
 
     var body: some View {
@@ -856,9 +866,11 @@ struct FormInputLocationPlaceholderBlock: View {
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
 
-        // Inline layout — dropdown is part of the VStack flow so it pushes other
-        // blocks down instead of overlaying them. ScrollView handles keyboard avoidance
-        // and scroll-to-focus correctly when the dropdown is in the layout tree.
+        // Label + input VStack. The dropdown is attached via .overlay so it does
+        // NOT contribute to the layout height — the Location block stays the same
+        // height whether or not the dropdown is visible. This prevents the
+        // ScrollView from reflowing and pushing Partner's name / siblings around
+        // when the user focuses the location field.
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
 
@@ -895,10 +907,19 @@ struct FormInputLocationPlaceholderBlock: View {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(borderColor, lineWidth: 1)
             )
-
-            // Autocomplete results — inline below the input, capped at 5 items
-            // (no inner ScrollView — that collapses to 0 height inside the outer
-            // form ScrollView). 5 items fit without scrolling.
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Measure the label+input VStack height and store it
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .preference(key: LocationInputHeightKey.self, value: geo.size.height)
+            }
+        )
+        .onPreferenceChange(LocationInputHeightKey.self) { inputAreaHeight = $0 }
+        // Dropdown as overlay — does NOT affect the VStack's layout height.
+        // Positioned absolutely just below the input using the measured height.
+        .overlay(alignment: .topLeading) {
             if showResults && !searchCompleter.results.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     let visible = Array(searchCompleter.results.prefix(5).enumerated())
@@ -939,12 +960,12 @@ struct FormInputLocationPlaceholderBlock: View {
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .stroke(borderColor, lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                .offset(y: inputAreaHeight + 4)
+                .zIndex(1000)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(.easeInOut(duration: 0.2), value: showResults)
+        .zIndex(showResults ? 10 : 0)  // ensure dropdown renders above subsequent siblings
         .onAppear {
             if text.isEmpty {
                 let fieldId = block.field_id ?? block.id
