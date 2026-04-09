@@ -16,6 +16,8 @@ struct CTAButton: View {
     var restoreText: String? = nil
     /// Whether to show restore button
     var showRestore: Bool = false
+    /// Restore button position relative to Subscribe: "above" or "below" (default: "below")
+    var restorePosition: String = "below"
     /// Restore action
     var onRestore: (() -> Void)? = nil
 
@@ -45,8 +47,8 @@ struct CTAButton: View {
         sectionStyle?.elements?["restore_text"]?.textStyle
     }
 
-    var body: some View {
-        VStack(spacing: 8) {
+    @ViewBuilder
+    private var subscribeButton: some View {
         Button(action: onTap) {
             HStack(spacing: 8) {
                 if isPurchasing {
@@ -82,7 +84,10 @@ struct CTAButton: View {
         }
         .disabled(isPurchasing)
         .padding(.horizontal)
+    }
 
+    @ViewBuilder
+    private var restoreButton: some View {
         if showRestore, let text = restoreText, !text.isEmpty {
             Button(action: { onRestore?() }) {
                 if let ts = restoreTextStyle {
@@ -94,6 +99,17 @@ struct CTAButton: View {
                 }
             }
         }
-        } // close VStack
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if restorePosition == "above" {
+                restoreButton
+                subscribeButton
+            } else {
+                subscribeButton
+                restoreButton
+            }
+        }
     }
 }

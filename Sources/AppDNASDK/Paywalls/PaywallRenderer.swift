@@ -45,6 +45,24 @@ struct PaywallRenderer: View {
         config.sections.first(where: { $0.type == "cta" })
     }
 
+    /// Sections sorted by `style.position.vertical_align` — top bucket first, then middle
+    /// (unspecified / center), then bottom. Within each bucket, original array order is preserved.
+    /// This makes the console's "Position → Vertical Align" actually move sections within the layout.
+    private var orderedSections: [PaywallSection] {
+        var topBucket: [PaywallSection] = []
+        var midBucket: [PaywallSection] = []
+        var bottomBucket: [PaywallSection] = []
+        for section in config.sections {
+            let va = section.style?.position?.vertical_align
+            switch va {
+            case "top":    topBucket.append(section)
+            case "bottom": bottomBucket.append(section)
+            default:       midBucket.append(section)
+            }
+        }
+        return topBucket + midBucket + bottomBucket
+    }
+
     // SPEC-089d: Toggle state for toggle sections
     @State private var toggleStates: [String: Bool] = [:]
     // SPEC-089d: Promo input state
@@ -57,9 +75,11 @@ struct PaywallRenderer: View {
             ScrollView(showsIndicators: false) {
                 // spacing: 0 — per-section margins handle all spacing
                 VStack(spacing: 0) {
-                    // CTA and sticky_footer are pinned outside scroll via safeAreaInset
-                    ForEach(Array(config.sections.enumerated()), id: \.offset) { _, section in
-                        if section.type != "cta" {
+                    // CTA and sticky_footer are pinned outside scroll via safeAreaInset.
+                    // Sections are bucket-sorted by position.vertical_align so
+                    // "top" renders first, "bottom" renders last within the scroll area.
+                    ForEach(Array(orderedSections.enumerated()), id: \.offset) { _, section in
+                        if section.type != "cta" && section.type != "sticky_footer" {
                             sectionView(for: section)
                         }
                     }
@@ -84,6 +104,7 @@ struct PaywallRenderer: View {
                             textOverride: ctaText,
                             restoreText: ctaSec.data?.restoreText,
                             showRestore: ctaSec.data?.showRestore ?? false,
+                            restorePosition: ctaSec.data?.restorePosition ?? "below",
                             onRestore: onRestore
                         )
                         .ctaAnimation(config.animation?.cta_animation)
@@ -403,7 +424,8 @@ struct PaywallRenderer: View {
                 ctaGradient: section.data?.ctaGradient,
                 textOverride: ctaText,
                 restoreText: section.data?.restoreText,
-                showRestore: section.data?.showRestore ?? false
+                showRestore: section.data?.showRestore ?? false,
+                restorePosition: section.data?.restorePosition ?? "below"
             )
             .ctaAnimation(config.animation?.cta_animation)
             .applyContainerStyle(section.style?.container))

@@ -327,7 +327,7 @@ struct FormInputSelectBlock: View {
                         Image(systemName: isSelected
                             ? (isMultiSelect ? "checkmark.circle.fill" : "largecircle.fill.circle")
                             : "circle")
-                            .foregroundColor(isSelected ? fillCol : textCol.opacity(0.5))
+                            .foregroundColor(fillCol)
                             .font(.title3)
                     }
                     .padding(12)
@@ -856,90 +856,96 @@ struct FormInputLocationPlaceholderBlock: View {
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
 
-        ZStack(alignment: .topLeading) {
-            VStack(alignment: .leading, spacing: 6) {
-                formFieldLabel(block)
+        // Inline layout — dropdown is part of the VStack flow so it pushes other
+        // blocks down instead of overlaying them. ScrollView handles keyboard avoidance
+        // and scroll-to-focus correctly when the dropdown is in the layout tree.
+        VStack(alignment: .leading, spacing: 6) {
+            formFieldLabel(block)
 
-                HStack(spacing: 8) {
-                    Image(systemName: "location.fill")
-                        .foregroundColor(.secondary)
-                    TextField(block.field_placeholder ?? "Search location...", text: $text, onEditingChanged: { editing in
-                        if !editing {
-                            // Dismiss dropdown when field loses focus
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                showResults = false
-                            }
-                        }
-                    })
-                        .font(.subheadline)
-                        .onChange(of: text) { newValue in
-                            searchCompleter.search(query: newValue)
-                            showResults = !newValue.isEmpty
-                            inputValues[fieldId] = newValue
-                        }
-                    if !text.isEmpty {
-                        Button { text = ""; showResults = false; inputValues[fieldId] = "" } label: {
-                            Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+            HStack(spacing: 8) {
+                Image(systemName: "location.fill")
+                    .foregroundColor(.secondary)
+                TextField(block.field_placeholder ?? "Search location...", text: $text, onEditingChanged: { editing in
+                    if !editing {
+                        // Dismiss dropdown when field loses focus
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            showResults = false
                         }
                     }
-                    if searchCompleter.isSearching {
-                        ProgressView().scaleEffect(0.7)
+                })
+                    .font(.subheadline)
+                    .onChange(of: text) { newValue in
+                        searchCompleter.search(query: newValue)
+                        showResults = !newValue.isEmpty
+                        inputValues[fieldId] = newValue
+                    }
+                if !text.isEmpty {
+                    Button { text = ""; showResults = false; inputValues[fieldId] = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
                     }
                 }
-                .padding(12)
-                .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
-                .cornerRadius(cornerRadius)
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(borderColor, lineWidth: 1)
-                )
+                if searchCompleter.isSearching {
+                    ProgressView().scaleEffect(0.7)
+                }
             }
+            .padding(12)
+            .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
+            .cornerRadius(cornerRadius)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(borderColor, lineWidth: 1)
+            )
 
-            // Autocomplete results dropdown — overlays below the input
+            // Autocomplete results — inline below the input, not an overlay.
+            // Capped at ~220pt with internal scrolling for many results.
             if showResults && !searchCompleter.results.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(searchCompleter.results.prefix(5), id: \.self) { result in
-                        Button {
-                            selectResult(result, fieldId: fieldId)
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "mappin")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(result.title)
-                                        .font(.subheadline)
-                                        .foregroundColor(.primary)
-                                    if !result.subtitle.isEmpty {
-                                        Text(result.subtitle)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(searchCompleter.results.prefix(5).enumerated()), id: \.offset) { idx, result in
+                            Button {
+                                selectResult(result, fieldId: fieldId)
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "mappin")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(result.title)
+                                            .font(.subheadline)
+                                            .foregroundColor(.primary)
+                                        if !result.subtitle.isEmpty {
+                                            Text(result.subtitle)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
                                     }
+                                    Spacer()
                                 }
-                                Spacer()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .contentShape(Rectangle())
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
+                            if idx < min(searchCompleter.results.count, 5) - 1 {
+                                Divider()
+                            }
                         }
-                        .buttonStyle(.plain)
-                        Divider()
                     }
                 }
+                .frame(maxHeight: 220)
                 .background(Color(.systemBackground))
                 .cornerRadius(cornerRadius)
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .stroke(borderColor, lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
-                .padding(.top, 70) // Offset below the input field
-                .zIndex(100)
+                .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .zIndex(showResults ? 10 : 0) // Ensure dropdown overlays sibling blocks
+        .animation(.easeInOut(duration: 0.2), value: showResults)
         .onAppear {
             if text.isEmpty {
                 let fieldId = block.field_id ?? block.id

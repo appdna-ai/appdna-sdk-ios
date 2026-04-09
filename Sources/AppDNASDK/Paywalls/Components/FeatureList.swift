@@ -11,7 +11,9 @@ struct FeatureList: View {
     var sectionStyle: SectionStyleConfig? = nil
 
     private var itemTextStyle: TextStyleConfig? {
-        sectionStyle?.elements?["item"]?.textStyle
+        // Console saves under "item_text" key; fall back to legacy "item" key for older configs
+        sectionStyle?.elements?["item_text"]?.textStyle
+            ?? sectionStyle?.elements?["item"]?.textStyle
     }
     private var iconColor: Color? {
         if let hex = sectionStyle?.elements?["icon"]?.textStyle?.color {

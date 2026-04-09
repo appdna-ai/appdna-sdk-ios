@@ -103,6 +103,7 @@ struct PaywallSectionData: Codable {
     let text: String?
     let restoreText: String?        // CTA section: restore purchase text
     let showRestore: Bool?          // CTA section: show restore button
+    let restorePosition: String?    // CTA section: "above" | "below" (default: "below")
 
     // Guarantee
     let guaranteeText: String?
@@ -272,6 +273,7 @@ struct PaywallSectionData: Codable {
         case title, subtitle, features, plans, cta, rating, testimonial, text, quote, height
         case restoreText = "restore_text"
         case showRestore = "show_restore"
+        case restorePosition = "restore_position"
         case title_style, subtitle_style
         case imageUrl = "image_url"
         case reviewCount = "review_count"

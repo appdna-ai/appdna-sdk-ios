@@ -92,11 +92,20 @@ public struct SpacingMargin: Codable {
     public let trailing: Double?
 }
 
+/// Per-section position: vertical_align/horizontal_align/offsets.
+public struct SectionPositionConfig: Codable {
+    public let vertical_align: String?    // "top" | "center" | "bottom"
+    public let horizontal_align: String?  // "left" | "center" | "right"
+    public let vertical_offset: Double?
+    public let horizontal_offset: Double?
+}
+
 /// Section-level style (container + per-element overrides + margin).
 public struct SectionStyleConfig: Codable {
     public let container: ElementStyleConfig?
     public let elements: [String: ElementStyleConfig]?
     public let margin: SpacingMargin?
+    public let position: SectionPositionConfig?
 }
 
 /// Animation configuration.
