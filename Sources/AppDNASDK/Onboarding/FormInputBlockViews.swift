@@ -896,44 +896,43 @@ struct FormInputLocationPlaceholderBlock: View {
                     .stroke(borderColor, lineWidth: 1)
             )
 
-            // Autocomplete results — inline below the input, not an overlay.
-            // Capped at ~220pt with internal scrolling for many results.
+            // Autocomplete results — inline below the input, capped at 5 items
+            // (no inner ScrollView — that collapses to 0 height inside the outer
+            // form ScrollView). 5 items fit without scrolling.
             if showResults && !searchCompleter.results.isEmpty {
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(searchCompleter.results.prefix(5).enumerated()), id: \.offset) { idx, result in
-                            Button {
-                                selectResult(result, fieldId: fieldId)
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "mappin")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(result.title)
-                                            .font(.subheadline)
-                                            .foregroundColor(.primary)
-                                        if !result.subtitle.isEmpty {
-                                            Text(result.subtitle)
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
+                VStack(alignment: .leading, spacing: 0) {
+                    let visible = Array(searchCompleter.results.prefix(5).enumerated())
+                    ForEach(visible, id: \.offset) { idx, result in
+                        Button {
+                            selectResult(result, fieldId: fieldId)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "mappin")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(result.title)
+                                        .font(.subheadline)
+                                        .foregroundColor(.primary)
+                                    if !result.subtitle.isEmpty {
+                                        Text(result.subtitle)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
                                     }
-                                    Spacer()
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .contentShape(Rectangle())
+                                Spacer()
                             }
-                            .buttonStyle(.plain)
-                            if idx < min(searchCompleter.results.count, 5) - 1 {
-                                Divider()
-                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if idx < visible.count - 1 {
+                            Divider()
                         }
                     }
                 }
-                .frame(maxHeight: 220)
                 .background(Color(.systemBackground))
                 .cornerRadius(cornerRadius)
                 .overlay(

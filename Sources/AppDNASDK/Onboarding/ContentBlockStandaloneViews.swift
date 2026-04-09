@@ -359,6 +359,8 @@ private struct SpeedometerArcShape: Shape {
     let sweepDegrees: Double
     /// Radius of the arc.
     let radius: CGFloat
+    /// Absolute Y position of the arc's center within the parent frame.
+    let centerY: CGFloat
 
     var animatableData: CGFloat {
         get { progress }
@@ -367,14 +369,10 @@ private struct SpeedometerArcShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        // Center: horizontally centered, vertically positioned so the arc fits fully
-        // with the stroke not clipping at the top edge.
-        let center = CGPoint(x: rect.midX, y: radius + rect.minY)
-        // Symmetric around 12 o'clock (top). Start = 270° - half sweep, End = 270° + half sweep
-        // (SwiftUI Path.addArc uses standard math angles: 0° = east, CCW positive, but since
-        // y is flipped visually, the rendering appears clockwise on screen.)
+        let center = CGPoint(x: rect.midX, y: centerY)
+        // Symmetric around 12 o'clock (top). In SwiftUI (y-down), 270° points north.
+        // Start angle = 270 - halfSweep, sweeping visually CW (clockwise=false in math sense).
         let halfSweep = sweepDegrees / 2.0
-        // 12 o'clock in SwiftUI (y-down) coordinate system with Path.addArc is -90° or 270°.
         let startAngle = Angle.degrees(270 - halfSweep)
         let endAngle = Angle.degrees(270 - halfSweep + sweepDegrees * Double(progress))
         if progress > 0 {
@@ -401,10 +399,12 @@ struct CircularGaugeBlockView: View {
         let minVal = CGFloat(block.min_value ?? 0)
         let maxVal = CGFloat(block.max_value ?? 100)
         let targetProgress = (maxVal - minVal) > 0 ? min((value - minVal) / (maxVal - minVal), 1.0) : 0
-        // Speedometer defaults to 280 for more visual presence; arc/radial default 200
+        // Speedometer defaults to 280 (min 240 enforced); arc/radial default 200
         let variant = block.gauge_variant ?? "arc"
         let defaultSize: Double = variant == "speedometer" ? 280 : 200
-        let size = CGFloat(block.height ?? defaultSize)
+        let rawSize = CGFloat(block.height ?? defaultSize)
+        // Enforce minimum size for speedometer to prevent tiny gauges
+        let size = variant == "speedometer" ? max(rawSize, 240) : rawSize
         let strokeW = CGFloat(block.stroke_width ?? 14)
         let fillCol = Color(hex: block.bar_color ?? block.active_color ?? "#6366F1")
         let trackCol = Color(hex: block.track_color ?? "#E5E7EB")
@@ -424,17 +424,9 @@ struct CircularGaugeBlockView: View {
         let minMaxFontSz = CGFloat(block.min_max_font_size ?? 13)
         let minMaxCol = Color(hex: block.min_max_color ?? block.label_color ?? "#000000")
 
-        // Speedometer geometry — 220° sweep, symmetric around top (12 o'clock)
+        // Speedometer sweep — 220° symmetric around top (12 o'clock)
         let speedoSweep: Double = 220
         let radius: CGFloat = size / 2 - strokeW / 2
-        // Arc endpoints (lower-left, lower-right) at angle ±110° from 12 o'clock.
-        // In screen coords: x = radius*sin(angle), y = -radius*cos(angle) (y flipped)
-        let endpointAngleRad: Double = (speedoSweep / 2.0) * .pi / 180.0
-        let endpointDX = CGFloat(sin(endpointAngleRad)) * radius
-        let endpointDY = -CGFloat(cos(endpointAngleRad)) * radius  // negative because y grows down
-        // Total height needed: top of arc (y = -radius) → bottom of arc endpoints (y = endpointDY)
-        // Plus stroke width (strokeW) and label height (minMaxFontSz * 1.5)
-        let speedoFrameHeight = radius - endpointDY + strokeW + minMaxFontSz * 1.5 + 8
 
         VStack(spacing: 4) {
             if showPct && pctLocation == "above" {
@@ -444,17 +436,27 @@ struct CircularGaugeBlockView: View {
             }
 
             if variant == "speedometer" {
-                // Speedometer uses explicit frame + Path-based rendering for pixel-perfect layout.
-                ZStack {
-                    // Track (full arc, background)
-                    SpeedometerArcShape(progress: 1.0, sweepDegrees: speedoSweep, radius: radius)
+                // Speedometer — explicit frame + Path-based rendering + .position() for pixel-perfect layout.
+                // Arc visual center: x = size/2, y = radius + strokeW/2 (so top stroke stops at y=0, not clipped)
+                let centerX = size / 2
+                let centerY = radius + strokeW / 2
+                // Arc endpoint coordinates (lower-left and lower-right), relative to arc center
+                let endpointAngleRad: Double = (speedoSweep / 2.0) * .pi / 180.0
+                let endpointOffsetX = CGFloat(sin(endpointAngleRad)) * radius      // ≈ 0.94 * radius
+                let endpointOffsetY = CGFloat(abs(cos(endpointAngleRad))) * radius // ≈ 0.34 * radius (below center)
+                // Frame height: from y=0 (top of stroke) to below endpoint labels
+                let frameHeight = centerY + endpointOffsetY + strokeW / 2 + minMaxFontSz * 1.8 + 24
+
+                ZStack(alignment: .topLeading) {
+                    // Track (full arc)
+                    SpeedometerArcShape(progress: 1.0, sweepDegrees: speedoSweep, radius: radius, centerY: centerY)
                         .stroke(trackCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
                     // Fill (animated)
-                    SpeedometerArcShape(progress: animatedProgress, sweepDegrees: speedoSweep, radius: radius)
+                    SpeedometerArcShape(progress: animatedProgress, sweepDegrees: speedoSweep, radius: radius, centerY: centerY)
                         .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
 
-                    // Needle — rotated around center (size/2, radius from top edge)
-                    let needleLen = radius - strokeW / 2 - 10
+                    // Needle — rotated around its own hub center, then positioned at arc center
+                    let needleLen = radius - strokeW / 2 - 12
                     let needleAngleFromUp = -speedoSweep / 2.0 + speedoSweep * Double(animatedProgress)
                     ZStack {
                         Capsule()
@@ -466,36 +468,47 @@ struct CircularGaugeBlockView: View {
                             .fill(needleCol)
                             .frame(width: max(12, needleW * 3.5), height: max(12, needleW * 3.5))
                     }
-                    // Position needle's origin at the arc's center (size/2, radius)
-                    .offset(x: 0, y: radius - speedoFrameHeight / 2)
+                    .position(x: centerX, y: centerY)
 
-                    // Center value label — positioned inside the "bowl" of the speedometer
+                    // Min/Max labels — positioned just below the arc endpoints
+                    Text(minLabel)
+                        .font(.system(size: minMaxFontSz, weight: .medium))
+                        .foregroundColor(minMaxCol)
+                        .fixedSize()
+                        .position(
+                            x: centerX - endpointOffsetX,
+                            y: centerY + endpointOffsetY + strokeW / 2 + minMaxFontSz
+                        )
+                    Text(maxLabel)
+                        .font(.system(size: minMaxFontSz, weight: .medium))
+                        .foregroundColor(minMaxCol)
+                        .fixedSize()
+                        .position(
+                            x: centerX + endpointOffsetX,
+                            y: centerY + endpointOffsetY + strokeW / 2 + minMaxFontSz
+                        )
+
+                    // Center value label — positioned inside the "bowl" (below arc center line)
                     if pctLocation == "center" {
                         VStack(spacing: 2) {
-                            Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
+                            Text(
+                                showPct
+                                    ? "\(Int(animatedProgress * 100))%"
+                                    : ((block.text?.isEmpty == false) ? block.text! : "\(Int(value))")
+                            )
                                 .font(.system(size: labelFontSz, weight: .bold))
                                 .foregroundColor(labelCol)
-                            if let sub = block.sublabel {
+                            if let sub = block.sublabel, !sub.isEmpty {
                                 Text(sub)
                                     .font(.system(size: min(labelFontSz * 0.5, 13)))
                                     .foregroundColor(labelCol.opacity(0.6))
                             }
                         }
-                        // Position below the arc's horizontal centerline
-                        .offset(x: 0, y: radius * 0.55 - speedoFrameHeight / 2 + radius)
+                        .fixedSize()
+                        .position(x: centerX, y: centerY + radius * 0.5)
                     }
-
-                    // Min/Max labels — positioned at the visual arc endpoints
-                    Text(minLabel)
-                        .font(.system(size: minMaxFontSz, weight: .medium))
-                        .foregroundColor(minMaxCol)
-                        .offset(x: -endpointDX, y: radius + endpointDY - speedoFrameHeight / 2 + minMaxFontSz * 0.8)
-                    Text(maxLabel)
-                        .font(.system(size: minMaxFontSz, weight: .medium))
-                        .foregroundColor(minMaxCol)
-                        .offset(x: endpointDX, y: radius + endpointDY - speedoFrameHeight / 2 + minMaxFontSz * 0.8)
                 }
-                .frame(width: size, height: speedoFrameHeight)
+                .frame(width: size, height: frameHeight)
             } else {
                 // Arc / radial variants use a regular square ZStack with Circle+trim
                 ZStack {

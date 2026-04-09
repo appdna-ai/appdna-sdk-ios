@@ -46,6 +46,15 @@ struct ThreeZoneStepLayout: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // Tap the scrollable background to dismiss the keyboard —
+                    // hides location autocomplete and other focused inputs.
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    }
                 }
                 .scrollDismissesKeyboardCompat()
             }
