@@ -1562,27 +1562,29 @@ struct PaywallRenderer: View {
     private func planLayoutView(plans: [PaywallPlan], displayStyle: String, style: SectionStyleConfig?, cardStyle: PlanCardStyle) -> AnyView {
         switch displayStyle {
 
-        // Grid: 2-column grid.
-        // Horizontal padding (8pt) on the grid gives scaleEffect room to breathe —
-        // otherwise a selected card with selected_scale > 1.0 renders past the
-        // grid cell width and gets clipped / pushed off-screen on narrow devices.
-        // Cell spacing is kept at the configured cardGap.
+        // Grid: side-by-side plans using HStack with equal flex widths.
+        //
+        // Why not LazyVGrid? LazyVGrid with GridItem(.flexible()) has layout
+        // ambiguity when combined with content overlays (badges, shadows) that
+        // can cause selected cards to overflow their cell bounds on narrow
+        // devices. HStack with `.frame(maxWidth: .infinity)` on each card is
+        // simpler, predictable, and guarantees a clean 50/50 split.
+        //
+        // For 3+ plans, they all render in a single row which may look cramped.
+        // Users with 3+ plans should use `vertical_stack` or `horizontal_scroll`
+        // instead of `grid`.
         case "grid":
             let gap = cardStyle.cardGap ?? 10
-            let columns = [
-                GridItem(.flexible(), spacing: gap),
-                GridItem(.flexible(), spacing: gap),
-            ]
             return AnyView(
-                LazyVGrid(columns: columns, spacing: gap) {
+                HStack(alignment: .top, spacing: gap) {
                     ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
                         PlanCard(plan: plan, isSelected: selectedPlanId == plan.id,
                                  onSelect: { selectPlan(plan.id) }, planIndex: index,
                                  loc: loc, sectionStyle: style, cardStyle: cardStyle)
                         .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
+                        .frame(maxWidth: .infinity)
                     }
                 }
-                .padding(.horizontal, 8)
             )
 
         // Carousel / horizontal_scroll: horizontally scrollable plans

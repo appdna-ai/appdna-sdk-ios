@@ -208,13 +208,10 @@ struct PlanCard: View {
         .contentShape(Rectangle())
         .buttonStyle(.plain)
         .padding(.top, plan.badge != nil && badgePositionValue != "inline" ? 8 : 0) // room for overflowing badge
-        // scaleEffect is INTENTIONALLY disabled here: when a card is scaled
-        // beyond 1.0 inside a narrow LazyVGrid cell, it visually overflows
-        // its layout bounds and gets clipped / pushed off-screen. Selection
-        // emphasis comes from border width (2pt selected vs 1pt unselected)
-        // and selected_bg_color instead. If users really want scale, they
-        // should use a single-column vertical_stack layout.
-        .scaleEffect(1.0)
+        // scaleEffect removed — it created a compositing layer that allowed
+        // content to visually overflow cell bounds in grid layouts. Selection
+        // emphasis comes from border width (2pt selected vs 1pt unselected),
+        // selected_bg_color and selected_text_color.
         .animation(.easeInOut(duration: 0.2), value: isSelected)
     }
 
