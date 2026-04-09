@@ -841,15 +841,6 @@ class LocationSearchCompleter: NSObject, ObservableObject, MKLocalSearchComplete
     }
 }
 
-/// Preference key that measures the label+input VStack height so the dropdown
-/// overlay can be positioned precisely below the input without affecting layout.
-private struct LocationInputHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 /// Location input with autocomplete powered by MKLocalSearchCompleter.
 /// User types to search, selects a result, and the formatted address + coordinates are stored.
 struct FormInputLocationPlaceholderBlock: View {
@@ -858,7 +849,7 @@ struct FormInputLocationPlaceholderBlock: View {
 
     @State private var text: String = ""
     @State private var showResults = false
-    @State private var inputAreaHeight: CGFloat = 80
+    @FocusState private var isFocused: Bool
     @StateObject private var searchCompleter = LocationSearchCompleter()
 
     var body: some View {
@@ -866,29 +857,23 @@ struct FormInputLocationPlaceholderBlock: View {
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
 
-        // Label + input VStack. The dropdown is attached via .overlay so it does
-        // NOT contribute to the layout height — the Location block stays the same
-        // height whether or not the dropdown is visible. This prevents the
-        // ScrollView from reflowing and pushing Partner's name / siblings around
-        // when the user focuses the location field.
+        // Label + input VStack. The dropdown is attached as an .overlay DIRECTLY
+        // on the input HStack (not the outer VStack) so GeometryReader inside the
+        // overlay reads the input's frame immediately — no PreferenceKey timing
+        // issues. The VStack's layout height stays fixed regardless of dropdown
+        // state, preventing ScrollView reflow and keyboard-avoidance repositioning.
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
 
             HStack(spacing: 8) {
                 Image(systemName: "location.fill")
                     .foregroundColor(.secondary)
-                TextField(block.field_placeholder ?? "Search location...", text: $text, onEditingChanged: { editing in
-                    if !editing {
-                        // Dismiss dropdown when field loses focus
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                            showResults = false
-                        }
-                    }
-                })
+                TextField(block.field_placeholder ?? "Search location...", text: $text)
+                    .focused($isFocused)
                     .font(.subheadline)
                     .onChange(of: text) { newValue in
                         searchCompleter.search(query: newValue)
-                        showResults = !newValue.isEmpty
+                        showResults = isFocused && !newValue.isEmpty
                         inputValues[fieldId] = newValue
                     }
                 if !text.isEmpty {
@@ -907,65 +892,68 @@ struct FormInputLocationPlaceholderBlock: View {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(borderColor, lineWidth: 1)
             )
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // Measure the label+input VStack height and store it
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .preference(key: LocationInputHeightKey.self, value: geo.size.height)
-            }
-        )
-        .onPreferenceChange(LocationInputHeightKey.self) { inputAreaHeight = $0 }
-        // Dropdown as overlay — does NOT affect the VStack's layout height.
-        // Positioned absolutely just below the input using the measured height.
-        .overlay(alignment: .topLeading) {
-            if showResults && !searchCompleter.results.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    let visible = Array(searchCompleter.results.prefix(5).enumerated())
-                    ForEach(visible, id: \.offset) { idx, result in
-                        Button {
-                            selectResult(result, fieldId: fieldId)
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "mappin")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(result.title)
-                                        .font(.subheadline)
-                                        .foregroundColor(.primary)
-                                    if !result.subtitle.isEmpty {
-                                        Text(result.subtitle)
+            // Dropdown overlay — attached to the input HStack so GeometryReader
+            // reads the input's own frame. Offset by height + 4 to position below.
+            // Overlay does NOT contribute to the input's layout size, so the
+            // outer VStack stays at a fixed height.
+            .overlay(alignment: .topLeading) {
+                if showResults && !searchCompleter.results.isEmpty {
+                    GeometryReader { inputGeo in
+                        VStack(alignment: .leading, spacing: 0) {
+                            let visible = Array(searchCompleter.results.prefix(5).enumerated())
+                            ForEach(visible, id: \.offset) { idx, result in
+                                Button {
+                                    selectResult(result, fieldId: fieldId)
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "mappin")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(result.title)
+                                                .font(.subheadline)
+                                                .foregroundColor(.primary)
+                                            if !result.subtitle.isEmpty {
+                                                Text(result.subtitle)
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                        Spacer()
                                     }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .contentShape(Rectangle())
                                 }
-                                Spacer()
+                                .buttonStyle(.plain)
+                                if idx < visible.count - 1 {
+                                    Divider()
+                                }
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
-                        if idx < visible.count - 1 {
-                            Divider()
-                        }
+                        .frame(width: inputGeo.size.width)
+                        .background(Color(.systemBackground))
+                        .cornerRadius(cornerRadius)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .stroke(borderColor, lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                        .offset(y: inputGeo.size.height + 4)
                     }
+                    .zIndex(1000)
                 }
-                .background(Color(.systemBackground))
-                .cornerRadius(cornerRadius)
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(borderColor, lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-                .offset(y: inputAreaHeight + 4)
-                .zIndex(1000)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .zIndex(showResults ? 10 : 0)  // ensure dropdown renders above subsequent siblings
+        .onChange(of: isFocused) { focused in
+            // Hide dropdown immediately when focus is lost (tap outside, Return, etc.)
+            if !focused {
+                showResults = false
+            }
+        }
         .onAppear {
             if text.isEmpty {
                 let fieldId = block.field_id ?? block.id
