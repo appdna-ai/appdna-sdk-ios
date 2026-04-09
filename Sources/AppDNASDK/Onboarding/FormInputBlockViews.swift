@@ -857,11 +857,10 @@ struct FormInputLocationPlaceholderBlock: View {
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
 
-        // Label + input VStack. The dropdown is attached as an .overlay DIRECTLY
-        // on the input HStack (not the outer VStack) so GeometryReader inside the
-        // overlay reads the input's frame immediately — no PreferenceKey timing
-        // issues. The VStack's layout height stays fixed regardless of dropdown
-        // state, preventing ScrollView reflow and keyboard-avoidance repositioning.
+        // Inline layout — dropdown is a real VStack child, which grows the
+        // location block downward (siblings BELOW get pushed; siblings ABOVE
+        // stay). The parent ScrollView has .ignoresSafeArea(.keyboard) to
+        // prevent keyboard auto-scroll from repositioning above siblings.
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
 
@@ -873,7 +872,7 @@ struct FormInputLocationPlaceholderBlock: View {
                     .font(.subheadline)
                     .onChange(of: text) { newValue in
                         searchCompleter.search(query: newValue)
-                        showResults = isFocused && !newValue.isEmpty
+                        showResults = !newValue.isEmpty
                         inputValues[fieldId] = newValue
                     }
                 if !text.isEmpty {
@@ -892,71 +891,53 @@ struct FormInputLocationPlaceholderBlock: View {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(borderColor, lineWidth: 1)
             )
-            // Dropdown overlay — uses .position() instead of .offset() so hit
-            // testing works on the extended content. Fixed-height container
-            // (300pt) wraps the dropdown items for consistent hit testing.
-            .overlay(alignment: .topLeading) {
-                if showResults && !searchCompleter.results.isEmpty {
-                    GeometryReader { inputGeo in
-                        // Fixed dropdown slot height — 60pt per item, 5 items = 300pt
-                        let slotHeight: CGFloat = 300
-                        VStack(alignment: .leading, spacing: 0) {
-                            let visible = Array(searchCompleter.results.prefix(5).enumerated())
-                            ForEach(visible, id: \.offset) { idx, result in
-                                Button {
-                                    selectResult(result, fieldId: fieldId)
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: "mappin")
+
+            if showResults && !searchCompleter.results.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    let visible = Array(searchCompleter.results.prefix(5).enumerated())
+                    ForEach(visible, id: \.offset) { idx, result in
+                        Button {
+                            selectResult(result, fieldId: fieldId)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "mappin")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(result.title)
+                                        .font(.subheadline)
+                                        .foregroundColor(.primary)
+                                    if !result.subtitle.isEmpty {
+                                        Text(result.subtitle)
                                             .font(.caption)
                                             .foregroundColor(.secondary)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(result.title)
-                                                .font(.subheadline)
-                                                .foregroundColor(.primary)
-                                            if !result.subtitle.isEmpty {
-                                                Text(result.subtitle)
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                        }
-                                        Spacer()
                                     }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 10)
-                                    .contentShape(Rectangle())
                                 }
-                                .buttonStyle(.plain)
-                                if idx < visible.count - 1 {
-                                    Divider()
-                                }
+                                Spacer()
                             }
-                            Spacer(minLength: 0)  // fill remaining slot height
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
                         }
-                        .frame(width: inputGeo.size.width, height: slotHeight, alignment: .top)
-                        .background(Color(.systemBackground))
-                        .cornerRadius(cornerRadius)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: cornerRadius)
-                                .stroke(borderColor, lineWidth: 1)
-                        )
-                        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-                        // .position places the view's CENTER at the given point
-                        // AND updates hit-testing to that location (unlike .offset)
-                        .position(
-                            x: inputGeo.size.width / 2,
-                            y: inputGeo.size.height + 4 + slotHeight / 2
-                        )
+                        .buttonStyle(.plain)
+                        if idx < visible.count - 1 {
+                            Divider()
+                        }
                     }
-                    .zIndex(1000)
                 }
+                .background(Color(.systemBackground))
+                .cornerRadius(cornerRadius)
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(borderColor, lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .zIndex(showResults ? 10 : 0)  // ensure dropdown renders above subsequent siblings
         .onChange(of: isFocused) { focused in
-            // Hide dropdown immediately when focus is lost (tap outside, Return, etc.)
+            // Hide dropdown immediately when focus is lost (tap outside)
             if !focused {
                 showResults = false
             }

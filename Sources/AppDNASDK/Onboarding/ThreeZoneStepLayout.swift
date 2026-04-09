@@ -57,6 +57,10 @@ struct ThreeZoneStepLayout: View {
                     }
                 }
                 .scrollDismissesKeyboardCompat()
+                // Prevent keyboard auto-scroll from repositioning siblings above
+                // the focused field — critical for location block's inline
+                // dropdown so Partner's name / other fields don't get pushed up.
+                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
         .safeAreaInset(edge: .bottom) {

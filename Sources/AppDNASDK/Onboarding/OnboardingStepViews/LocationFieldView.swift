@@ -49,92 +49,81 @@ struct LocationFieldView: View {
     }
 
     var body: some View {
-        // Search input — dropdown attached as overlay below so it doesn't
-        // grow the layout when shown (prevents ScrollView reflow).
-        HStack {
-            Image(systemName: "mappin.circle.fill")
-                .foregroundColor(.secondary)
-                .font(.system(size: 14))
+        // Inline layout — dropdown is a real VStack child (clickable + no
+        // hit-test issues). Parent ScrollView uses .ignoresSafeArea(.keyboard)
+        // to prevent keyboard auto-scroll from repositioning siblings.
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: "mappin.circle.fill")
+                    .foregroundColor(.secondary)
+                    .font(.system(size: 14))
 
-            TextField(placeholder, text: $query)
-                .textFieldStyle(.plain)
-                .font(.system(size: 15))
-                .focused($isFocused)
-                .onChange(of: query) { newValue in
-                    onQueryChanged(newValue)
-                }
-
-            if isLoading {
-                ProgressView()
-                    .scaleEffect(0.7)
-            } else if selectedLocation != nil {
-                Button(action: clearSelection) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
-                        .font(.system(size: 14))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color(.systemGray6))
-        .cornerRadius(10)
-        // Dropdown as overlay — uses .position() for hit testing on extended content
-        .overlay(alignment: .topLeading) {
-            if isExpanded && !suggestions.isEmpty {
-                GeometryReader { inputGeo in
-                    let slotHeight: CGFloat = 300
-                    VStack(spacing: 0) {
-                        ForEach(Array(suggestions.prefix(5).enumerated()), id: \.offset) { idx, suggestion in
-                            Button(action: { selectSuggestion(suggestion) }) {
-                                HStack {
-                                    Image(systemName: "mappin")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.secondary)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(suggestion.city.isEmpty ? suggestion.formatted_address : suggestion.city)
-                                            .font(.system(size: 14, weight: .medium))
-                                            .foregroundColor(.primary)
-                                        if !suggestion.city.isEmpty {
-                                            Text(suggestion.formatted_address)
-                                                .font(.system(size: 11))
-                                                .foregroundColor(.secondary)
-                                                .lineLimit(1)
-                                        }
-                                    }
-                                    Spacer()
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            if idx < min(suggestions.count, 5) - 1 {
-                                Divider().padding(.leading, 36)
-                            }
-                        }
-                        Spacer(minLength: 0)
+                TextField(placeholder, text: $query)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 15))
+                    .focused($isFocused)
+                    .onChange(of: query) { newValue in
+                        onQueryChanged(newValue)
                     }
-                    .frame(width: inputGeo.size.width, height: slotHeight, alignment: .top)
-                    .background(Color(.systemBackground))
-                    .cornerRadius(10)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-                    // .position() affects hit testing (unlike .offset)
-                    .position(
-                        x: inputGeo.size.width / 2,
-                        y: inputGeo.size.height + 4 + slotHeight / 2
-                    )
+
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                } else if selectedLocation != nil {
+                    Button(action: clearSelection) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 14))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .zIndex(1000)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color(.systemGray6))
+            .cornerRadius(10)
+
+            if isExpanded && !suggestions.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(suggestions.prefix(5).enumerated()), id: \.offset) { idx, suggestion in
+                        Button(action: { selectSuggestion(suggestion) }) {
+                            HStack {
+                                Image(systemName: "mappin")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(suggestion.city.isEmpty ? suggestion.formatted_address : suggestion.city)
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.primary)
+                                    if !suggestion.city.isEmpty {
+                                        Text(suggestion.formatted_address)
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer()
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if idx < min(suggestions.count, 5) - 1 {
+                            Divider().padding(.leading, 36)
+                        }
+                    }
+                }
+                .background(Color(.systemBackground))
+                .cornerRadius(10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
             }
         }
-        .zIndex(isExpanded ? 10 : 0)
         .onChange(of: isFocused) { focused in
             if !focused {
                 // Delay slightly so button taps on dropdown items register first

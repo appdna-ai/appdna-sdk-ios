@@ -62,6 +62,10 @@ struct FormStepView: View {
                 .padding(.bottom, 24)
             }
             .scrollDismissesKeyboardCompat()
+            // Prevent keyboard auto-scroll from repositioning siblings above
+            // the focused field — critical for location field's inline
+            // dropdown so Partner's name / other fields don't get pushed up.
+            .ignoresSafeArea(.keyboard, edges: .bottom)
 
             // CTA — configurable styling via element_style
             let ctaBg = config.element_style?.background?.color ?? "#6366F1"
