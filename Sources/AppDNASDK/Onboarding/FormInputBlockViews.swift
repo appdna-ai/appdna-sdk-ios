@@ -1064,7 +1064,7 @@ struct FormInputLocationPlaceholderBlock: View {
         showResults = false
         isFocused = false  // dismiss keyboard + hide dropdown reliably
 
-        // Resolve full placemark via MKLocalSearch to get city/state/country/timezone
+        // Resolve full placemark via MKLocalSearch to get city/state/country
         let searchRequest = MKLocalSearch.Request(completion: result)
         let search = MKLocalSearch(request: searchRequest)
         search.start { response, _ in
@@ -1083,36 +1083,65 @@ struct FormInputLocationPlaceholderBlock: View {
             let city = placemark.locality ?? placemark.subAdministrativeArea ?? ""
             let state = placemark.administrativeArea ?? ""
             let country = placemark.country ?? ""
-            let timezone = placemark.timeZone?.identifier ?? TimeZone.current.identifier
 
-            // Structured dict — country, city, state, timezone, lat, lon
-            let locationDict: [String: Any] = [
-                "city": city,
-                "state": state,
-                "country": country,
-                "timezone": timezone,
-                "latitude": coordinate.latitude,
-                "longitude": coordinate.longitude,
-            ]
-            inputValues[fieldId] = locationDict
+            // IMPORTANT: MKLocalSearch's MKPlacemark.timeZone is USUALLY NIL
+            // for text-search results. Falling back to TimeZone.current returns
+            // the DEVICE's timezone (e.g. Europe/Warsaw) — not the LOCATION's
+            // timezone. To get the accurate timezone for the selected location,
+            // we reverse-geocode via CLGeocoder which reliably populates
+            // CLPlacemark.timeZone.
+            //
+            // Strategy: if MKPlacemark has a timezone, use it immediately.
+            // Otherwise, update the field text + lat/lng/city/state/country
+            // synchronously (fast UX), then fetch the timezone async and
+            // overwrite the dict once we have it. The user won't be able to
+            // advance for a few hundred ms, which is fine.
 
-            // Build display text: "City / State, Country" or "City, Country"
-            let display = Self.formatLocationDisplay(from: locationDict) ?? result.title
-            isRestoringFromSaved = true
-            text = display
-            DispatchQueue.main.async { isRestoringFromSaved = false }
+            // Helper that stores the dict + updates display + prints debug
+            let finalize: (String) -> Void = { resolvedTimezone in
+                let locationDict: [String: Any] = [
+                    "city": city,
+                    "state": state,
+                    "country": country,
+                    "timezone": resolvedTimezone,
+                    "latitude": coordinate.latitude,
+                    "longitude": coordinate.longitude,
+                ]
+                inputValues[fieldId] = locationDict
 
-            // Debug print for Xcode console — user explicitly asked for this
-            print("""
-            [AppDNA] Location selected:
-              city:      \(city)
-              state:     \(state)
-              country:   \(country)
-              timezone:  \(timezone)
-              latitude:  \(coordinate.latitude)
-              longitude: \(coordinate.longitude)
-              display:   \(display)
-            """)
+                let display = Self.formatLocationDisplay(from: locationDict) ?? result.title
+                isRestoringFromSaved = true
+                text = display
+                DispatchQueue.main.async { isRestoringFromSaved = false }
+
+                // Debug print for Xcode console — user explicitly asked for this
+                print("""
+                [AppDNA] Location selected:
+                  city:      \(city)
+                  state:     \(state)
+                  country:   \(country)
+                  timezone:  \(resolvedTimezone)
+                  latitude:  \(coordinate.latitude)
+                  longitude: \(coordinate.longitude)
+                  display:   \(display)
+                """)
+            }
+
+            if let tz = placemark.timeZone?.identifier {
+                // Rare happy path — placemark already has timezone
+                finalize(tz)
+            } else {
+                // Reverse geocode to fetch the LOCATION's timezone (not device tz)
+                let geocoder = CLGeocoder()
+                let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+                geocoder.reverseGeocodeLocation(location) { placemarks, error in
+                    let tz = placemarks?.first?.timeZone?.identifier ?? "UTC"
+                    if let error = error {
+                        print("[AppDNA] Reverse geocode timezone lookup failed: \(error.localizedDescription), defaulting to UTC")
+                    }
+                    finalize(tz)
+                }
+            }
         }
     }
 }
