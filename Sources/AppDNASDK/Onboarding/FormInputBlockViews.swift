@@ -255,27 +255,39 @@ struct FormInputSelectBlock: View {
 
     @ViewBuilder
     private func stackedSelectView(options: [InputOption], fieldId: String) -> some View {
-        // Accent color — prefer fill_color, fall back to focused_border_color (console uses this), then label_color, then block active_color
+        // Accent color — prefer fill_color, fall back to focused_border_color (console uses this), then active_color
         let accentHex = block.field_style?.fill_color
             ?? block.field_style?.focused_border_color
-            ?? block.field_style?.label_color
             ?? block.active_color
             ?? "#6366F1"
         let fillCol = Color(hex: accentHex)
         let cornerR = CGFloat(block.field_style?.corner_radius ?? 10)
-        // Selected bg = accent at 15% opacity (like console preview)
-        let selectedBgCol = fillCol.opacity(0.15)
-        // Unselected bg
-        let optionBg: Color = block.field_style?.background_color.map { Color(hex: $0) } ?? Color.white
-        // Text color chain: field_style.text_color → block.text_color → label_color → style.color → primary
-        let textCol: Color = block.field_style?.text_color.map { Color(hex: $0) }
+
+        // Read option-specific colors from field_config (matches console preview logic)
+        let cfgOptBg = (block.field_config?["bg_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgOptText = (block.field_config?["text_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgOptBorder = (block.field_config?["border_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgSelectedBg = (block.field_config?["selected_bg_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgSelectedText = (block.field_config?["selected_text_color"]?.value as? String).map { Color(hex: $0) }
+
+        // Selected bg — field_config.selected_bg_color > accent at 15%
+        let selectedBgCol = cfgSelectedBg ?? fillCol.opacity(0.15)
+        // Unselected bg — field_config.bg_color > field_style.background_color > white
+        let optionBg: Color = cfgOptBg
+            ?? block.field_style?.background_color.map { Color(hex: $0) }
+            ?? Color.white
+        // Unselected text — field_config.text_color > field_style.text_color > block.text_color > primary
+        let textCol: Color = cfgOptText
+            ?? block.field_style?.text_color.map { Color(hex: $0) }
             ?? block.text_color.map { Color(hex: $0) }
-            ?? block.field_style?.label_color.map { Color(hex: $0) }
             ?? block.style?.color.map { Color(hex: $0) }
             ?? .primary
-        // Unselected border color — prefer border_color, fall back to a subtle version of accent
-        let configuredBorderCol: Color? = block.field_style?.border_color.map { Color(hex: $0) }
-        let unselectedBorderCol: Color = configuredBorderCol ?? fillCol.opacity(0.3)
+        // Selected text — field_config.selected_text_color > textCol
+        let selectedTextCol: Color = cfgSelectedText ?? textCol
+        // Unselected border — field_config.border_color > field_style.border_color > accent at 30%
+        let unselectedBorderCol: Color = cfgOptBorder
+            ?? block.field_style?.border_color.map { Color(hex: $0) }
+            ?? fillCol.opacity(0.3)
 
         VStack(spacing: 8) {
             ForEach(options) { option in
@@ -310,7 +322,7 @@ struct FormInputSelectBlock: View {
                         }
                         Text(option.label ?? "")
                             .font(.subheadline)
-                            .foregroundColor(textCol)
+                            .foregroundColor(isSelected ? selectedTextCol : textCol)
                         Spacer()
                         Image(systemName: isSelected
                             ? (isMultiSelect ? "checkmark.circle.fill" : "largecircle.fill.circle")
@@ -339,19 +351,31 @@ struct FormInputSelectBlock: View {
     private func gridSelectView(options: [InputOption], fieldId: String) -> some View {
         let accentHex = block.field_style?.fill_color
             ?? block.field_style?.focused_border_color
-            ?? block.field_style?.label_color
             ?? block.active_color
             ?? "#6366F1"
         let fillCol = Color(hex: accentHex)
         let cornerR = CGFloat(block.field_style?.corner_radius ?? 10)
-        let selectedBgCol = fillCol.opacity(0.15)
-        let optionBg: Color = block.field_style?.background_color.map { Color(hex: $0) } ?? Color.white
-        let textCol: Color = block.field_style?.text_color.map { Color(hex: $0) }
+
+        // Read option-specific colors from field_config (matches console preview logic)
+        let cfgOptBg = (block.field_config?["bg_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgOptText = (block.field_config?["text_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgOptBorder = (block.field_config?["border_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgSelectedBg = (block.field_config?["selected_bg_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgSelectedText = (block.field_config?["selected_text_color"]?.value as? String).map { Color(hex: $0) }
+
+        let selectedBgCol = cfgSelectedBg ?? fillCol.opacity(0.15)
+        let optionBg: Color = cfgOptBg
+            ?? block.field_style?.background_color.map { Color(hex: $0) }
+            ?? Color.white
+        let textCol: Color = cfgOptText
+            ?? block.field_style?.text_color.map { Color(hex: $0) }
             ?? block.text_color.map { Color(hex: $0) }
-            ?? block.field_style?.label_color.map { Color(hex: $0) }
             ?? block.style?.color.map { Color(hex: $0) }
             ?? .primary
-        let unselectedBorderCol: Color = block.field_style?.border_color.map { Color(hex: $0) } ?? fillCol.opacity(0.3)
+        let selectedTextCol: Color = cfgSelectedText ?? textCol
+        let unselectedBorderCol: Color = cfgOptBorder
+            ?? block.field_style?.border_color.map { Color(hex: $0) }
+            ?? fillCol.opacity(0.3)
         let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
 
         LazyVGrid(columns: columns, spacing: 8) {
@@ -378,7 +402,7 @@ struct FormInputSelectBlock: View {
                         }
                         Text(option.label ?? "")
                             .font(.subheadline)
-                            .foregroundColor(textCol)
+                            .foregroundColor(isSelected ? selectedTextCol : textCol)
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity, minHeight: 60)

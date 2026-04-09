@@ -567,6 +567,20 @@ struct DateWheelPickerBlockView: View {
             }
         }()
 
+        // Read picker_variant from field_config (console option): "graphical" (default) | "wheel" | "compact"
+        let variant = (block.field_config?["picker_variant"]?.value as? String)
+            ?? (block.field_config?["date_picker_variant"]?.value as? String)
+            ?? "graphical"
+        // Read additional styling options from field_config
+        let calendarBg = (block.field_config?["calendar_bg_color"]?.value as? String)
+            ?? block.calendar_bg_color ?? "#FFFFFF"
+        let wheelBg = (block.field_config?["wheel_bg_color"]?.value as? String) ?? calendarBg
+        let pickerCornerRadius = CGFloat((block.field_config?["picker_corner_radius"]?.value as? Double) ?? 12)
+        let wheelTextColorHex = (block.field_config?["wheel_text_color"]?.value as? String)
+        let pickerBorderColor = (block.field_config?["picker_border_color"]?.value as? String)
+        let pickerBorderWidth = CGFloat((block.field_config?["picker_border_width"]?.value as? Double) ?? 0)
+        let pickerPadding = CGFloat((block.field_config?["picker_padding"]?.value as? Double) ?? 0)
+
         VStack(spacing: 8) {
             if isFieldMode {
                 // Field mode: tap to open
@@ -577,7 +591,7 @@ struct DateWheelPickerBlockView: View {
                         Text(formatDate(selectedDate, components: components))
                             .foregroundColor(.primary)
                         Spacer()
-                        Image(systemName: "calendar")
+                        Image(systemName: components == [.hourAndMinute] ? "clock" : "calendar")
                             .foregroundColor(highlightCol)
                     }
                     .padding(12)
@@ -588,76 +602,35 @@ struct DateWheelPickerBlockView: View {
                 .buttonStyle(.plain)
 
                 if showPicker {
-                    if components.contains(.date) && components.contains(.hourAndMinute) {
-                        // DateTime: time wheel first (top), then date graphical below
-                        let spacing = CGFloat(block.picker_spacing ?? 16)
-                        VStack(spacing: spacing) {
-                            DatePicker("", selection: $selectedDate, displayedComponents: [.hourAndMinute])
-                                .datePickerStyle(.wheel)
-                                .labelsHidden()
-                                .frame(height: 100)
-                                .frame(maxWidth: .infinity)
-                            DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
-                                .datePickerStyle(.graphical)
-                                .labelsHidden()
-                                .accentColor(highlightCol)
-                                .tint(highlightCol)
-                                .background(Color(hex: block.calendar_bg_color ?? "#FFFFFF"))
-                                .cornerRadius(12)
-                        }
-                    } else if components.contains(.date) {
-                        // Note: iOS .graphical DatePicker cannot be resized — size is system-controlled.
-                        // Use wheel_height and font_size only for .wheel style pickers.
-                        DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
-                            .datePickerStyle(.graphical)
-                            .labelsHidden()
-                            .accentColor(highlightCol)
-                            .tint(highlightCol)
-                            .background(Color(hex: block.calendar_bg_color ?? "#FFFFFF"))
-                            .cornerRadius(12)
-                    } else {
-                        DatePicker("", selection: $selectedDate, displayedComponents: components)
-                            .datePickerStyle(.wheel)
-                            .labelsHidden()
-                            .frame(maxWidth: .infinity)
-                    }
+                    datePickerContent(
+                        components: components,
+                        variant: variant,
+                        highlightCol: highlightCol,
+                        calendarBg: calendarBg,
+                        wheelBg: wheelBg,
+                        pickerCornerRadius: pickerCornerRadius,
+                        wheelTextColorHex: wheelTextColorHex,
+                        pickerBorderColor: pickerBorderColor,
+                        pickerBorderWidth: pickerBorderWidth,
+                        pickerPadding: pickerPadding,
+                        defaultSpacing: 16
+                    )
                 }
             } else {
                 // Inline mode (default)
-                if components.contains(.date) && components.contains(.hourAndMinute) {
-                    // DateTime: time wheel first (top), then date graphical below
-                    let spacing = CGFloat(block.picker_spacing ?? 8)
-                    VStack(spacing: spacing) {
-                        DatePicker("", selection: $selectedDate, displayedComponents: [.hourAndMinute])
-                            .datePickerStyle(.wheel)
-                            .labelsHidden()
-                            .frame(maxWidth: .infinity)
-                        DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
-                            .datePickerStyle(.graphical)
-                            .labelsHidden()
-                            .accentColor(highlightCol)
-                            .tint(highlightCol)
-                            .background(Color(hex: block.calendar_bg_color ?? "#FFFFFF"))
-                            .cornerRadius(12)
-                    }
-                } else if components.contains(.date) {
-                    // Note: iOS .graphical DatePicker cannot be resized — size is system-controlled.
-                    DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: [.date])
-                        .datePickerStyle(.graphical)
-                        .labelsHidden()
-                        .accentColor(highlightCol)
-                        .tint(highlightCol)
-                        .background(Color(hex: block.calendar_bg_color ?? "#FFFFFF"))
-                        .cornerRadius(12)
-                        .frame(maxWidth: .infinity)
-                } else {
-                    DatePicker("", selection: $selectedDate, displayedComponents: components)
-                        .datePickerStyle(.wheel)
-                        .labelsHidden()
-                        .accentColor(highlightCol)
-                        .tint(highlightCol)
-                        .frame(maxWidth: .infinity)
-                }
+                datePickerContent(
+                    components: components,
+                    variant: variant,
+                    highlightCol: highlightCol,
+                    calendarBg: calendarBg,
+                    wheelBg: wheelBg,
+                    pickerCornerRadius: pickerCornerRadius,
+                    wheelTextColorHex: wheelTextColorHex,
+                    pickerBorderColor: pickerBorderColor,
+                    pickerBorderWidth: pickerBorderWidth,
+                    pickerPadding: pickerPadding,
+                    defaultSpacing: 8
+                )
             }
         }
         .onChange(of: selectedDate) { newDate in
@@ -727,6 +700,149 @@ struct DateWheelPickerBlockView: View {
             f.dateStyle = .medium; f.timeStyle = .none
         }
         return f.string(from: date)
+    }
+
+    // MARK: - Date Picker Rendering Helper
+    @ViewBuilder
+    private func datePickerContent(
+        components: DatePickerComponents,
+        variant: String,
+        highlightCol: Color,
+        calendarBg: String,
+        wheelBg: String,
+        pickerCornerRadius: CGFloat,
+        wheelTextColorHex: String?,
+        pickerBorderColor: String?,
+        pickerBorderWidth: CGFloat,
+        pickerPadding: CGFloat,
+        defaultSpacing: CGFloat
+    ) -> some View {
+        let spacing = CGFloat(block.picker_spacing ?? Double(defaultSpacing))
+        let useWheel = variant == "wheel"
+        let useCompact = variant == "compact"
+
+        if components.contains(.date) && components.contains(.hourAndMinute) {
+            // DateTime: date above, time wheel below (user requested this order)
+            VStack(spacing: spacing) {
+                datePart(
+                    components: [.date],
+                    useWheel: useWheel,
+                    useCompact: useCompact,
+                    highlightCol: highlightCol,
+                    bgHex: calendarBg,
+                    wheelBgHex: wheelBg,
+                    cornerRadius: pickerCornerRadius,
+                    wheelTextColorHex: wheelTextColorHex,
+                    pickerBorderColor: pickerBorderColor,
+                    pickerBorderWidth: pickerBorderWidth,
+                    pickerPadding: pickerPadding
+                )
+                datePart(
+                    components: [.hourAndMinute],
+                    useWheel: true, // Time is always wheel
+                    useCompact: useCompact,
+                    highlightCol: highlightCol,
+                    bgHex: wheelBg,
+                    wheelBgHex: wheelBg,
+                    cornerRadius: pickerCornerRadius,
+                    wheelTextColorHex: wheelTextColorHex,
+                    pickerBorderColor: pickerBorderColor,
+                    pickerBorderWidth: pickerBorderWidth,
+                    pickerPadding: pickerPadding
+                )
+            }
+        } else if components.contains(.date) {
+            datePart(
+                components: [.date],
+                useWheel: useWheel,
+                useCompact: useCompact,
+                highlightCol: highlightCol,
+                bgHex: calendarBg,
+                wheelBgHex: wheelBg,
+                cornerRadius: pickerCornerRadius,
+                wheelTextColorHex: wheelTextColorHex,
+                pickerBorderColor: pickerBorderColor,
+                pickerBorderWidth: pickerBorderWidth,
+                pickerPadding: pickerPadding
+            )
+        } else {
+            // Time-only
+            datePart(
+                components: [.hourAndMinute],
+                useWheel: true,
+                useCompact: useCompact,
+                highlightCol: highlightCol,
+                bgHex: wheelBg,
+                wheelBgHex: wheelBg,
+                cornerRadius: pickerCornerRadius,
+                wheelTextColorHex: wheelTextColorHex,
+                pickerBorderColor: pickerBorderColor,
+                pickerBorderWidth: pickerBorderWidth,
+                pickerPadding: pickerPadding
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func datePart(
+        components: DatePickerComponents,
+        useWheel: Bool,
+        useCompact: Bool,
+        highlightCol: Color,
+        bgHex: String,
+        wheelBgHex: String,
+        cornerRadius: CGFloat,
+        wheelTextColorHex: String?,
+        pickerBorderColor: String?,
+        pickerBorderWidth: CGFloat,
+        pickerPadding: CGFloat
+    ) -> some View {
+        let bg = Color(hex: bgHex)
+        let isTime = components == [.hourAndMinute]
+        let picker: AnyView = {
+            if useWheel || isTime {
+                let base = DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: components)
+                    .datePickerStyle(.wheel)
+                    .labelsHidden()
+                    .accentColor(highlightCol)
+                    .tint(highlightCol)
+                    .frame(maxWidth: .infinity)
+                if let hex = wheelTextColorHex {
+                    return AnyView(base.colorMultiply(Color(hex: hex)))
+                }
+                return AnyView(base)
+            } else if useCompact {
+                return AnyView(
+                    DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: components)
+                        .datePickerStyle(.compact)
+                        .labelsHidden()
+                        .accentColor(highlightCol)
+                        .tint(highlightCol)
+                        .frame(maxWidth: .infinity)
+                )
+            } else {
+                // Default: graphical calendar
+                return AnyView(
+                    DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: components)
+                        .datePickerStyle(.graphical)
+                        .labelsHidden()
+                        .accentColor(highlightCol)
+                        .tint(highlightCol)
+                )
+            }
+        }()
+
+        picker
+            .padding(pickerPadding)
+            .background(bg)
+            .cornerRadius(cornerRadius)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(
+                        Color(hex: pickerBorderColor ?? "#00000000"),
+                        lineWidth: pickerBorderWidth
+                    )
+            )
     }
 }
 
