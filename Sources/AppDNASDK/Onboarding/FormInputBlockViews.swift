@@ -892,13 +892,14 @@ struct FormInputLocationPlaceholderBlock: View {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(borderColor, lineWidth: 1)
             )
-            // Dropdown overlay — attached to the input HStack so GeometryReader
-            // reads the input's own frame. Offset by height + 4 to position below.
-            // Overlay does NOT contribute to the input's layout size, so the
-            // outer VStack stays at a fixed height.
+            // Dropdown overlay — uses .position() instead of .offset() so hit
+            // testing works on the extended content. Fixed-height container
+            // (300pt) wraps the dropdown items for consistent hit testing.
             .overlay(alignment: .topLeading) {
                 if showResults && !searchCompleter.results.isEmpty {
                     GeometryReader { inputGeo in
+                        // Fixed dropdown slot height — 60pt per item, 5 items = 300pt
+                        let slotHeight: CGFloat = 300
                         VStack(alignment: .leading, spacing: 0) {
                             let visible = Array(searchCompleter.results.prefix(5).enumerated())
                             ForEach(visible, id: \.offset) { idx, result in
@@ -931,8 +932,9 @@ struct FormInputLocationPlaceholderBlock: View {
                                     Divider()
                                 }
                             }
+                            Spacer(minLength: 0)  // fill remaining slot height
                         }
-                        .frame(width: inputGeo.size.width)
+                        .frame(width: inputGeo.size.width, height: slotHeight, alignment: .top)
                         .background(Color(.systemBackground))
                         .cornerRadius(cornerRadius)
                         .overlay(
@@ -940,7 +942,12 @@ struct FormInputLocationPlaceholderBlock: View {
                                 .stroke(borderColor, lineWidth: 1)
                         )
                         .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-                        .offset(y: inputGeo.size.height + 4)
+                        // .position places the view's CENTER at the given point
+                        // AND updates hit-testing to that location (unlike .offset)
+                        .position(
+                            x: inputGeo.size.width / 2,
+                            y: inputGeo.size.height + 4 + slotHeight / 2
+                        )
                     }
                     .zIndex(1000)
                 }

@@ -80,10 +80,11 @@ struct LocationFieldView: View {
         .padding(.vertical, 10)
         .background(Color(.systemGray6))
         .cornerRadius(10)
-        // Dropdown as overlay attached to the input HStack — doesn't affect layout
+        // Dropdown as overlay — uses .position() for hit testing on extended content
         .overlay(alignment: .topLeading) {
-            if isExpanded && !suggestions.isEmpty && isFocused {
+            if isExpanded && !suggestions.isEmpty {
                 GeometryReader { inputGeo in
+                    let slotHeight: CGFloat = 300
                     VStack(spacing: 0) {
                         ForEach(Array(suggestions.prefix(5).enumerated()), id: \.offset) { idx, suggestion in
                             Button(action: { selectSuggestion(suggestion) }) {
@@ -114,8 +115,9 @@ struct LocationFieldView: View {
                                 Divider().padding(.leading, 36)
                             }
                         }
+                        Spacer(minLength: 0)
                     }
-                    .frame(width: inputGeo.size.width)
+                    .frame(width: inputGeo.size.width, height: slotHeight, alignment: .top)
                     .background(Color(.systemBackground))
                     .cornerRadius(10)
                     .overlay(
@@ -123,7 +125,11 @@ struct LocationFieldView: View {
                             .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                     )
                     .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-                    .offset(y: inputGeo.size.height + 4)
+                    // .position() affects hit testing (unlike .offset)
+                    .position(
+                        x: inputGeo.size.width / 2,
+                        y: inputGeo.size.height + 4 + slotHeight / 2
+                    )
                 }
                 .zIndex(1000)
             }
