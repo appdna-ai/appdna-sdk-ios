@@ -1562,27 +1562,37 @@ struct PaywallRenderer: View {
     private func planLayoutView(plans: [PaywallPlan], displayStyle: String, style: SectionStyleConfig?, cardStyle: PlanCardStyle) -> AnyView {
         switch displayStyle {
 
-        // Grid: side-by-side plans using HStack with equal flex widths.
+        // Grid: side-by-side plans, strictly equal widths, no overflow.
         //
-        // Why not LazyVGrid? LazyVGrid with GridItem(.flexible()) has layout
-        // ambiguity when combined with content overlays (badges, shadows) that
-        // can cause selected cards to overflow their cell bounds on narrow
-        // devices. HStack with `.frame(maxWidth: .infinity)` on each card is
-        // simpler, predictable, and guarantees a clean 50/50 split.
+        // Uses a custom `EqualWidthRow` Layout (iOS 16+) which proposes an
+        // EXACT width to each card — `(availableWidth - totalGap) / n`.
+        // This is the only way to bulletproof against overflow:
+        //   - LazyVGrid with GridItem(.flexible()) was unreliable because
+        //     intrinsic child content could push a cell wider than its share.
+        //   - HStack + `.frame(maxWidth: .infinity)` was also unreliable in
+        //     Button label builders — the Button wraps the card and can ignore
+        //     the outer maxWidth hint when child content has a hard minimum.
+        //   - Custom Layout hands each subview a width PROPOSAL they MUST
+        //     honor, and then reports the tallest child as the row height.
         //
-        // For 3+ plans, they all render in a single row which may look cramped.
-        // Users with 3+ plans should use `vertical_stack` or `horizontal_scroll`
-        // instead of `grid`.
+        // We also skip `.planSelection(...)` in grid mode because its
+        // `scaleEffect(1.03)` creates a compositing layer that visually
+        // overflows layout bounds (the scale is centered, so the selected
+        // card visually extends ~1.5% on each side beyond its cell).
+        // Selection emphasis in grid mode comes from: border width (2pt vs
+        // 1pt), selected_bg_color, and selected_text_color.
+        //
+        // For 3+ plans, they all render in a single row which may look
+        // cramped. Users with 3+ plans should use `vertical_stack` or
+        // `horizontal_scroll` instead of `grid`.
         case "grid":
             let gap = cardStyle.cardGap ?? 10
             return AnyView(
-                HStack(alignment: .top, spacing: gap) {
+                EqualWidthRow(spacing: gap) {
                     ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
                         PlanCard(plan: plan, isSelected: selectedPlanId == plan.id,
                                  onSelect: { selectPlan(plan.id) }, planIndex: index,
                                  loc: loc, sectionStyle: style, cardStyle: cardStyle)
-                        .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
-                        .frame(maxWidth: .infinity)
                     }
                 }
             )
@@ -2088,5 +2098,65 @@ struct PaywallRenderer: View {
             metadata["promo_code"] = promoCode
         }
         onPlanSelected(plan, metadata)
+    }
+}
+
+// MARK: - EqualWidthRow Layout
+
+/// A row layout that gives each subview EXACTLY the same width.
+///
+/// Unlike `HStack` + `.frame(maxWidth: .infinity)`, this layout forces width
+/// compliance by passing an explicit width proposal to each subview. Subviews
+/// cannot overflow their allocated cell — their content must fit within the
+/// proposed width (which they can then wrap, truncate, or compress as needed).
+///
+/// Row height = max of all subviews' heights when proposed their allocated
+/// width. This makes the row naturally fit its tallest card.
+///
+/// Used by the paywall "grid" plan layout to guarantee that no plan card,
+/// however much content it carries, can visually overflow the screen.
+@available(iOS 16.0, *)
+struct EqualWidthRow: Layout {
+    var spacing: CGFloat
+
+    init(spacing: CGFloat = 0) {
+        self.spacing = spacing
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard !subviews.isEmpty else { return .zero }
+        let count = CGFloat(subviews.count)
+        let availableWidth = proposal.width ?? .infinity
+        let totalSpacing = spacing * max(count - 1, 0)
+        let itemWidth = max((availableWidth - totalSpacing) / count, 0)
+        let itemProposal = ProposedViewSize(width: itemWidth, height: proposal.height)
+        let maxHeight = subviews.map { $0.sizeThatFits(itemProposal).height }.max() ?? 0
+        // Report the row's own width as the available width so the parent
+        // doesn't try to stretch us further. If availableWidth is infinity
+        // (unbounded proposal), fall back to summing the per-item widths.
+        let rowWidth: CGFloat
+        if availableWidth == .infinity {
+            rowWidth = itemWidth * count + totalSpacing
+        } else {
+            rowWidth = availableWidth
+        }
+        return CGSize(width: rowWidth, height: maxHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard !subviews.isEmpty else { return }
+        let count = CGFloat(subviews.count)
+        let totalSpacing = spacing * max(count - 1, 0)
+        let itemWidth = max((bounds.width - totalSpacing) / count, 0)
+        let itemProposal = ProposedViewSize(width: itemWidth, height: bounds.height)
+        var x = bounds.minX
+        for subview in subviews {
+            subview.place(
+                at: CGPoint(x: x, y: bounds.minY),
+                anchor: .topLeading,
+                proposal: itemProposal
+            )
+            x += itemWidth + spacing
+        }
     }
 }
