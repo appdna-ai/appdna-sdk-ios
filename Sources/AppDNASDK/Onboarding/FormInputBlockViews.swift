@@ -331,14 +331,17 @@ struct FormInputSelectBlock: View {
                             .font(.title3)
                     }
                     .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: cornerR)
-                            .fill(isSelected ? selectedBgCol : optionBg)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: cornerR)
-                            .stroke(isSelected ? fillCol : unselectedBorderCol, lineWidth: isSelected ? 2 : 1)
-                    )
+                    .background {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: cornerR)
+                                .fill(isSelected ? selectedBgCol : optionBg)
+                            RoundedRectangle(cornerRadius: cornerR)
+                                .strokeBorder(
+                                    isSelected ? fillCol : unselectedBorderCol,
+                                    lineWidth: isSelected ? 2 : 1
+                                )
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
             }
@@ -407,14 +410,17 @@ struct FormInputSelectBlock: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 60)
                     .padding(10)
-                    .background(
-                        RoundedRectangle(cornerRadius: cornerR)
-                            .fill(isSelected ? selectedBgCol : optionBg)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: cornerR)
-                            .stroke(isSelected ? fillCol : unselectedBorderCol, lineWidth: isSelected ? 2 : 1)
-                    )
+                    .background {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: cornerR)
+                                .fill(isSelected ? selectedBgCol : optionBg)
+                            RoundedRectangle(cornerRadius: cornerR)
+                                .strokeBorder(
+                                    isSelected ? fillCol : unselectedBorderCol,
+                                    lineWidth: isSelected ? 2 : 1
+                                )
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
             }

@@ -884,8 +884,14 @@ public struct ContentBlock: Codable, Identifiable {
     public let min_label: String?
     public let max_label: String?
     public let min_max_font_size: Double?
+    public let min_max_color: String?
     public let animate: Bool?
     public let animation_duration_ms: Int?
+    // Arrow/needle styling (console uses these names)
+    public let arrow_color: String?
+    public let arrow_stroke_width: Double?
+    // Percentage location: "center" (default), "below", "above", "none"
+    public let percentage_location: String?
 
     // SPEC-089d Phase F: date_wheel_picker fields
     public let columns: [DateWheelColumnConfig]?
@@ -1016,6 +1022,7 @@ public struct ContentBlock: Codable, Identifiable {
         case total_duration_ms, auto_advance, show_percentage
         // SPEC-089d Phase F: new block fields
         case gauge_variant, gauge_value, max_value, sublabel, stroke_width, min_label, max_label, min_max_font_size
+        case min_max_color, arrow_color, arrow_stroke_width, percentage_location
         case label_color, label_font_size, animate, animation_duration_ms
         case columns, default_date_value, min_date, max_date, allow_future, allow_past, date_validation_message
         case highlight_color, haptic_on_scroll, orientation, wheel_orientation, picker_presentation, picker_mode
@@ -1168,6 +1175,10 @@ public struct ContentBlock: Codable, Identifiable {
         self.min_label = try c.decodeIfPresent(String.self, forKey: .min_label)
         self.max_label = try c.decodeIfPresent(String.self, forKey: .max_label)
         self.min_max_font_size = try c.decodeIfPresent(Double.self, forKey: .min_max_font_size)
+        self.min_max_color = try c.decodeIfPresent(String.self, forKey: .min_max_color)
+        self.arrow_color = try c.decodeIfPresent(String.self, forKey: .arrow_color)
+        self.arrow_stroke_width = try c.decodeIfPresent(Double.self, forKey: .arrow_stroke_width)
+        self.percentage_location = try c.decodeIfPresent(String.self, forKey: .percentage_location)
         self.animate = try c.decodeIfPresent(Bool.self, forKey: .animate)
         self.animation_duration_ms = try c.decodeIfPresent(Int.self, forKey: .animation_duration_ms)
         self.columns = try c.decodeIfPresent([DateWheelColumnConfig].self, forKey: .columns)

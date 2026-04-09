@@ -359,7 +359,10 @@ struct CircularGaugeBlockView: View {
         let minVal = CGFloat(block.min_value ?? 0)
         let maxVal = CGFloat(block.max_value ?? 100)
         let targetProgress = (maxVal - minVal) > 0 ? min((value - minVal) / (maxVal - minVal), 1.0) : 0
-        let size = CGFloat(block.height ?? 200)
+        // Speedometer defaults to 260 for more visual presence; arc/radial default 200
+        let variant = block.gauge_variant ?? "arc"
+        let defaultSize: Double = variant == "speedometer" ? 260 : 200
+        let size = CGFloat(block.height ?? defaultSize)
         let strokeW = CGFloat(block.stroke_width ?? 12)
         let fillCol = Color(hex: block.bar_color ?? block.active_color ?? "#6366F1")
         let trackCol = Color(hex: block.track_color ?? "#E5E7EB")
@@ -368,60 +371,90 @@ struct CircularGaugeBlockView: View {
         let shouldAnimate = block.animate ?? true
         let animDuration = Double(block.animation_duration_ms ?? 800) / 1000.0
         let showPct = block.show_percentage ?? false
+        // Percentage placement: "center" (default), "below", "above", "none"
+        let pctLocation = block.percentage_location ?? "center"
 
-        let variant = block.gauge_variant ?? "arc"
-
-        let needleCol = Color(hex: block.border_color ?? block.label_color ?? block.text_color ?? "#1F2937")
+        // Needle/arrow styling — prefer dedicated arrow_color over fallbacks
+        let needleCol = Color(hex: block.arrow_color ?? block.label_color ?? "#1F2937")
+        let needleW = CGFloat(block.arrow_stroke_width ?? 3)
         let minLabel = block.min_label ?? "\(Int(minVal))"
         let maxLabel = block.max_label ?? "\(Int(maxVal))"
         let minMaxFontSz = CGFloat(block.min_max_font_size ?? 13)
+        let minMaxCol = Color(hex: block.min_max_color ?? block.label_color ?? "#000000")
 
-        VStack(spacing: 8) {
+        // Speedometer geometry — 220° sweep, symmetric around top (12 o'clock)
+        // Using rotationEffect approach: trim(0, 220/360) gives a 220° CW arc starting at 3 o'clock,
+        // then rotate by 160° CW so the arc start points to ~7 o'clock and end to ~5 o'clock.
+        let sweepFraction: CGFloat = 220.0 / 360.0
+        let rotationDegrees: Double = 160
+
+        VStack(spacing: 4) {
+            if showPct && pctLocation == "above" {
+                Text("\(Int(animatedProgress * 100))%")
+                    .font(.system(size: labelFontSz, weight: .bold))
+                    .foregroundColor(labelCol)
+            }
+
             ZStack {
                 switch variant {
                 case "speedometer":
-                    // Thick semi-circle arc (220° sweep for a wider speedometer look)
-                    let sweepAngle: Double = 220
-                    let startAngle: Double = 160 // Start from lower-left
-                    let trimStart: CGFloat = CGFloat(startAngle) / 360.0
-                    let trimEnd: CGFloat = CGFloat(startAngle + sweepAngle) / 360.0
-
                     // Track
                     Circle()
-                        .trim(from: trimStart, to: trimEnd)
+                        .trim(from: 0, to: sweepFraction)
                         .stroke(trackCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
+                        .rotationEffect(.degrees(rotationDegrees))
                     // Fill
                     Circle()
-                        .trim(from: trimStart, to: trimStart + (trimEnd - trimStart) * animatedProgress)
+                        .trim(from: 0, to: sweepFraction * animatedProgress)
                         .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
+                        .rotationEffect(.degrees(rotationDegrees))
+
                     // Needle
-                    let needleAngle = startAngle + sweepAngle * Double(animatedProgress)
-                    let needleLen = size / 2 - strokeW * 1.5 - 12
+                    let needleLen = size / 2 - strokeW * 1.5 - 14
+                    // Needle angle in degrees from "up" (12 o'clock): 0° = up
+                    // Rotate from -110° (start) through 0° (center) to +110° (end)
+                    let needleAngleFromUp = -110.0 + 220.0 * Double(animatedProgress)
                     ZStack {
-                        // Needle line
                         Capsule()
                             .fill(needleCol)
-                            .frame(width: 3, height: needleLen)
+                            .frame(width: needleW, height: needleLen)
                             .offset(y: -needleLen / 2)
-                            .rotationEffect(.degrees(needleAngle + 90))
-                        // Center dot
+                            .rotationEffect(.degrees(needleAngleFromUp))
+                        // Center hub
                         Circle()
                             .fill(needleCol)
-                            .frame(width: 10, height: 10)
+                            .frame(width: max(10, needleW * 3), height: max(10, needleW * 3))
                     }
 
-                    // Center value below needle
-                    VStack(spacing: 2) {
-                        Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
-                            .font(.system(size: labelFontSz, weight: .bold))
-                            .foregroundColor(labelCol)
-                        if let sub = block.sublabel {
-                            Text(sub)
-                                .font(.system(size: min(labelFontSz * 0.5, 13)))
-                                .foregroundColor(labelCol.opacity(0.6))
+                    // Center value label
+                    if pctLocation == "center" {
+                        VStack(spacing: 2) {
+                            Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
+                                .font(.system(size: labelFontSz, weight: .bold))
+                                .foregroundColor(labelCol)
+                            if let sub = block.sublabel {
+                                Text(sub)
+                                    .font(.system(size: min(labelFontSz * 0.5, 13)))
+                                    .foregroundColor(labelCol.opacity(0.6))
+                            }
                         }
+                        .offset(y: size * 0.22)
                     }
-                    .offset(y: size * 0.12)
+
+                    // Min/Max labels — positioned at the visual arc endpoints via geometric math.
+                    // Arc endpoints sit on circle of radius (size/2 - strokeW/2), at angles -110°/+110° from top.
+                    let labelRadius = size / 2 - strokeW / 2 + 4
+                    let angleRad = 110.0 * .pi / 180.0
+                    let dx = CGFloat(sin(angleRad)) * labelRadius
+                    let dy = -CGFloat(cos(angleRad)) * labelRadius
+                    Text(minLabel)
+                        .font(.system(size: minMaxFontSz, weight: .medium))
+                        .foregroundColor(minMaxCol)
+                        .offset(x: -dx, y: dy + minMaxFontSz * 0.8)
+                    Text(maxLabel)
+                        .font(.system(size: minMaxFontSz, weight: .medium))
+                        .foregroundColor(minMaxCol)
+                        .offset(x: dx, y: dy + minMaxFontSz * 0.8)
 
                 case "radial":
                     Circle()
@@ -430,12 +463,14 @@ struct CircularGaugeBlockView: View {
                         .trim(from: 0, to: animatedProgress)
                         .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW * 2, lineCap: .round))
                         .rotationEffect(.degrees(-90))
-                    VStack(spacing: 2) {
-                        Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
-                            .font(.system(size: labelFontSz, weight: .bold))
-                            .foregroundColor(labelCol)
-                        if let sub = block.sublabel {
-                            Text(sub).font(.caption).foregroundColor(labelCol.opacity(0.7))
+                    if pctLocation == "center" {
+                        VStack(spacing: 2) {
+                            Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
+                                .font(.system(size: labelFontSz, weight: .bold))
+                                .foregroundColor(labelCol)
+                            if let sub = block.sublabel {
+                                Text(sub).font(.caption).foregroundColor(labelCol.opacity(0.7))
+                            }
                         }
                     }
 
@@ -446,30 +481,25 @@ struct CircularGaugeBlockView: View {
                         .trim(from: 0, to: animatedProgress)
                         .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
                         .rotationEffect(.degrees(-90))
-                    VStack(spacing: 2) {
-                        Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
-                            .font(.system(size: labelFontSz, weight: .bold))
-                            .foregroundColor(labelCol)
-                        if let sub = block.sublabel {
-                            Text(sub).font(.caption).foregroundColor(labelCol.opacity(0.7))
+                    if pctLocation == "center" {
+                        VStack(spacing: 2) {
+                            Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
+                                .font(.system(size: labelFontSz, weight: .bold))
+                                .foregroundColor(labelCol)
+                            if let sub = block.sublabel {
+                                Text(sub).font(.caption).foregroundColor(labelCol.opacity(0.7))
+                            }
                         }
                     }
                 }
             }
-            .frame(width: size, height: variant == "speedometer" ? size * 0.65 : size)
+            // Speedometer needs enough height for the arc (220° sweep drops ~20% below centerline)
+            .frame(width: size, height: variant == "speedometer" ? size * 0.75 : size)
 
-            // Min/Max labels
-            if variant == "speedometer" {
-                HStack {
-                    Text(minLabel)
-                        .font(.system(size: minMaxFontSz, weight: .medium))
-                        .foregroundColor(labelCol.opacity(0.5))
-                    Spacer()
-                    Text(maxLabel)
-                        .font(.system(size: minMaxFontSz, weight: .medium))
-                        .foregroundColor(labelCol.opacity(0.5))
-                }
-                .frame(width: size * 0.75)
+            if showPct && pctLocation == "below" {
+                Text("\(Int(animatedProgress * 100))%")
+                    .font(.system(size: labelFontSz, weight: .bold))
+                    .foregroundColor(labelCol)
             }
         }
         .frame(maxWidth: .infinity)
