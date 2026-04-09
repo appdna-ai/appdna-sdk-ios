@@ -1590,7 +1590,8 @@ struct PaywallRenderer: View {
                     selectPlan: { self.selectPlan($0) },
                     loc: loc,
                     sectionStyle: style,
-                    cardStyle: cardStyle
+                    cardStyle: cardStyle,
+                    planSelectionAnimation: config.animation?.plan_selection_animation
                 )
             )
 
@@ -2138,6 +2139,7 @@ struct GridPlansView: View {
     let loc: (String, String) -> String
     let sectionStyle: SectionStyleConfig?
     let cardStyle: PlanCardStyle
+    var planSelectionAnimation: String? = nil
 
     @State private var rowHeight: CGFloat = 0
 
@@ -2157,6 +2159,12 @@ struct GridPlansView: View {
                         loc: loc,
                         sectionStyle: sectionStyle,
                         cardStyle: cardStyle
+                    )
+                    // Strip "scale" because it visually extends ~1.5% beyond
+                    // the cell bounds. glow/border_highlight are cell-safe.
+                    .planSelection(
+                        safeGridAnimation(planSelectionAnimation),
+                        isSelected: selectedPlanId == plan.id
                     )
                     .frame(width: cardWidth, alignment: .topLeading)
                     .background(
@@ -2178,21 +2186,32 @@ struct GridPlansView: View {
     }
 }
 
+/// Strips the `scale` animation in tightly-packed grid layouts because its
+/// `scaleEffect(1.03)` creates a compositing layer that visually extends
+/// ~1.5% beyond the cell's layout bounds. `glow` and `border_highlight`
+/// are cell-safe and preserved.
+private func safeGridAnimation(_ animation: String?) -> String? {
+    animation == "scale" ? nil : animation
+}
+
 // MARK: - HorizontalPlansView
 
 /// Side-by-side / carousel plan layout used by the `horizontal_scroll` and
 /// `carousel` display styles.
 ///
-/// Dynamically chooses between two modes based on whether plans fit on screen:
+/// Dynamically picks between two modes based on how much each card would
+/// have to shrink to fit the available width:
 ///
-///   1. **Grid mode** (plans fit): equal-width cards filling the full
-///      available width. This is the correct behavior when the user has 2–3
-///      plans and the console shows a "Horizontal" layout hint — cards sit
-///      side-by-side and never overflow the screen edge.
+///   1. **Grid mode** (compressed width ≥ minCardWidth): equal-width cards
+///      filling the full available width. Used when the compressed width is
+///      still readable (≥ 140pt). Works for 2–3 plan Monthly/Annual layouts
+///      on any device, and for any number of plans on iPad where there's
+///      plenty of room.
 ///
-///   2. **Carousel mode** (plans overflow): horizontally-scrollable row with
-///      each card at a fixed natural width (200pt default, or
-///      `cardStyle.card_width`). User can swipe to reveal additional plans.
+///   2. **Carousel mode** (compressed width < minCardWidth): horizontally-
+///      scrollable row with each card at natural width (200pt). Used when
+///      there are so many plans that shrinking them all to fit would make
+///      them unreadable (typically 4+ plans on iPhone).
 ///
 /// Height is measured from the tallest card via PreferenceKey so the
 /// GeometryReader container gets an intrinsic height instead of the previous
@@ -2209,17 +2228,20 @@ struct HorizontalPlansView: View {
 
     @State private var rowHeight: CGFloat = 0
 
+    /// Minimum readable card width. Below this, we fall back to carousel
+    /// mode so plans aren't squished into an unreadable grid.
+    private var minCardWidth: CGFloat { 140 }
+    /// Natural card width used in carousel mode.
     private var naturalCardWidth: CGFloat { 200 }
 
     var body: some View {
         GeometryReader { geo in
             let count = CGFloat(max(plans.count, 1))
             let totalGap = gap * max(count - 1, 0)
-            let naturalTotal = naturalCardWidth * count + totalGap
-            let fits = naturalTotal <= geo.size.width
-            let gridCardWidth = max((geo.size.width - totalGap) / count, 0)
+            let compressedWidth = max((geo.size.width - totalGap) / count, 0)
+            let useGrid = compressedWidth >= minCardWidth
 
-            if fits {
+            if useGrid {
                 // Grid mode — equal-width cards filling available space.
                 HStack(alignment: .top, spacing: gap) {
                     ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
@@ -2232,7 +2254,14 @@ struct HorizontalPlansView: View {
                             sectionStyle: sectionStyle,
                             cardStyle: cardStyle
                         )
-                        .frame(width: gridCardWidth, alignment: .topLeading)
+                        // Strip `scale` animation — it compositing-overflows
+                        // cell bounds in a tightly-packed grid. glow and
+                        // border_highlight are cell-safe and preserved.
+                        .planSelection(
+                            safeGridAnimation(planSelectionAnimation),
+                            isSelected: selectedPlanId == plan.id
+                        )
+                        .frame(width: compressedWidth, alignment: .topLeading)
                         .background(
                             GeometryReader { innerGeo in
                                 Color.clear
