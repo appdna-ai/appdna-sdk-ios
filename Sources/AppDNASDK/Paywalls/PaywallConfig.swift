@@ -104,6 +104,8 @@ struct PaywallSectionData: Codable {
     let restoreText: String?        // CTA section: restore purchase text
     let showRestore: Bool?          // CTA section: show restore button
     let restorePosition: String?    // CTA section: "above" | "below" (default: "below")
+    let restoreTextColor: String?   // CTA section: restore link text color (hex)
+    let restoreFontSize: Double?    // CTA section: restore link font size
 
     // Guarantee
     let guaranteeText: String?
@@ -267,6 +269,8 @@ struct PaywallSectionData: Codable {
     let badgeTextColor: String?
     let selectedBorderColor: String?
     let selectedBgColor: String?
+    let selectedTextColor: String?      // Text color applied to all plan text elements when selected
+    let unselectedBorderColor: String?  // Border color for non-selected cards (defaults to a subtle gray)
     let selectedScale: CGFloat?
 
     enum CodingKeys: String, CodingKey {
@@ -274,6 +278,8 @@ struct PaywallSectionData: Codable {
         case restoreText = "restore_text"
         case showRestore = "show_restore"
         case restorePosition = "restore_position"
+        case restoreTextColor = "restore_text_color"
+        case restoreFontSize = "restore_font_size"
         case title_style, subtitle_style
         case imageUrl = "image_url"
         case reviewCount = "review_count"
@@ -374,6 +380,8 @@ struct PaywallSectionData: Codable {
         case badgeTextColor = "badge_text_color"
         case selectedBorderColor = "selected_border_color"
         case selectedBgColor = "selected_bg_color"
+        case selectedTextColor = "selected_text_color"
+        case unselectedBorderColor = "unselected_border_color"
         case selectedScale = "selected_scale"
         case layout, orientation
         case planDisplayStyle = "plan_display_style"

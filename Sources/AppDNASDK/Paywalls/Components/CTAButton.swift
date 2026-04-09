@@ -18,6 +18,10 @@ struct CTAButton: View {
     var showRestore: Bool = false
     /// Restore button position relative to Subscribe: "above" or "below" (default: "below")
     var restorePosition: String = "below"
+    /// Direct color override for the restore link (takes priority over restore_text element style)
+    var restoreTextColor: String? = nil
+    /// Direct font size override for the restore link
+    var restoreFontSize: CGFloat? = nil
     /// Restore action
     var onRestore: (() -> Void)? = nil
 
@@ -90,12 +94,32 @@ struct CTAButton: View {
     private var restoreButton: some View {
         if showRestore, let text = restoreText, !text.isEmpty {
             Button(action: { onRestore?() }) {
-                if let ts = restoreTextStyle {
-                    Text(text).applyTextStyle(ts)
+                // Priority order:
+                // 1. Direct restoreTextColor/restoreFontSize from section data (console Content tab)
+                // 2. restore_text element style (console Style tab)
+                // 3. Default: .secondary gray at .subheadline size
+                let directColor: Color? = restoreTextColor.map { Color(hex: $0) }
+                let directFont: Font = restoreFontSize.map { .system(size: $0) } ?? .subheadline
+                if let directColor = directColor {
+                    Text(text)
+                        .font(directFont)
+                        .foregroundColor(directColor)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .contentShape(Rectangle())
+                } else if let ts = restoreTextStyle {
+                    Text(text)
+                        .applyTextStyle(ts)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .contentShape(Rectangle())
                 } else {
                     Text(text)
-                        .font(.subheadline)
+                        .font(directFont)
                         .foregroundColor(.secondary)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .contentShape(Rectangle())
                 }
             }
         }

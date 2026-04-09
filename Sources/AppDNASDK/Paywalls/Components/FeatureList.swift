@@ -9,6 +9,10 @@ struct FeatureList: View {
     var gap: CGFloat = 12
     /// SPEC-084: Per-section style with element overrides.
     var sectionStyle: SectionStyleConfig? = nil
+    /// Direct icon color override from section.data.icon_color — takes priority
+    /// over sectionStyle.elements["icon"].textStyle.color. Exposed in the console
+    /// Content tab for easier access than the Style tab.
+    var iconColorOverride: String? = nil
 
     private var itemTextStyle: TextStyleConfig? {
         // Console saves under "item_text" key; fall back to legacy "item" key for older configs
@@ -16,6 +20,10 @@ struct FeatureList: View {
             ?? sectionStyle?.elements?["item"]?.textStyle
     }
     private var iconColor: Color? {
+        // Priority: section.data.icon_color (Content tab) > style.elements.icon.textStyle.color (Style tab)
+        if let hex = iconColorOverride, !hex.isEmpty {
+            return Color(hex: hex)
+        }
         if let hex = sectionStyle?.elements?["icon"]?.textStyle?.color {
             return Color(hex: hex)
         }

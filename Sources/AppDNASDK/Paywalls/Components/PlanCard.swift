@@ -40,6 +40,27 @@ struct PlanCard: View {
     private var selectedBg: Color? {
         cardStyle.selectedBgColor.map { Color(hex: $0) }
     }
+    /// Text color applied to plan name / price / subtitle when the card is selected.
+    /// Lets you do "white text on a solid green selected card" without overriding
+    /// each element's style manually.
+    private var selectedTextColor: Color? {
+        cardStyle.selectedTextColor.map { Color(hex: $0) }
+    }
+    /// Border color for non-selected cards. Defaults to a visible light gray
+    /// (was white.opacity(0.15) — invisible on light paywall backgrounds).
+    private var unselectedBorder: Color {
+        if let hex = cardStyle.unselectedBorderColor {
+            return Color(hex: hex)
+        }
+        return Color.gray.opacity(0.3)
+    }
+    /// Text color for UNSELECTED state — falls back to .primary (default dark).
+    private var unselectedTextColor: Color { .primary }
+    /// Resolved text color for the current selection state.
+    private var effectiveTextColor: Color {
+        if isSelected, let sel = selectedTextColor { return sel }
+        return unselectedTextColor
+    }
     private var selectedScaleValue: CGFloat { cardStyle.selectedScale ?? 1.0 }
     private var badgeBg: Color { Color(hex: cardStyle.badgeBgColor ?? "#6366F1") }
     private var badgeFg: Color { Color(hex: cardStyle.badgeTextColor ?? "#FFFFFF") }
@@ -49,18 +70,17 @@ struct PlanCard: View {
             print("[PlanCard] Tapped plan: \(plan.id ?? "nil")")
             onSelect()
         }) {
-            ZStack(alignment: badgeAlignment) {
-                VStack(spacing: 0) {
-                    // Plan image (if enabled)
-                    if showImage, let imgUrl = plan.image_url, let url = URL(string: imgUrl) {
-                        BundledAsyncImage(url: url) { img in
-                            img.resizable().scaledToFill()
-                        } placeholder: {
-                            Color.gray.opacity(0.1)
-                        }
-                        .frame(height: 80)
-                        .clipped()
+            VStack(spacing: 0) {
+                // Plan image (if enabled)
+                if showImage, let imgUrl = plan.image_url, let url = URL(string: imgUrl) {
+                    BundledAsyncImage(url: url) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        Color.gray.opacity(0.1)
                     }
+                    .frame(height: 80)
+                    .clipped()
+                }
 
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
@@ -69,10 +89,11 @@ struct PlanCard: View {
                             if let ts = planNameTextStyle {
                                 Text(loc?("plan.\(planIndex).name", plan.displayName) ?? plan.displayName)
                                     .applyTextStyle(ts)
+                                    .foregroundColor(isSelected && selectedTextColor != nil ? effectiveTextColor : nil)
                             } else {
                                 Text(loc?("plan.\(planIndex).name", plan.displayName) ?? plan.displayName)
                                     .font(.headline)
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(effectiveTextColor)
                             }
 
                             if let badge = plan.badge, badgePositionValue == "inline" {
@@ -85,10 +106,11 @@ struct PlanCard: View {
                             if let ts = priceTextStyle {
                                 Text(loc?("plan.\(planIndex).price", plan.displayPrice) ?? plan.displayPrice)
                                     .applyTextStyle(ts)
+                                    .foregroundColor(isSelected && selectedTextColor != nil ? effectiveTextColor : nil)
                             } else {
                                 Text(loc?("plan.\(planIndex).price", plan.displayPrice) ?? plan.displayPrice)
                                     .font(.subheadline.bold())
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(effectiveTextColor)
                             }
                         }
 
@@ -96,10 +118,11 @@ struct PlanCard: View {
                             if let ts = featureTextStyle {
                                 Text(loc?("plan.\(planIndex).trial", "\(trial) free trial") ?? "\(trial) free trial")
                                     .applyTextStyle(ts)
+                                    .foregroundColor(isSelected && selectedTextColor != nil ? effectiveTextColor : nil)
                             } else {
                                 Text(loc?("plan.\(planIndex).trial", "\(trial) free trial") ?? "\(trial) free trial")
                                     .font(.caption)
-                                    .foregroundColor(Color(hex: "#6366F1"))
+                                    .foregroundColor(isSelected ? effectiveTextColor : Color(hex: "#6366F1"))
                             }
                         }
 
@@ -107,7 +130,7 @@ struct PlanCard: View {
                         if showSubtitle, let desc = plan.description, !desc.isEmpty {
                             Text(desc)
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(isSelected && selectedTextColor != nil ? effectiveTextColor.opacity(0.8) : .secondary)
                                 .lineLimit(2)
                         }
 
@@ -115,7 +138,7 @@ struct PlanCard: View {
                         if showSavings, let savings = plan.savings_text, !savings.isEmpty {
                             Text(savings)
                                 .font(.caption2.bold())
-                                .foregroundColor(Color(hex: "#22C55E"))
+                                .foregroundColor(isSelected && selectedTextColor != nil ? effectiveTextColor : Color(hex: "#22C55E"))
                         }
 
                         // Per-plan features
@@ -125,8 +148,10 @@ struct PlanCard: View {
                                     HStack(spacing: 4) {
                                         Image(systemName: "checkmark")
                                             .font(.system(size: 9, weight: .bold))
-                                            .foregroundColor(Color(hex: "#6366F1"))
-                                        Text(feat).font(.caption2).foregroundColor(.secondary)
+                                            .foregroundColor(isSelected && selectedTextColor != nil ? effectiveTextColor : Color(hex: "#6366F1"))
+                                        Text(feat)
+                                            .font(.caption2)
+                                            .foregroundColor(isSelected && selectedTextColor != nil ? effectiveTextColor.opacity(0.85) : .secondary)
                                     }
                                 }
                             }
@@ -139,43 +164,50 @@ struct PlanCard: View {
                     if showIcon, let iconName = plan.icon, !iconName.isEmpty {
                         Image(systemName: iconName)
                             .font(.title3)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(isSelected && selectedTextColor != nil ? effectiveTextColor : .secondary)
                             .padding(.trailing, 4)
                     }
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .font(.title2)
-                        .foregroundColor(isSelected ? selectedBorder : Color.white.opacity(0.3))
+                        .foregroundColor(isSelected ? (selectedTextColor ?? selectedBorder) : unselectedBorder)
                 }
                 .padding(cardPadding)
                 .contentShape(Rectangle()) // Make entire card area tappable including Spacer gaps
-                } // close VStack for image
-                .background(
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(isSelected ? (selectedBg ?? Color.white.opacity(0.08)) : Color.white.opacity(0.05))
-                )
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(isSelected ? selectedBorder : Color.white.opacity(0.15), lineWidth: isSelected ? 2 : 1)
-                )
-                .shadow(
-                    color: (cardStyle.cardShadow != nil && cardStyle.cardShadow != "none" && cardStyle.cardShadow != "false")
-                        ? .black.opacity(0.1) : .clear,
-                    radius: cardStyle.cardShadow == "sm" ? 2 : cardStyle.cardShadow == "lg" ? 8 : 4,
-                    x: 0,
-                    y: cardStyle.cardShadow == "sm" ? 1 : cardStyle.cardShadow == "lg" ? 4 : 2
-                )
-
-                // Positioned badge (top_left / top_right)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(isSelected ? (selectedBg ?? Color(.systemBackground)) : Color(.systemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(isSelected ? selectedBorder : unselectedBorder, lineWidth: isSelected ? 2 : 1)
+            )
+            .shadow(
+                color: (cardStyle.cardShadow != nil && cardStyle.cardShadow != "none" && cardStyle.cardShadow != "false")
+                    ? .black.opacity(0.1) : .clear,
+                radius: cardStyle.cardShadow == "sm" ? 2 : cardStyle.cardShadow == "lg" ? 8 : 4,
+                x: 0,
+                y: cardStyle.cardShadow == "sm" ? 1 : cardStyle.cardShadow == "lg" ? 4 : 2
+            )
+            // Badge as .overlay instead of a ZStack sibling — extends beyond the
+            // card's bounds without being clipped, and doesn't affect the card's
+            // intrinsic size (important in LazyVGrid cells where width is
+            // constrained). .allowsHitTesting(false) so tapping the badge still
+            // registers as a card tap.
+            .overlay(alignment: badgeAlignment) {
                 if let badge = plan.badge, badgePositionValue != "inline" {
                     badgeView(badge)
-                        .offset(x: badgePositionValue == "top_left" ? 0 : 0, y: -10)
+                        .fixedSize()
+                        .offset(y: -10)
+                        .allowsHitTesting(false)
                 }
             }
         }
         .contentShape(Rectangle())
         .buttonStyle(.plain)
+        .padding(.top, plan.badge != nil && badgePositionValue != "inline" ? 10 : 0) // leave room for the overflowing badge
         .scaleEffect(isSelected ? selectedScaleValue : 1.0)
         .animation(.easeInOut(duration: 0.2), value: isSelected)
     }
@@ -245,6 +277,8 @@ struct PlanCardStyle {
     var badgeTextColor: String? = nil
     var selectedBorderColor: String? = nil
     var selectedBgColor: String? = nil
+    var selectedTextColor: String? = nil      // Flips plan text colors when selected
+    var unselectedBorderColor: String? = nil  // Default subtle gray when nil
     var selectedScale: CGFloat? = nil
     // Show flags
     var showIcon: Bool = false
@@ -270,6 +304,8 @@ struct PlanCardStyle {
         self.badgeTextColor = data?.badgeTextColor
         self.selectedBorderColor = data?.selectedBorderColor
         self.selectedBgColor = data?.selectedBgColor
+        self.selectedTextColor = data?.selectedTextColor
+        self.unselectedBorderColor = data?.unselectedBorderColor
         self.selectedScale = data?.selectedScale
         self.showIcon = data?.showPlanIcons ?? false
         self.showImage = data?.showPlanImages ?? false

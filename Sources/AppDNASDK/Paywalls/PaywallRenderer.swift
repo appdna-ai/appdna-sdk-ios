@@ -105,6 +105,8 @@ struct PaywallRenderer: View {
                             restoreText: ctaSec.data?.restoreText,
                             showRestore: ctaSec.data?.showRestore ?? false,
                             restorePosition: ctaSec.data?.restorePosition ?? "below",
+                            restoreTextColor: ctaSec.data?.restoreTextColor,
+                            restoreFontSize: ctaSec.data?.restoreFontSize.map { CGFloat($0) },
                             onRestore: onRestore
                         )
                         .ctaAnimation(config.animation?.cta_animation)
@@ -402,7 +404,8 @@ struct PaywallRenderer: View {
                 richItems: section.data?.items,
                 columns: Int(section.data?.featureColumns ?? 1),
                 gap: section.data?.featureGap ?? 12,
-                sectionStyle: section.style)
+                sectionStyle: section.style,
+                iconColorOverride: section.data?.iconColor)
                 .applyContainerStyle(section.style?.container))
         case "plans":
             // Plans can be in section.data.plans OR top-level config.plans
@@ -425,7 +428,9 @@ struct PaywallRenderer: View {
                 textOverride: ctaText,
                 restoreText: section.data?.restoreText,
                 showRestore: section.data?.showRestore ?? false,
-                restorePosition: section.data?.restorePosition ?? "below"
+                restorePosition: section.data?.restorePosition ?? "below",
+                restoreTextColor: section.data?.restoreTextColor,
+                restoreFontSize: section.data?.restoreFontSize.map { CGFloat($0) }
             )
             .ctaAnimation(config.animation?.cta_animation)
             .applyContainerStyle(section.style?.container))
@@ -801,6 +806,7 @@ struct PaywallRenderer: View {
     @ViewBuilder
     private func legalSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
         let textColor = Color(hex: data?.color ?? "#9CA3AF")
+        let linkColor = Color(hex: data?.accentColor ?? "#6366F1")
         let size = data?.fontSize ?? 11
         let textAlignment: TextAlignment = {
             switch data?.alignment {
@@ -817,7 +823,7 @@ struct PaywallRenderer: View {
                     .font(.system(size: size))
                     .foregroundColor(textColor)
                     .multilineTextAlignment(textAlignment)
-                    .tint(Color(hex: data?.accentColor ?? "#6366F1"))
+                    .tint(linkColor)
             }
 
             if let links = data?.links, !links.isEmpty {
@@ -829,18 +835,35 @@ struct PaywallRenderer: View {
                             } label: {
                                 Text(link.label ?? "Restore Purchases")
                                     .font(.system(size: size))
-                                    .foregroundColor(Color(hex: data?.accentColor ?? "#6366F1"))
+                                    .foregroundColor(linkColor)
                             }
                         } else if let urlStr = link.url, let url = URL(string: urlStr) {
-                            Link(link.label ?? "", destination: url)
-                                .font(.system(size: size))
-                                .foregroundColor(Color(hex: data?.accentColor ?? "#6366F1"))
+                            // Use Button + InAppBrowser instead of SwiftUI Link.
+                            // Link(...) hands URLs to UIApplication.open which
+                            // launches Safari — we want a sheet-style in-app browser
+                            // so users stay in the app.
+                            Button {
+                                InAppBrowser.present(url: url)
+                            } label: {
+                                Text(link.label ?? "")
+                                    .font(.system(size: size))
+                                    .foregroundColor(linkColor)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity)
+        // Intercept URL opens from any inline markdown links inside the
+        // Text(AttributedString) above. Without this, tapping a markdown
+        // link in the legal paragraph launches Safari. OpenURLAction
+        // returns .handled so SwiftUI doesn't pass the URL to UIApplication.
+        .environment(\.openURL, OpenURLAction { url in
+            InAppBrowser.present(url: url)
+            return .handled
+        })
     }
 
     private func parseMarkdownLinks(_ text: String) -> AttributedString {
