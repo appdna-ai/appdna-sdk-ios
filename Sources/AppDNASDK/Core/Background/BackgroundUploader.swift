@@ -8,8 +8,17 @@ final class BackgroundUploader {
     /// Task identifier — must match BGTaskSchedulerPermittedIdentifiers in Info.plist.
     static let taskIdentifier = "ai.appdna.sdk.eventUpload"
 
-    /// Shared instance, set during SDK init.
+    /// Shared instance, set during SDK init (after registration).
     static var shared: BackgroundUploader?
+
+    /// Tracks whether BGTaskScheduler.register has been called successfully.
+    /// Apple requires this to happen BEFORE application(_:didFinishLaunchingWithOptions:)
+    /// returns — calling it later crashes with "All launch handlers must be registered
+    /// before application finishes launching".
+    private static var didRegister = false
+
+    /// Returns true once `registerBackgroundTaskIdentifier()` has completed.
+    static var isRegistered: Bool { didRegister }
 
     private weak var apiClient: APIClient?
     private let eventStore: EventStore
@@ -21,18 +30,36 @@ final class BackgroundUploader {
         self.eventStore = eventStore
     }
 
-    /// Register the background task with the system.
-    /// Must be called during application(_:didFinishLaunchingWithOptions:) or SDK init.
-    func registerBackgroundTask() {
+    /// Register the BGTaskScheduler identifier with a static handler that forwards
+    /// to `BackgroundUploader.shared` (may be nil if SDK isn't configured yet).
+    ///
+    /// **MUST be called from `application(_:didFinishLaunchingWithOptions:)` BEFORE
+    /// the method returns.** The host app should call `AppDNA.registerBackgroundTasks()`
+    /// which delegates here.
+    ///
+    /// Safe to call multiple times — subsequent calls are no-ops.
+    static func registerBackgroundTaskIdentifier() {
+        guard !didRegister else { return }
         if #available(iOS 13.0, *) {
             BGTaskScheduler.shared.register(
-                forTaskWithIdentifier: Self.taskIdentifier,
+                forTaskWithIdentifier: taskIdentifier,
                 using: nil
-            ) { [weak self] task in
-                guard let processingTask = task as? BGProcessingTask else { return }
-                self?.handleBackgroundTask(processingTask)
+            ) { task in
+                guard let processingTask = task as? BGProcessingTask else {
+                    task.setTaskCompleted(success: false)
+                    return
+                }
+                // Forward to the live BackgroundUploader instance if configured.
+                // If configure() hasn't run yet, there's nothing to upload — complete cleanly.
+                if let shared = BackgroundUploader.shared {
+                    shared.handleBackgroundTask(processingTask)
+                } else {
+                    Log.warning("Background task fired but AppDNA SDK not configured — skipping upload")
+                    processingTask.setTaskCompleted(success: false)
+                }
             }
-            Log.debug("Registered background upload task: \(Self.taskIdentifier)")
+            didRegister = true
+            Log.debug("Registered background upload task: \(taskIdentifier)")
         }
     }
 

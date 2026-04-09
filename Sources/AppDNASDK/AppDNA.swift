@@ -11,7 +11,7 @@ import FirebaseFirestore
 public final class AppDNA: @unchecked Sendable {
 
     /// SDK version string.
-    public static let sdkVersion = "1.0.37"
+    public static let sdkVersion = "1.0.38"
 
     /// Firestore instance used by the SDK.
     /// Uses a secondary Firebase app ("appdna") if GoogleService-Info-AppDNA.plist is found,
@@ -121,6 +121,35 @@ public final class AppDNA: @unchecked Sendable {
     private init() {}
 
     // MARK: - Public API: Initialization
+
+    /// Register the SDK's BGTaskScheduler identifiers with the system.
+    ///
+    /// **Call this from `AppDelegate.application(_:didFinishLaunchingWithOptions:)`
+    /// BEFORE the method returns — and before `AppDNA.configure()`.**
+    ///
+    /// Apple requires `BGTaskScheduler.register(...)` to happen during app launch.
+    /// Calling it later (from `SceneDelegate`, `SwiftUI.onAppear`, or an async block)
+    /// crashes with: *"All launch handlers must be registered before application
+    /// finishes launching"*.
+    ///
+    /// ```swift
+    /// func application(
+    ///     _ application: UIApplication,
+    ///     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+    /// ) -> Bool {
+    ///     AppDNA.registerBackgroundTasks()   // MUST be first, synchronously
+    ///     AppDNA.configure(apiKey: "your-api-key")
+    ///     return true
+    /// }
+    /// ```
+    ///
+    /// This call is idempotent — multiple calls are no-ops.
+    /// If you don't call this, the SDK logs a warning and background event
+    /// uploads are disabled (the app still works normally, events upload on
+    /// next foreground session).
+    public static func registerBackgroundTasks() {
+        BackgroundUploader.registerBackgroundTaskIdentifier()
+    }
 
     /// Configure the SDK. Call once at app launch. Subsequent calls are ignored.
     /// Firebase is initialized on the main thread first, then the rest runs on a background queue.
@@ -813,10 +842,25 @@ public final class AppDNA: @unchecked Sendable {
         self.eventQueue = eq
         tracker.setEventQueue(eq)
 
-        // SPEC-067: Initialize background uploader
+        // SPEC-067: Initialize background uploader.
+        // BGTaskScheduler.register must happen during app launch (before
+        // application(_:didFinishLaunchingWithOptions:) returns) — we
+        // previously called it here in configure(), which crashed on devices
+        // where configure() ran after launch completed. Registration is now
+        // done via AppDNA.registerBackgroundTasks() which host apps call
+        // early in their AppDelegate. If it hasn't happened, background
+        // uploads are disabled for this session but the SDK still works.
         let bgUploader = BackgroundUploader(apiClient: client, eventStore: eventStore)
-        bgUploader.registerBackgroundTask()
         BackgroundUploader.shared = bgUploader
+        if !BackgroundUploader.isRegistered {
+            Log.warning("""
+                BackgroundUploader: background task not registered. Add this to \
+                your AppDelegate's application(_:didFinishLaunchingWithOptions:) \
+                BEFORE calling AppDNA.configure():
+                    AppDNA.registerBackgroundTasks()
+                Background event uploads are disabled for this session.
+                """)
+        }
 
         // 3. Initialize session manager (tracks lifecycle events)
         let sessionMgr = SessionManager(eventTracker: tracker)

@@ -289,11 +289,39 @@ struct FormInputSelectBlock: View {
             ?? block.field_style?.border_color.map { Color(hex: $0) }
             ?? fillCol.opacity(0.3)
 
+        // Radio position — "left" (leading) or "right" (trailing, default)
+        let radioPosition = (block.field_config?["radio_position"]?.value as? String) ?? "right"
+        let radioOnLeft = radioPosition == "left" || radioPosition == "leading"
+
+        // Default text sizes from field_config (fallbacks when per-option not set)
+        let defaultTitleSize = (block.field_config?["title_font_size"]?.value as? Double) ?? 15
+        let defaultSubtitleSize = (block.field_config?["subtitle_font_size"]?.value as? Double) ?? 12
+        let defaultSubtitleColor = (block.field_config?["subtitle_color"]?.value as? String).map { Color(hex: $0) }
+            ?? textCol.opacity(0.65)
+
         VStack(spacing: 8) {
             ForEach(options) { option in
                 let isSelected = isMultiSelect
                     ? selectedValues.contains(option.resolvedValue)
                     : selectedValue == option.resolvedValue
+
+                // Per-option style overrides
+                let optTitleColor: Color = option.title_color.map { Color(hex: $0) }
+                    ?? (isSelected ? selectedTextCol : textCol)
+                let optSubtitleColor: Color = option.subtitle_color.map { Color(hex: $0) }
+                    ?? defaultSubtitleColor
+                let optTitleSize: CGFloat = CGFloat(option.title_font_size ?? defaultTitleSize)
+                let optSubtitleSize: CGFloat = CGFloat(option.subtitle_font_size ?? defaultSubtitleSize)
+                let optTitleWeight: Font.Weight = {
+                    switch option.title_font_weight {
+                    case "regular": return .regular
+                    case "medium": return .medium
+                    case "semibold": return .semibold
+                    case "bold": return .bold
+                    default: return .regular
+                    }
+                }()
+
                 Button {
                     if isMultiSelect {
                         if selectedValues.contains(option.resolvedValue) {
@@ -308,6 +336,14 @@ struct FormInputSelectBlock: View {
                     }
                 } label: {
                     HStack(spacing: 12) {
+                        // Radio on left (if configured)
+                        if radioOnLeft {
+                            Image(systemName: isSelected
+                                ? (isMultiSelect ? "checkmark.circle.fill" : "largecircle.fill.circle")
+                                : "circle")
+                                .foregroundColor(fillCol)
+                                .font(.title3)
+                        }
                         if let imgUrl = option.image_url, let url = URL(string: imgUrl) {
                             BundledAsyncImage(url: url) { image in
                                 image.resizable().scaledToFill()
@@ -320,15 +356,26 @@ struct FormInputSelectBlock: View {
                         if let icon = option.icon, !icon.isEmpty {
                             Text(icon)
                         }
-                        Text(option.label ?? "")
-                            .font(.subheadline)
-                            .foregroundColor(isSelected ? selectedTextCol : textCol)
+                        // Title + optional subtitle
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(option.label ?? "")
+                                .font(.system(size: optTitleSize, weight: optTitleWeight))
+                                .foregroundColor(optTitleColor)
+                            if let sub = option.subtitle, !sub.isEmpty {
+                                Text(sub)
+                                    .font(.system(size: optSubtitleSize))
+                                    .foregroundColor(optSubtitleColor)
+                            }
+                        }
                         Spacer()
-                        Image(systemName: isSelected
-                            ? (isMultiSelect ? "checkmark.circle.fill" : "largecircle.fill.circle")
-                            : "circle")
-                            .foregroundColor(fillCol)
-                            .font(.title3)
+                        // Radio on right (default)
+                        if !radioOnLeft {
+                            Image(systemName: isSelected
+                                ? (isMultiSelect ? "checkmark.circle.fill" : "largecircle.fill.circle")
+                                : "circle")
+                                .foregroundColor(fillCol)
+                                .font(.title3)
+                        }
                     }
                     .padding(12)
                     .background {
@@ -852,6 +899,11 @@ struct FormInputLocationPlaceholderBlock: View {
     @FocusState private var isFocused: Bool
     @StateObject private var searchCompleter = LocationSearchCompleter()
 
+    /// True while we're restoring text from saved inputValues so the
+    /// .onChange(of: text) handler doesn't clobber the full dict with a
+    /// raw string.
+    @State private var isRestoringFromSaved = false
+
     var body: some View {
         let fieldId = block.field_id ?? block.id
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
@@ -871,12 +923,25 @@ struct FormInputLocationPlaceholderBlock: View {
                     .focused($isFocused)
                     .font(.subheadline)
                     .onChange(of: text) { newValue in
+                        // Skip the onChange that fires when we programmatically set
+                        // text from a saved dict — we must NOT overwrite the full
+                        // dict with the raw string. Same when a suggestion is
+                        // selected (we set text before storing the dict).
+                        if isRestoringFromSaved { return }
                         searchCompleter.search(query: newValue)
-                        showResults = !newValue.isEmpty
+                        showResults = isFocused && !newValue.isEmpty
+                        // Only store the raw string if the user is ACTIVELY typing.
+                        // Once a suggestion is selected, selectResult writes the
+                        // structured dict and this onChange won't fire again until
+                        // the user starts typing over it.
                         inputValues[fieldId] = newValue
                     }
                 if !text.isEmpty {
-                    Button { text = ""; showResults = false; inputValues[fieldId] = "" } label: {
+                    Button {
+                        text = ""
+                        showResults = false
+                        inputValues[fieldId] = ""
+                    } label: {
                         Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
                     }
                 }
@@ -904,6 +969,10 @@ struct FormInputLocationPlaceholderBlock: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                 VStack(alignment: .leading, spacing: 2) {
+                                    // Display formatted location: show title only
+                                    // (MKLocalSearchCompletion.title is typically the
+                                    // city/place name). We defer the full city/state/
+                                    // country resolution to selectResult via MKPlacemark.
                                     Text(result.title)
                                         .font(.subheadline)
                                         .foregroundColor(.primary)
@@ -943,37 +1012,107 @@ struct FormInputLocationPlaceholderBlock: View {
             }
         }
         .onAppear {
-            if text.isEmpty {
-                let fieldId = block.field_id ?? block.id
-                if let saved = inputValues[fieldId] as? [String: Any], let addr = saved["address"] as? String {
-                    text = addr
-                } else if let saved = inputValues[fieldId] as? String, !saved.isEmpty {
-                    text = saved
+            // Restore previously entered/selected value WITHOUT clobbering the
+            // stored dict. Uses isRestoringFromSaved to bypass the onChange(of: text)
+            // handler so the full structured dict (lat/lng/city/state/country/
+            // timezone) survives back-navigation.
+            let fieldId = block.field_id ?? block.id
+            if let savedDict = inputValues[fieldId] as? [String: Any] {
+                // Full structured dict — rebuild display text from city/state/country
+                let display = Self.formatLocationDisplay(from: savedDict)
+                    ?? (savedDict["address"] as? String)
+                    ?? ""
+                if !display.isEmpty && text != display {
+                    isRestoringFromSaved = true
+                    text = display
+                    // Re-yield so onChange(of:text) fires with isRestoringFromSaved
+                    // still true, then clear the flag.
+                    DispatchQueue.main.async {
+                        isRestoringFromSaved = false
+                    }
+                }
+                Log.debug("[LocationBlock] restored saved dict: \(savedDict)")
+            } else if let savedStr = inputValues[fieldId] as? String, !savedStr.isEmpty {
+                if text != savedStr {
+                    isRestoringFromSaved = true
+                    text = savedStr
+                    DispatchQueue.main.async {
+                        isRestoringFromSaved = false
+                    }
                 }
             }
         }
     }
 
-    private func selectResult(_ result: MKLocalSearchCompletion, fieldId: String) {
-        let displayText = result.subtitle.isEmpty ? result.title : "\(result.title), \(result.subtitle)"
-        text = displayText
-        showResults = false
+    /// Formats a saved location dict as "City / State, Country" (with state)
+    /// or "City, Country" (no state). Returns nil if city is missing.
+    static func formatLocationDisplay(from dict: [String: Any]) -> String? {
+        let city = (dict["city"] as? String) ?? ""
+        let state = (dict["state"] as? String) ?? ""
+        let country = (dict["country"] as? String) ?? ""
+        guard !city.isEmpty else { return nil }
+        if !state.isEmpty && !country.isEmpty {
+            return "\(city) / \(state), \(country)"
+        } else if !country.isEmpty {
+            return "\(city), \(country)"
+        } else {
+            return city
+        }
+    }
 
-        // Resolve coordinates via MKLocalSearch
+    private func selectResult(_ result: MKLocalSearchCompletion, fieldId: String) {
+        showResults = false
+        isFocused = false  // dismiss keyboard + hide dropdown reliably
+
+        // Resolve full placemark via MKLocalSearch to get city/state/country/timezone
         let searchRequest = MKLocalSearch.Request(completion: result)
         let search = MKLocalSearch(request: searchRequest)
         search.start { response, _ in
             guard let mapItem = response?.mapItems.first else {
-                // Store formatted address without coordinates
-                inputValues[fieldId] = ["address": displayText]
+                // Fallback: store minimal data
+                let fallback = result.subtitle.isEmpty ? result.title : "\(result.title), \(result.subtitle)"
+                isRestoringFromSaved = true
+                text = fallback
+                DispatchQueue.main.async { isRestoringFromSaved = false }
+                inputValues[fieldId] = ["address": fallback]
+                print("[AppDNA] Location (no placemark): \(fallback)")
                 return
             }
-            let coordinate = mapItem.placemark.coordinate
-            inputValues[fieldId] = [
-                "address": displayText,
+            let placemark = mapItem.placemark
+            let coordinate = placemark.coordinate
+            let city = placemark.locality ?? placemark.subAdministrativeArea ?? ""
+            let state = placemark.administrativeArea ?? ""
+            let country = placemark.country ?? ""
+            let timezone = placemark.timeZone?.identifier ?? TimeZone.current.identifier
+
+            // Structured dict — country, city, state, timezone, lat, lon
+            let locationDict: [String: Any] = [
+                "city": city,
+                "state": state,
+                "country": country,
+                "timezone": timezone,
                 "latitude": coordinate.latitude,
                 "longitude": coordinate.longitude,
             ]
+            inputValues[fieldId] = locationDict
+
+            // Build display text: "City / State, Country" or "City, Country"
+            let display = Self.formatLocationDisplay(from: locationDict) ?? result.title
+            isRestoringFromSaved = true
+            text = display
+            DispatchQueue.main.async { isRestoringFromSaved = false }
+
+            // Debug print for Xcode console — user explicitly asked for this
+            print("""
+            [AppDNA] Location selected:
+              city:      \(city)
+              state:     \(state)
+              country:   \(country)
+              timezone:  \(timezone)
+              latitude:  \(coordinate.latitude)
+              longitude: \(coordinate.longitude)
+              display:   \(display)
+            """)
         }
     }
 }

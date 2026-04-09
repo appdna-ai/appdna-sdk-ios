@@ -207,6 +207,15 @@ struct AnimatedLoadingBlockView: View {
     /// Type-erased loading variant to avoid @ViewBuilder switch in body.
     private func loadingVariantView(variant: String, itemList: [LoadingItemConfig], progressCol: Color, checkCol: Color) -> AnyView {
         switch variant {
+        case "orbiting_icons":
+            return AnyView(OrbitingIconsLoaderView(
+                block: block,
+                items: itemList,
+                progress: overallProgress,
+                completedCount: completedCount,
+                progressCol: progressCol
+            ))
+
         case "circular":
             return AnyView(
                 VStack(spacing: 16) {
@@ -341,6 +350,243 @@ struct AnimatedLoadingBlockView: View {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Orbiting Icons Loader View
+
+/// Radial loader: a central dot/image with N icons orbiting around it on a ring.
+/// Each icon has its own background color and image/emoji. Used for "Aligning the
+/// stars" style screens (Astro Future, SynergyChart).
+///
+/// Configuration (all via `block.field_config`):
+///   - `orbit_radius` (Double)     — radius of the orbit circle, default 80
+///   - `orbit_duration_ms` (Int)   — ms for a full rotation, default 6000
+///   - `central_image_url` (String)
+///   - `central_bg_color` (String)
+///   - `central_size` (Double)     — diameter of central circle, default 10
+///   - `ring_color` (String)       — optional visible ring stroke color
+///   - `ring_width` (Double)       — ring stroke width, default 1
+///   - `animated_bg` (String)      — "none" (default), "constellation", "pulse"
+///   - `animated_bg_color` (String)
+///   - `size` (Double)             — total frame size (square), default 240
+///
+/// Each item in `block.loading_items` becomes one orbiting icon. The item can
+/// specify:
+///   - `icon_url` or `icon`         — image/emoji to display
+///   - `icon_bg_color`              — hex background color for the icon bubble
+///   - `icon_size`                  — diameter of the icon, default 48
+///   - `icon_orbit_angle`           — optional fixed angle 0-360; nil = auto-distribute
+///   - `label` (String)             — text to show during this icon's active phase
+struct OrbitingIconsLoaderView: View {
+    let block: ContentBlock
+    let items: [LoadingItemConfig]
+    let progress: CGFloat
+    let completedCount: Int
+    let progressCol: Color
+
+    @State private var rotation: Double = 0
+    @State private var bgPulse: CGFloat = 0
+
+    var body: some View {
+        // Pull orbiting config from field_config (dictionary-based, no schema changes)
+        let cfg = block.field_config
+        let size: CGFloat = CGFloat((cfg?["size"]?.value as? Double) ?? 240)
+        let orbitRadius: CGFloat = CGFloat((cfg?["orbit_radius"]?.value as? Double) ?? 80)
+        let orbitDurationMs: Double = Double((cfg?["orbit_duration_ms"]?.value as? Int) ?? (cfg?["orbit_duration_ms"]?.value as? Double).map { Int($0) } ?? 6000)
+        let centralSize: CGFloat = CGFloat((cfg?["central_size"]?.value as? Double) ?? 10)
+        let centralImageUrl = cfg?["central_image_url"]?.value as? String
+        let centralBgColorHex = cfg?["central_bg_color"]?.value as? String ?? "#FEE2E2"
+        let ringColorHex = cfg?["ring_color"]?.value as? String
+        let ringWidth: CGFloat = CGFloat((cfg?["ring_width"]?.value as? Double) ?? 1)
+        let animatedBg = (cfg?["animated_bg"]?.value as? String) ?? "none"
+        let animatedBgHex = cfg?["animated_bg_color"]?.value as? String ?? "#EEEEEE"
+        let labelSize = CGFloat((cfg?["label_font_size"]?.value as? Double) ?? 17)
+        let subtitleSize = CGFloat((cfg?["subtitle_font_size"]?.value as? Double) ?? 14)
+        let subtitleColorHex = cfg?["subtitle_color"]?.value as? String ?? "#E11D48"
+        let labelColorHex = cfg?["label_color"]?.value as? String ?? "#0F172A"
+        let showPercentage = block.show_percentage ?? false
+        let pctLocation = (cfg?["percentage_location"]?.value as? String) ?? "below"
+
+        VStack(spacing: 20) {
+            ZStack {
+                // Animated background (optional)
+                if animatedBg == "constellation" {
+                    ConstellationBackground(color: Color(hex: animatedBgHex).opacity(0.4))
+                        .frame(width: size * 1.2, height: size * 1.2)
+                        .blendMode(.multiply)
+                } else if animatedBg == "pulse" {
+                    Circle()
+                        .fill(Color(hex: animatedBgHex).opacity(0.15 + 0.15 * bgPulse))
+                        .frame(width: size * (1.0 + 0.1 * bgPulse), height: size * (1.0 + 0.1 * bgPulse))
+                }
+
+                // Ring (optional visible orbit path)
+                if let ringColorHex {
+                    Circle()
+                        .stroke(Color(hex: ringColorHex).opacity(0.3), lineWidth: ringWidth)
+                        .frame(width: orbitRadius * 2, height: orbitRadius * 2)
+                }
+
+                // Central dot/image
+                if let urlStr = centralImageUrl, let url = URL(string: urlStr) {
+                    BundledAsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Circle().fill(Color(hex: centralBgColorHex))
+                    }
+                    .frame(width: centralSize, height: centralSize)
+                    .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color(hex: centralBgColorHex))
+                        .frame(width: centralSize, height: centralSize)
+                }
+
+                // Orbiting icons
+                ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
+                    let baseAngle = item.icon_orbit_angle ?? (360.0 * Double(idx) / Double(max(items.count, 1)))
+                    let angleDeg = baseAngle + rotation
+                    let angleRad = angleDeg * .pi / 180
+                    let xOffset = CGFloat(cos(angleRad)) * orbitRadius
+                    let yOffset = CGFloat(sin(angleRad)) * orbitRadius
+                    let iconSize: CGFloat = CGFloat(item.icon_size ?? 48)
+                    let iconBgHex = item.icon_bg_color ?? "#BE123C"
+                    OrbitingIconView(
+                        item: item,
+                        size: iconSize,
+                        bgColor: Color(hex: iconBgHex)
+                    )
+                    .offset(x: xOffset, y: yOffset)
+                }
+            }
+            .frame(width: size, height: size)
+            .onAppear {
+                withAnimation(.linear(duration: orbitDurationMs / 1000.0).repeatForever(autoreverses: false)) {
+                    rotation = 360
+                }
+                if animatedBg == "pulse" {
+                    withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                        bgPulse = 1.0
+                    }
+                }
+            }
+
+            // Above percentage
+            if showPercentage && pctLocation == "above" {
+                Text("\(Int(progress * 100))%")
+                    .font(.system(size: labelSize, weight: .bold))
+                    .foregroundColor(Color(hex: labelColorHex))
+            }
+
+            // Title label (from block.text OR first item label)
+            if let title = block.text, !title.isEmpty {
+                Text(title)
+                    .font(.system(size: labelSize, weight: .semibold))
+                    .foregroundColor(Color(hex: labelColorHex))
+                    .multilineTextAlignment(.center)
+            }
+
+            // Active item subtitle label
+            if completedCount < items.count, let subtitle = items[completedCount].label, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.system(size: subtitleSize))
+                    .foregroundColor(Color(hex: subtitleColorHex))
+                    .multilineTextAlignment(.center)
+                    .transition(.opacity)
+                    .animation(.easeInOut, value: completedCount)
+            }
+
+            // Below percentage
+            if showPercentage && pctLocation == "below" {
+                Text("\(Int(progress * 100))%")
+                    .font(.system(size: labelSize, weight: .bold))
+                    .foregroundColor(Color(hex: labelColorHex))
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// A single orbiting icon — circular bubble with image, emoji icon, or
+/// SF Symbol inside.
+private struct OrbitingIconView: View {
+    let item: LoadingItemConfig
+    let size: CGFloat
+    let bgColor: Color
+
+    var body: some View {
+        ZStack {
+            Circle().fill(bgColor)
+            if let urlStr = item.icon_url, let url = URL(string: urlStr) {
+                BundledAsyncImage(url: url) { image in
+                    image.resizable().scaledToFit()
+                } placeholder: {
+                    Color.clear
+                }
+                .frame(width: size * 0.55, height: size * 0.55)
+            } else if let icon = item.icon, !icon.isEmpty {
+                // Emoji or SF Symbol
+                if icon.count <= 2 || icon.contains(where: { $0.isLetter == false && $0.isNumber == false }) {
+                    Text(icon).font(.system(size: size * 0.45))
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: size * 0.45, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .shadow(color: bgColor.opacity(0.3), radius: 8, y: 2)
+    }
+}
+
+/// Faint constellation dots + lines drifting background for orbiting loader.
+private struct ConstellationBackground: View {
+    let color: Color
+    @State private var phase: Double = 0
+
+    var body: some View {
+        Canvas { ctx, size in
+            let dots: [(CGPoint, CGFloat)] = [
+                (CGPoint(x: size.width * 0.15, y: size.height * 0.2), 2),
+                (CGPoint(x: size.width * 0.85, y: size.height * 0.15), 3),
+                (CGPoint(x: size.width * 0.25, y: size.height * 0.75), 2),
+                (CGPoint(x: size.width * 0.75, y: size.height * 0.8), 2),
+                (CGPoint(x: size.width * 0.5, y: size.height * 0.4), 3),
+                (CGPoint(x: size.width * 0.1, y: size.height * 0.55), 2),
+                (CGPoint(x: size.width * 0.9, y: size.height * 0.5), 2),
+                (CGPoint(x: size.width * 0.45, y: size.height * 0.85), 2),
+            ]
+            for (p, r) in dots {
+                let opacity = 0.3 + 0.5 * abs(sin(phase + Double(p.x)))
+                ctx.fill(
+                    Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)),
+                    with: .color(color.opacity(opacity))
+                )
+            }
+            // Connecting lines between nearest dots
+            for i in 0..<dots.count {
+                for j in (i + 1)..<dots.count {
+                    let a = dots[i].0
+                    let b = dots[j].0
+                    let dx = a.x - b.x
+                    let dy = a.y - b.y
+                    let dist = sqrt(dx * dx + dy * dy)
+                    if dist < size.width * 0.3 {
+                        var path = Path()
+                        path.move(to: a)
+                        path.addLine(to: b)
+                        ctx.stroke(path, with: .color(color.opacity(0.15)), lineWidth: 0.5)
+                    }
+                }
+            }
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 3.0).repeatForever(autoreverses: true)) {
+                phase = .pi
             }
         }
     }
@@ -655,10 +901,14 @@ struct DateWheelPickerBlockView: View {
             }
         }()
 
-        // Read picker_variant from field_config (console option): "graphical" (default) | "wheel" | "compact"
-        let variant = (block.field_config?["picker_variant"]?.value as? String)
+        // Read picker_variant from field_config (console option): "graphical" | "wheel" | "compact".
+        // When in datetime mode we default to "wheel" because graphical+wheel
+        // stacked vertically exceeds most screen heights and gets clipped by the
+        // pinned CTA button. Date-only can still default to "graphical" (calendar).
+        let explicitVariant = (block.field_config?["picker_variant"]?.value as? String)
             ?? (block.field_config?["date_picker_variant"]?.value as? String)
-            ?? "graphical"
+        let isDatetimeMode = components.contains(.date) && components.contains(.hourAndMinute)
+        let variant = explicitVariant ?? (isDatetimeMode ? "wheel" : "graphical")
         // Read additional styling options from field_config
         let calendarBg = (block.field_config?["calendar_bg_color"]?.value as? String)
             ?? block.calendar_bg_color ?? "#FFFFFF"

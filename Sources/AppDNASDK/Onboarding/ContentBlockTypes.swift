@@ -319,6 +319,14 @@ public struct InputOption: Codable, Identifiable {
     public let value: String?
     public let icon: String?
     public let image_url: String?
+    // Per-option subtitle (shown below label in a smaller font)
+    public let subtitle: String?
+    // Per-option text styling — overrides field_config defaults when set
+    public let title_color: String?
+    public let subtitle_color: String?
+    public let title_font_size: Double?
+    public let subtitle_font_size: Double?
+    public let title_font_weight: String?  // regular, medium, semibold, bold
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -329,6 +337,12 @@ public struct InputOption: Codable, Identifiable {
         self.label = try container.decodeIfPresent(String.self, forKey: .label)
         self.icon = try container.decodeIfPresent(String.self, forKey: .icon)
         self.image_url = try container.decodeIfPresent(String.self, forKey: .image_url)
+        self.subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
+        self.title_color = try container.decodeIfPresent(String.self, forKey: .title_color)
+        self.subtitle_color = try container.decodeIfPresent(String.self, forKey: .subtitle_color)
+        self.title_font_size = try container.decodeIfPresent(Double.self, forKey: .title_font_size)
+        self.subtitle_font_size = try container.decodeIfPresent(Double.self, forKey: .subtitle_font_size)
+        self.title_font_weight = try container.decodeIfPresent(String.self, forKey: .title_font_weight)
     }
 
     /// Non-optional value — falls back to id if value is nil.
@@ -336,6 +350,8 @@ public struct InputOption: Codable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id, label, value, icon, image_url
+        case subtitle, title_color, subtitle_color
+        case title_font_size, subtitle_font_size, title_font_weight
     }
 }
 
@@ -674,11 +690,17 @@ public struct SocialProviderConfig: Codable {
     public let enabled: Bool?
 }
 
-/// A single item for the `animated_loading` checklist.
+/// A single item for the `animated_loading` checklist OR for the
+/// `orbiting_icons` variant (each item = one icon orbiting the center).
 public struct LoadingItemConfig: Codable {
     public let label: String?
     public let duration_ms: Int?
     public let icon: String?
+    // Orbiting-icons variant fields
+    public let icon_url: String?
+    public let icon_bg_color: String?
+    public let icon_size: Double?         // diameter in pt; default 48
+    public let icon_orbit_angle: Double?  // 0-360; nil = auto-distribute
 }
 
 /// Countdown label overrides.

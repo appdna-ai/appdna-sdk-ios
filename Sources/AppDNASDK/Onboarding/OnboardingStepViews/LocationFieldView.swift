@@ -92,11 +92,22 @@ struct LocationFieldView: View {
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(suggestion.city.isEmpty ? suggestion.formatted_address : suggestion.city)
+                                    // Primary line: City (or fallback to country if city empty)
+                                    Text(suggestion.city.isEmpty ? suggestion.country : suggestion.city)
                                         .font(.system(size: 14, weight: .medium))
                                         .foregroundColor(.primary)
-                                    if !suggestion.city.isEmpty {
-                                        Text(suggestion.formatted_address)
+                                    // Secondary line: "State, Country" or just "Country"
+                                    // (no street names per user request)
+                                    let secondary: String = {
+                                        if !suggestion.state.isEmpty && !suggestion.country.isEmpty {
+                                            return "\(suggestion.state), \(suggestion.country)"
+                                        } else if !suggestion.country.isEmpty {
+                                            return suggestion.country
+                                        }
+                                        return ""
+                                    }()
+                                    if !secondary.isEmpty {
+                                        Text(secondary)
                                             .font(.system(size: 11))
                                             .foregroundColor(.secondary)
                                             .lineLimit(1)
@@ -132,6 +143,20 @@ struct LocationFieldView: View {
                         isExpanded = false
                     }
                 }
+            }
+        }
+        .onAppear {
+            // Restore from saved dict on re-entry (back navigation). Rebuild the
+            // display query text from city/state/country so the field doesn't
+            // show an empty placeholder after back-navigating to this step.
+            if query.isEmpty, let dict = value as? [String: Any] {
+                let city = (dict["city"] as? String) ?? ""
+                let state = (dict["state"] as? String) ?? ""
+                let country = (dict["country"] as? String) ?? ""
+                if !city.isEmpty {
+                    query = Self.formatDisplay(city: city, state: state, country: country)
+                }
+                print("[AppDNA] LocationField restored: \(dict)")
             }
         }
     }
@@ -193,25 +218,39 @@ struct LocationFieldView: View {
     }
 
     private func selectSuggestion(_ suggestion: LocationData) {
-        query = suggestion.formatted_address
-        // Store as dictionary for JSON serialization compatibility
-        // (Swift structs can't be serialized by JSONSerialization)
+        // Build display: "City / State, Country" or "City, Country"
+        let display = Self.formatDisplay(
+            city: suggestion.city,
+            state: suggestion.state,
+            country: suggestion.country
+        )
+        query = display
+
+        // Store structured dict: country, city, state, timezone, lat, lon
         value = [
-            "formatted_address": suggestion.formatted_address,
             "city": suggestion.city,
             "state": suggestion.state,
-            "state_code": suggestion.state_code,
             "country": suggestion.country,
-            "country_code": suggestion.country_code,
+            "timezone": suggestion.timezone,
             "latitude": suggestion.latitude,
             "longitude": suggestion.longitude,
-            "timezone": suggestion.timezone,
-            "timezone_offset": suggestion.timezone_offset,
-            "postal_code": suggestion.postal_code ?? NSNull(),
-            "raw_query": suggestion.raw_query,
         ] as [String: Any]
+
         suggestions = []
         isExpanded = false
+        isFocused = false  // dismiss keyboard
+
+        // Debug print for Xcode console
+        print("""
+        [AppDNA] Location selected:
+          city:      \(suggestion.city)
+          state:     \(suggestion.state)
+          country:   \(suggestion.country)
+          timezone:  \(suggestion.timezone)
+          latitude:  \(suggestion.latitude)
+          longitude: \(suggestion.longitude)
+          display:   \(display)
+        """)
     }
 
     private func clearSelection() {
@@ -219,5 +258,16 @@ struct LocationFieldView: View {
         value = nil
         suggestions = []
         isExpanded = false
+    }
+
+    /// Formats "City / State, Country" or "City, Country" based on whether state is present.
+    static func formatDisplay(city: String, state: String, country: String) -> String {
+        if !state.isEmpty && !country.isEmpty {
+            return "\(city) / \(state), \(country)"
+        } else if !country.isEmpty {
+            return "\(city), \(country)"
+        } else {
+            return city
+        }
     }
 }

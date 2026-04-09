@@ -22,6 +22,11 @@ struct OnboardingFlowHost: View {
     @State private var showError = false
     @State private var configOverrides: [String: StepConfigOverride] = [:]
 
+    /// True while the SDK is prefetching images for the NEXT step. During this
+    /// time the current step remains visible (instead of showing an empty screen
+    /// with unloaded image placeholders).
+    @State private var isPreloadingNextStep = false
+
     var body: some View {
         VStack(spacing: 0) {
             // Progress bar (hidden per-step via hide_progress while still counting in total)
@@ -675,8 +680,7 @@ struct OnboardingFlowHost: View {
                     // Follow downstream edge if available
                     if let nextTarget = nodeData?["next_target"] as? String,
                        let targetIndex = flow.steps.firstIndex(where: { $0.id == nextTarget }) {
-                        navigationHistory.append(currentIndex)
-                        withAnimation { currentIndex = targetIndex }
+                        navigate(to: targetIndex)
                         return
                     }
                     // No downstream target — continue to next rule
@@ -747,8 +751,7 @@ struct OnboardingFlowHost: View {
 
                 // Navigate to a specific step
                 if let targetIndex = flow.steps.firstIndex(where: { $0.id == target }) {
-                    navigationHistory.append(currentIndex)
-                    withAnimation { currentIndex = targetIndex }
+                    navigate(to: targetIndex)
                     return
                 }
             }
@@ -758,9 +761,86 @@ struct OnboardingFlowHost: View {
         if currentIndex + 1 >= flow.steps.count {
             onFlowCompleted(responses)
         } else {
-            navigationHistory.append(currentIndex)
-            withAnimation { currentIndex += 1 }
+            navigate(to: currentIndex + 1)
         }
+    }
+
+    // MARK: - Navigation with image preload
+
+    /// Advance to the given step index, prefetching any remote images referenced
+    /// in the target step's content blocks BEFORE updating currentIndex. This
+    /// prevents the new screen from flashing with empty image placeholders while
+    /// the network downloads the assets.
+    private func navigate(to targetIndex: Int, appendHistory: Bool = true) {
+        guard targetIndex >= 0 && targetIndex < flow.steps.count else { return }
+        let targetStep = flow.steps[targetIndex]
+        let urls = collectImageURLs(from: targetStep)
+
+        let performNavigation: () -> Void = {
+            if appendHistory { navigationHistory.append(currentIndex) }
+            withAnimation { currentIndex = targetIndex }
+        }
+
+        if urls.isEmpty {
+            performNavigation()
+            return
+        }
+
+        isPreloadingNextStep = true
+        ImagePreloader.prefetch(urls: urls, timeout: 3.0) {
+            isPreloadingNextStep = false
+            performNavigation()
+        }
+    }
+
+    /// Walk a step's content to collect every remote image URL that will be
+    /// rendered when the step displays.
+    private func collectImageURLs(from step: OnboardingStep) -> [URL] {
+        var urls: [URL] = []
+
+        // Step-level image (welcome/value_prop/custom layouts)
+        if let s = step.config.image_url, let u = URL(string: s) {
+            urls.append(u)
+        }
+
+        // Step background image
+        if let bg = step.config.background?.image_url, let u = URL(string: bg) {
+            urls.append(u)
+        }
+
+        // Recurse content blocks
+        if let blocks = step.config.content_blocks {
+            for block in blocks {
+                urls.append(contentsOf: collectImageURLs(from: block))
+            }
+        }
+
+        return urls
+    }
+
+    /// Recursive helper to walk nested content blocks (stack/row containers) and
+    /// collect their image URLs.
+    private func collectImageURLs(from block: ContentBlock) -> [URL] {
+        var urls: [URL] = []
+        if let s = block.image_url, let u = URL(string: s) {
+            urls.append(u)
+        }
+        if let s = block.placeholder_image_url, let u = URL(string: s) {
+            urls.append(u)
+        }
+        if let options = block.field_options {
+            for opt in options {
+                if let s = opt.image_url, let u = URL(string: s) {
+                    urls.append(u)
+                }
+            }
+        }
+        // Container children (stack / row / card)
+        let kids = (block.children ?? []) + (block.stack_children ?? [])
+        for child in kids {
+            urls.append(contentsOf: collectImageURLs(from: child))
+        }
+        return urls
     }
 
     // MARK: - Condition Evaluation
