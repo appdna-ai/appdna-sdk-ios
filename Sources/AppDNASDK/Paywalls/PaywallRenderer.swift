@@ -1564,54 +1564,63 @@ struct PaywallRenderer: View {
 
         // Grid: side-by-side plans, strictly equal widths, no overflow.
         //
-        // Uses a custom `EqualWidthRow` Layout (iOS 16+) which proposes an
-        // EXACT width to each card — `(availableWidth - totalGap) / n`.
-        // This is the only way to bulletproof against overflow:
-        //   - LazyVGrid with GridItem(.flexible()) was unreliable because
-        //     intrinsic child content could push a cell wider than its share.
-        //   - HStack + `.frame(maxWidth: .infinity)` was also unreliable in
-        //     Button label builders — the Button wraps the card and can ignore
-        //     the outer maxWidth hint when child content has a hard minimum.
-        //   - Custom Layout hands each subview a width PROPOSAL they MUST
-        //     honor, and then reports the tallest child as the row height.
+        // We measure the available width with GeometryReader and then apply
+        // an EXPLICIT `.frame(width: cardWidth)` to each card. Explicit frames
+        // are the ONLY layout primitive SwiftUI treats as a hard constraint —
+        // neither `.frame(maxWidth: .infinity)` nor a custom Layout's `place`
+        // proposal are sufficient, because both can be overridden by a child's
+        // intrinsic content size.
+        //
+        // Height is measured via PreferenceKey from the tallest child and
+        // applied back to the GeometryReader's outer frame (GeometryReader
+        // itself has no intrinsic height).
         //
         // We also skip `.planSelection(...)` in grid mode because its
         // `scaleEffect(1.03)` creates a compositing layer that visually
-        // overflows layout bounds (the scale is centered, so the selected
-        // card visually extends ~1.5% on each side beyond its cell).
-        // Selection emphasis in grid mode comes from: border width (2pt vs
-        // 1pt), selected_bg_color, and selected_text_color.
-        //
-        // For 3+ plans, they all render in a single row which may look
-        // cramped. Users with 3+ plans should use `vertical_stack` or
-        // `horizontal_scroll` instead of `grid`.
+        // extends ~1.5% on each side beyond the cell's layout bounds.
+        // Selection emphasis comes from border width + selected_bg_color +
+        // selected_text_color — more than enough for a 2-column grid.
         case "grid":
             let gap = cardStyle.cardGap ?? 10
             return AnyView(
-                EqualWidthRow(spacing: gap) {
-                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                        PlanCard(plan: plan, isSelected: selectedPlanId == plan.id,
-                                 onSelect: { selectPlan(plan.id) }, planIndex: index,
-                                 loc: loc, sectionStyle: style, cardStyle: cardStyle)
-                    }
-                }
+                GridPlansView(
+                    plans: plans,
+                    gap: gap,
+                    selectedPlanId: selectedPlanId,
+                    selectPlan: { self.selectPlan($0) },
+                    loc: loc,
+                    sectionStyle: style,
+                    cardStyle: cardStyle
+                )
             )
 
-        // Carousel / horizontal_scroll: horizontally scrollable plans
+        // Carousel / horizontal_scroll: side-by-side plans.
+        //
+        // If all plans fit within the available width at their natural
+        // `card_width` (or 200pt default), we render them as an equal-width
+        // grid filling the full available width — this is what users want
+        // for 2-plan layouts (Monthly / Annual). If they don't fit, we fall
+        // back to a horizontally-scrollable carousel with the natural widths
+        // so users can swipe.
+        //
+        // Previous behavior hardcoded `.frame(width: 200)` on every card
+        // inside a horizontal ScrollView, which made the second card render
+        // off-screen on iPhone for any 2-plan layout (2×200 + gap > ~360pt
+        // available). That was the bug in customer-reported screenshots.
         case "carousel", "horizontal_scroll":
-            return AnyView(ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: cardStyle.cardGap ?? 12) {
-                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                        PlanCard(plan: plan, isSelected: selectedPlanId == plan.id,
-                                 onSelect: { selectPlan(plan.id) }, planIndex: index,
-                                 loc: loc, sectionStyle: style, cardStyle: cardStyle)
-                        .planSelection(config.animation?.plan_selection_animation, isSelected: selectedPlanId == plan.id)
-                        .frame(width: 200)
-                    }
-                }
-                .padding(.horizontal, 4)
-            }
-            .frame(height: 140))
+            let gap = cardStyle.cardGap ?? 12
+            return AnyView(
+                HorizontalPlansView(
+                    plans: plans,
+                    gap: gap,
+                    selectedPlanId: selectedPlanId,
+                    selectPlan: { self.selectPlan($0) },
+                    loc: loc,
+                    sectionStyle: style,
+                    cardStyle: cardStyle,
+                    planSelectionAnimation: config.animation?.plan_selection_animation
+                )
+            )
 
         // Radio list: compact VStack with radio circles (no full card BG)
         case "radio_list":
@@ -2101,62 +2110,171 @@ struct PaywallRenderer: View {
     }
 }
 
-// MARK: - EqualWidthRow Layout
+// MARK: - Shared plan row preference + helpers
 
-/// A row layout that gives each subview EXACTLY the same width.
-///
-/// Unlike `HStack` + `.frame(maxWidth: .infinity)`, this layout forces width
-/// compliance by passing an explicit width proposal to each subview. Subviews
-/// cannot overflow their allocated cell — their content must fit within the
-/// proposed width (which they can then wrap, truncate, or compress as needed).
-///
-/// Row height = max of all subviews' heights when proposed their allocated
-/// width. This makes the row naturally fit its tallest card.
-///
-/// Used by the paywall "grid" plan layout to guarantee that no plan card,
-/// however much content it carries, can visually overflow the screen.
-@available(iOS 16.0, *)
-struct EqualWidthRow: Layout {
-    var spacing: CGFloat
-
-    init(spacing: CGFloat = 0) {
-        self.spacing = spacing
+/// Preference key used by `GridPlansView` and `HorizontalPlansView` to collect
+/// the tallest plan card's height so the GeometryReader container can adopt
+/// an intrinsic height (GeometryReader itself has no intrinsic size).
+private struct PlanRowHeightPref: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
+}
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        guard !subviews.isEmpty else { return .zero }
-        let count = CGFloat(subviews.count)
-        let availableWidth = proposal.width ?? .infinity
-        let totalSpacing = spacing * max(count - 1, 0)
-        let itemWidth = max((availableWidth - totalSpacing) / count, 0)
-        let itemProposal = ProposedViewSize(width: itemWidth, height: proposal.height)
-        let maxHeight = subviews.map { $0.sizeThatFits(itemProposal).height }.max() ?? 0
-        // Report the row's own width as the available width so the parent
-        // doesn't try to stretch us further. If availableWidth is infinity
-        // (unbounded proposal), fall back to summing the per-item widths.
-        let rowWidth: CGFloat
-        if availableWidth == .infinity {
-            rowWidth = itemWidth * count + totalSpacing
-        } else {
-            rowWidth = availableWidth
+/// Side-by-side plan grid that GUARANTEES equal card widths and zero overflow.
+///
+/// Uses GeometryReader to measure the parent's offered width, then applies an
+/// EXPLICIT `.frame(width: cardWidth)` to each card. Explicit frames are the
+/// only layout primitive SwiftUI treats as a hard constraint on width.
+///
+/// The GeometryReader's outer frame height is sized from a PreferenceKey that
+/// reports the tallest rendered child.
+struct GridPlansView: View {
+    let plans: [PaywallPlan]
+    let gap: CGFloat
+    let selectedPlanId: String?
+    let selectPlan: (String) -> Void
+    let loc: (String, String) -> String
+    let sectionStyle: SectionStyleConfig?
+    let cardStyle: PlanCardStyle
+
+    @State private var rowHeight: CGFloat = 0
+
+    var body: some View {
+        GeometryReader { geo in
+            let count = CGFloat(max(plans.count, 1))
+            let totalGap = gap * max(count - 1, 0)
+            let cardWidth = max((geo.size.width - totalGap) / count, 0)
+
+            HStack(alignment: .top, spacing: gap) {
+                ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                    PlanCard(
+                        plan: plan,
+                        isSelected: selectedPlanId == plan.id,
+                        onSelect: { selectPlan(plan.id) },
+                        planIndex: index,
+                        loc: loc,
+                        sectionStyle: sectionStyle,
+                        cardStyle: cardStyle
+                    )
+                    .frame(width: cardWidth, alignment: .topLeading)
+                    .background(
+                        GeometryReader { innerGeo in
+                            Color.clear
+                                .preference(key: PlanRowHeightPref.self, value: innerGeo.size.height)
+                        }
+                    )
+                }
+            }
+            .frame(width: geo.size.width, alignment: .leading)
         }
-        return CGSize(width: rowWidth, height: maxHeight)
+        .frame(height: rowHeight > 0 ? rowHeight : 180)
+        .onPreferenceChange(PlanRowHeightPref.self) { height in
+            if abs(height - rowHeight) > 0.5 {
+                rowHeight = height
+            }
+        }
     }
+}
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        guard !subviews.isEmpty else { return }
-        let count = CGFloat(subviews.count)
-        let totalSpacing = spacing * max(count - 1, 0)
-        let itemWidth = max((bounds.width - totalSpacing) / count, 0)
-        let itemProposal = ProposedViewSize(width: itemWidth, height: bounds.height)
-        var x = bounds.minX
-        for subview in subviews {
-            subview.place(
-                at: CGPoint(x: x, y: bounds.minY),
-                anchor: .topLeading,
-                proposal: itemProposal
-            )
-            x += itemWidth + spacing
+// MARK: - HorizontalPlansView
+
+/// Side-by-side / carousel plan layout used by the `horizontal_scroll` and
+/// `carousel` display styles.
+///
+/// Dynamically chooses between two modes based on whether plans fit on screen:
+///
+///   1. **Grid mode** (plans fit): equal-width cards filling the full
+///      available width. This is the correct behavior when the user has 2–3
+///      plans and the console shows a "Horizontal" layout hint — cards sit
+///      side-by-side and never overflow the screen edge.
+///
+///   2. **Carousel mode** (plans overflow): horizontally-scrollable row with
+///      each card at a fixed natural width (200pt default, or
+///      `cardStyle.card_width`). User can swipe to reveal additional plans.
+///
+/// Height is measured from the tallest card via PreferenceKey so the
+/// GeometryReader container gets an intrinsic height instead of the previous
+/// hardcoded `.frame(height: 140)` which clipped taller cards.
+struct HorizontalPlansView: View {
+    let plans: [PaywallPlan]
+    let gap: CGFloat
+    let selectedPlanId: String?
+    let selectPlan: (String) -> Void
+    let loc: (String, String) -> String
+    let sectionStyle: SectionStyleConfig?
+    let cardStyle: PlanCardStyle
+    let planSelectionAnimation: String?
+
+    @State private var rowHeight: CGFloat = 0
+
+    private var naturalCardWidth: CGFloat { 200 }
+
+    var body: some View {
+        GeometryReader { geo in
+            let count = CGFloat(max(plans.count, 1))
+            let totalGap = gap * max(count - 1, 0)
+            let naturalTotal = naturalCardWidth * count + totalGap
+            let fits = naturalTotal <= geo.size.width
+            let gridCardWidth = max((geo.size.width - totalGap) / count, 0)
+
+            if fits {
+                // Grid mode — equal-width cards filling available space.
+                HStack(alignment: .top, spacing: gap) {
+                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                        PlanCard(
+                            plan: plan,
+                            isSelected: selectedPlanId == plan.id,
+                            onSelect: { selectPlan(plan.id) },
+                            planIndex: index,
+                            loc: loc,
+                            sectionStyle: sectionStyle,
+                            cardStyle: cardStyle
+                        )
+                        .frame(width: gridCardWidth, alignment: .topLeading)
+                        .background(
+                            GeometryReader { innerGeo in
+                                Color.clear
+                                    .preference(key: PlanRowHeightPref.self, value: innerGeo.size.height)
+                            }
+                        )
+                    }
+                }
+                .frame(width: geo.size.width, alignment: .leading)
+            } else {
+                // Carousel mode — scrollable row at natural card width.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: gap) {
+                        ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                            PlanCard(
+                                plan: plan,
+                                isSelected: selectedPlanId == plan.id,
+                                onSelect: { selectPlan(plan.id) },
+                                planIndex: index,
+                                loc: loc,
+                                sectionStyle: sectionStyle,
+                                cardStyle: cardStyle
+                            )
+                            .planSelection(planSelectionAnimation, isSelected: selectedPlanId == plan.id)
+                            .frame(width: naturalCardWidth, alignment: .topLeading)
+                            .background(
+                                GeometryReader { innerGeo in
+                                    Color.clear
+                                        .preference(key: PlanRowHeightPref.self, value: innerGeo.size.height)
+                                }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+            }
+        }
+        .frame(height: rowHeight > 0 ? rowHeight : 180)
+        .onPreferenceChange(PlanRowHeightPref.self) { height in
+            if abs(height - rowHeight) > 0.5 {
+                rowHeight = height
+            }
         }
     }
 }
