@@ -214,24 +214,24 @@ final class RemoteConfigManager {
         // to avoid the 1MB mega-doc limit. Fall back to legacy mega-doc if no index.
         let group = DispatchGroup()
 
-        // Paywalls: index → per-item docs, fallback → mega-doc
+        // Paywalls: index → per-item docs (subcollection), fallback → mega-doc
         group.enter()
         self.fetchViaIndex(
             db: db, basePath: basePath,
             indexPath: "paywall_index", indexKey: "paywalls",
-            itemCollection: "paywalls",
+            itemCollection: "paywall_index/paywalls",
             megaDocPath: "paywalls",
             parseItem: { [weak self] id, data in self?.parseSinglePaywall(id: id, data: data) },
             parseMegaDoc: { [weak self] data in self?.parsePaywalls(data) },
             onComplete: { group.leave() }
         )
 
-        // Onboarding: index → per-item docs, fallback → mega-doc
+        // Onboarding: index → per-item docs (subcollection), fallback → mega-doc
         group.enter()
         self.fetchViaIndex(
             db: db, basePath: basePath,
             indexPath: "onboarding_index", indexKey: "flows",
-            itemCollection: "onboarding",
+            itemCollection: "onboarding_index/flows",
             megaDocPath: "onboarding",
             parseItem: { [weak self] id, data in self?.parseSingleOnboardingFlow(id: id, data: data) },
             parseMegaDoc: { [weak self] data in self?.parseOnboarding(data) },
@@ -244,12 +244,12 @@ final class RemoteConfigManager {
             onComplete: { group.leave() }
         )
 
-        // Surveys: index → per-item docs, fallback → mega-doc
+        // Surveys: index → per-item docs (subcollection), fallback → mega-doc
         group.enter()
         self.fetchViaIndex(
             db: db, basePath: basePath,
             indexPath: "survey_index", indexKey: "surveys",
-            itemCollection: "surveys",
+            itemCollection: "survey_index/surveys",
             megaDocPath: "surveys",
             parseItem: { [weak self] id, data in self?.parseSingleSurvey(id: id, data: data) },
             parseMegaDoc: { [weak self] data in self?.parseSurveys(data) },
@@ -630,7 +630,7 @@ final class RemoteConfigManager {
         guard let firestorePath else { completion(nil); return }
         guard let db = AppDNA.firestoreDB else { completion(nil); return }
         let basePath = "\(firestorePath)/config"
-        db.document("\(basePath)/paywalls/\(id)").getDocument { [weak self] snapshot, error in
+        db.document("\(basePath)/paywall_index/paywalls/\(id)").getDocument { [weak self] snapshot, error in
             guard let data = snapshot?.data() else {
                 completion(nil)
                 return
@@ -652,7 +652,7 @@ final class RemoteConfigManager {
         guard let firestorePath else { completion(nil); return }
         guard let db = AppDNA.firestoreDB else { completion(nil); return }
         let basePath = "\(firestorePath)/config"
-        db.document("\(basePath)/onboarding/\(id)").getDocument { [weak self] snapshot, error in
+        db.document("\(basePath)/onboarding_index/flows/\(id)").getDocument { [weak self] snapshot, error in
             guard let data = snapshot?.data() else {
                 completion(nil)
                 return
