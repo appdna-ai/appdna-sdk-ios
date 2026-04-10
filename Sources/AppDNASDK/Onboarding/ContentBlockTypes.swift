@@ -632,11 +632,12 @@ extension View {
 struct RelativeSizingModifier: ViewModifier {
     let width: String?
     let height: String?
+    var useMinHeight: Bool = false
 
     func body(content: Content) -> some View {
         content
             .modifier(WidthModifier(size: SizeValue.parse(width)))
-            .modifier(HeightModifier(size: SizeValue.parse(height)))
+            .modifier(HeightModifier(size: SizeValue.parse(height), useMin: useMinHeight))
     }
 
     struct WidthModifier: ViewModifier {
@@ -664,17 +665,27 @@ struct RelativeSizingModifier: ViewModifier {
 
     struct HeightModifier: ViewModifier {
         let size: SizeValue?
+        var useMin: Bool = false
         func body(content: Content) -> some View {
             switch size {
             case .fill:
                 content.frame(maxHeight: .infinity)
             case .px(let val):
-                content.frame(height: val)
+                if useMin {
+                    content.frame(minHeight: val)
+                } else {
+                    content.frame(height: val)
+                }
             case .percent(let fraction):
                 if fraction >= 1.0 {
                     content.frame(maxHeight: .infinity)
                 } else {
-                    content.frame(height: UIScreen.main.bounds.height * fraction)
+                    let h = UIScreen.main.bounds.height * fraction
+                    if useMin {
+                        content.frame(minHeight: h)
+                    } else {
+                        content.frame(height: h)
+                    }
                 }
             case .auto_, .none:
                 content
@@ -685,8 +696,8 @@ struct RelativeSizingModifier: ViewModifier {
 
 extension View {
     /// Apply relative sizing (SPEC-089d §6.7).
-    func applyRelativeSizing(width: String?, height: String?) -> some View {
-        modifier(RelativeSizingModifier(width: width, height: height))
+    func applyRelativeSizing(width: String?, height: String?, useMinHeight: Bool = false) -> some View {
+        modifier(RelativeSizingModifier(width: width, height: height, useMinHeight: useMinHeight))
     }
 
     /// Universal container styling for ANY content block: background opacity, blur,

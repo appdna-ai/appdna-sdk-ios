@@ -423,15 +423,18 @@ struct OrbitingIconsLoaderView: View {
                         .frame(width: size * (1.0 + 0.1 * bgPulse), height: size * (1.0 + 0.1 * bgPulse))
                 }
 
-                // Orbit ring — always visible with a subtle default
+                // Orbit rings — visible path lines for orbiting icons
                 let effectiveRingColor = ringColorHex ?? "#D1D5DB"
+                // Use configured opacity or a visible default (0.5) so rings
+                // are clearly visible on both light and dark backgrounds.
+                let ringOpacity = CGFloat((cfg?["ring_opacity"]?.value as? Double) ?? 0.5)
                 Circle()
-                    .stroke(Color(hex: effectiveRingColor).opacity(0.2), lineWidth: ringWidth)
+                    .stroke(Color(hex: effectiveRingColor).opacity(ringOpacity), lineWidth: ringWidth)
                     .frame(width: orbitRadius * 2, height: orbitRadius * 2)
 
-                // Inner ring (subtle, at 60% radius) for depth
+                // Inner ring (at 60% radius) for depth
                 Circle()
-                    .stroke(Color(hex: effectiveRingColor).opacity(0.08), lineWidth: max(1, ringWidth * 0.5))
+                    .stroke(Color(hex: effectiveRingColor).opacity(ringOpacity * 0.4), lineWidth: max(1, ringWidth * 0.5))
                     .frame(width: orbitRadius * 1.2, height: orbitRadius * 1.2)
 
                 // Central dot/image

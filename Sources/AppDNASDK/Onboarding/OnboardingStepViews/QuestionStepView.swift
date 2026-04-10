@@ -60,14 +60,20 @@ struct QuestionStepView: View {
                     .padding(.top, 24)
             }
 
-            // Options grid
+            // Options grid — manual 2-column layout (LazyVGrid clips wrapped text)
             ScrollView {
-                LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12),
-                ], spacing: 12) {
-                    ForEach(config.options ?? []) { option in
-                        optionCard(option)
+                VStack(spacing: 12) {
+                    let allOptions = config.options ?? []
+                    let rowCount = (allOptions.count + 1) / 2
+                    ForEach(0..<rowCount, id: \.self) { rowIdx in
+                        HStack(spacing: 12) {
+                            optionCard(allOptions[rowIdx * 2])
+                            if rowIdx * 2 + 1 < allOptions.count {
+                                optionCard(allOptions[rowIdx * 2 + 1])
+                            } else {
+                                Color.clear.frame(maxWidth: .infinity)
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 24)

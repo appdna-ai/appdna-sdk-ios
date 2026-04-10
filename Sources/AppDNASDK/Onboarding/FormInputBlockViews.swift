@@ -405,8 +405,7 @@ struct FormInputSelectBlock: View {
                         }
                     }
                     .padding(12)
-                    .frame(maxWidth: .infinity, minHeight: fieldHeight(block), alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .background {
                         ZStack {
                             if useBlur {
@@ -547,8 +546,7 @@ struct FormInputSelectBlock: View {
             ?? fillCol.opacity(0.3)
 
         // Grid configuration
-        let colCount = Int((cfg?["grid_columns"]?.value as? Double) ?? 2)
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: max(colCount, 1))
+        let colCount = max(Int((cfg?["grid_columns"]?.value as? Double) ?? 2), 1)
         let selectedBorderW = CGFloat((cfg?["selected_border_width"]?.value as? Double) ?? 2)
         let unselectedBorderW = CGFloat((cfg?["unselected_border_width"]?.value as? Double) ?? 1)
         let bgOpacity = CGFloat((cfg?["background_opacity"]?.value as? Double) ?? 1.0)
@@ -563,91 +561,99 @@ struct FormInputSelectBlock: View {
         let tooltipIcon = (cfg?["tooltip_icon"]?.value as? String) ?? "info.circle"
 
         VStack(spacing: 8) {
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(options) { option in
-                    let isSelected = isMultiSelect
-                        ? selectedValues.contains(option.resolvedValue)
-                        : selectedValue == option.resolvedValue
-                    let optBorderCol = option.selected_border_color.map { Color(hex: $0) } ?? fillCol
-                    let optUnselBorderCol = option.border_color.map { Color(hex: $0) } ?? unselectedBorderCol
+            // Manual grid — LazyVGrid clips wrapped text (ignores fixedSize for row height).
+            let rowCount = (options.count + colCount - 1) / colCount
+            ForEach(0..<rowCount, id: \.self) { rowIdx in
+                HStack(spacing: 8) {
+                    ForEach(0..<colCount, id: \.self) { colIdx in
+                        let optIdx = rowIdx * colCount + colIdx
+                        if optIdx < options.count {
+                            let option = options[optIdx]
+                            let isSelected = isMultiSelect
+                                ? selectedValues.contains(option.resolvedValue)
+                                : selectedValue == option.resolvedValue
+                            let optBorderCol = option.selected_border_color.map { Color(hex: $0) } ?? fillCol
+                            let optUnselBorderCol = option.border_color.map { Color(hex: $0) } ?? unselectedBorderCol
 
-                    Button {
-                        toggleSelection(option: option, fieldId: fieldId)
-                    } label: {
-                        ZStack(alignment: .topTrailing) {
-                            VStack(spacing: 6) {
-                                // Image with optional overlay
-                                if let imgUrl = option.image_url, let url = URL(string: imgUrl) {
-                                    imageWithOverlay(url: url, option: option, isSelected: isSelected, size: 40)
-                                }
-                                // Icon with state change (selected/unselected variants)
-                                if let icon = option.icon, !icon.isEmpty {
-                                    let resolvedIcon = isSelected
-                                        ? (option.selected_icon ?? defaultSelectedIcon ?? icon)
-                                        : (option.unselected_icon ?? defaultUnselectedIcon ?? icon)
-                                    // Detect SF Symbol vs emoji
-                                    if UIImage(systemName: resolvedIcon) != nil {
-                                        Image(systemName: resolvedIcon)
-                                            .font(.title2)
+                            Button {
+                                toggleSelection(option: option, fieldId: fieldId)
+                            } label: {
+                                ZStack(alignment: .topTrailing) {
+                                    VStack(spacing: 6) {
+                                        // Image with optional overlay
+                                        if let imgUrl = option.image_url, let url = URL(string: imgUrl) {
+                                            imageWithOverlay(url: url, option: option, isSelected: isSelected, size: 40)
+                                        }
+                                        // Icon with state change (selected/unselected variants)
+                                        if let icon = option.icon, !icon.isEmpty {
+                                            let resolvedIcon = isSelected
+                                                ? (option.selected_icon ?? defaultSelectedIcon ?? icon)
+                                                : (option.unselected_icon ?? defaultUnselectedIcon ?? icon)
+                                            if UIImage(systemName: resolvedIcon) != nil {
+                                                Image(systemName: resolvedIcon)
+                                                    .font(.title2)
+                                                    .foregroundColor(isSelected ? selectedTextCol : textCol)
+                                            } else {
+                                                Text(resolvedIcon).font(.title2)
+                                            }
+                                        }
+                                        // Label + subtitle
+                                        Text(option.label ?? "")
+                                            .font(.subheadline)
                                             .foregroundColor(isSelected ? selectedTextCol : textCol)
-                                    } else {
-                                        Text(resolvedIcon).font(.title2)
+                                            .multilineTextAlignment(.center)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        if let sub = option.subtitle, !sub.isEmpty {
+                                            Text(sub)
+                                                .font(.caption)
+                                                .foregroundColor(textCol.opacity(0.65))
+                                                .multilineTextAlignment(.center)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                        }
                                     }
-                                }
-                                // Label + subtitle
-                                Text(option.label ?? "")
-                                    .font(.subheadline)
-                                    .foregroundColor(isSelected ? selectedTextCol : textCol)
-                                    .multilineTextAlignment(.center)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                if let sub = option.subtitle, !sub.isEmpty {
-                                    Text(sub)
-                                        .font(.caption)
-                                        .foregroundColor(textCol.opacity(0.65))
-                                        .multilineTextAlignment(.center)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, minHeight: fieldHeight(block) ?? 60)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(10)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(10)
 
-                            // Toggle icon badge (top-right, like screenshot 2-grid +/check)
-                            if showToggleIcon {
-                                let selIcon = option.selected_icon ?? defaultSelectedIcon ?? "checkmark"
-                                let unselIcon = option.unselected_icon ?? defaultUnselectedIcon ?? "plus"
-                                let badgeIcon = isSelected ? selIcon : unselIcon
-                                Group {
-                                    if UIImage(systemName: badgeIcon) != nil {
-                                        Image(systemName: badgeIcon)
-                                            .font(.system(size: 10, weight: .bold))
-                                    } else {
-                                        Text(badgeIcon).font(.system(size: 10))
+                                    // Toggle icon badge (top-right)
+                                    if showToggleIcon {
+                                        let selIcon = option.selected_icon ?? defaultSelectedIcon ?? "checkmark"
+                                        let unselIcon = option.unselected_icon ?? defaultUnselectedIcon ?? "plus"
+                                        let badgeIcon = isSelected ? selIcon : unselIcon
+                                        Group {
+                                            if UIImage(systemName: badgeIcon) != nil {
+                                                Image(systemName: badgeIcon)
+                                                    .font(.system(size: 10, weight: .bold))
+                                            } else {
+                                                Text(badgeIcon).font(.system(size: 10))
+                                            }
+                                        }
+                                        .foregroundColor(isSelected ? selectedTextCol : textCol.opacity(0.5))
+                                        .frame(width: 20, height: 20)
+                                        .background(Circle().fill(isSelected ? fillCol.opacity(0.2) : Color.clear))
+                                        .padding(6)
                                     }
                                 }
-                                .foregroundColor(isSelected ? selectedTextCol : textCol.opacity(0.5))
-                                .frame(width: 20, height: 20)
-                                .background(Circle().fill(isSelected ? fillCol.opacity(0.2) : Color.clear))
-                                .padding(6)
-                            }
-                        }
-                        .background {
-                            ZStack {
-                                if useBlur {
-                                    RoundedRectangle(cornerRadius: cornerR)
-                                        .fill(.ultraThinMaterial)
+                                .background {
+                                    ZStack {
+                                        if useBlur {
+                                            RoundedRectangle(cornerRadius: cornerR)
+                                                .fill(.ultraThinMaterial)
+                                        }
+                                        RoundedRectangle(cornerRadius: cornerR)
+                                            .fill((isSelected ? selectedBgCol : optionBg).opacity(bgOpacity))
+                                        RoundedRectangle(cornerRadius: cornerR)
+                                            .strokeBorder(
+                                                isSelected ? optBorderCol : optUnselBorderCol,
+                                                lineWidth: isSelected ? selectedBorderW : unselectedBorderW
+                                            )
+                                    }
                                 }
-                                RoundedRectangle(cornerRadius: cornerR)
-                                    .fill((isSelected ? selectedBgCol : optionBg).opacity(bgOpacity))
-                                RoundedRectangle(cornerRadius: cornerR)
-                                    .strokeBorder(
-                                        isSelected ? optBorderCol : optUnselBorderCol,
-                                        lineWidth: isSelected ? selectedBorderW : unselectedBorderW
-                                    )
                             }
+                            .buttonStyle(.plain)
+                        } else {
+                            Color.clear.frame(maxWidth: .infinity)
                         }
                     }
-                    .buttonStyle(.plain)
                 }
             }
 
@@ -1088,7 +1094,7 @@ struct FormInputLocationPlaceholderBlock: View {
 
     @State private var text: String = ""
     @State private var showResults = false
-    @FocusState private var isFocused: Bool
+    @State private var isFocused: Bool = false
     @StateObject private var searchCompleter = LocationSearchCompleter()
 
     /// True while we're restoring text from saved inputValues so the
@@ -1104,9 +1110,10 @@ struct FormInputLocationPlaceholderBlock: View {
         // Same default background as FormInputTextBlock — location must look
         // like any other iOS text field, not a differently-styled widget.
         let bgColor = Color(hex: block.field_style?.background_color ?? "#FFFFFF")
-        // Keyboard appearance override — matches text input blocks
+        // Always use UIKitTextField for location — SwiftUI's TextField
+        // triggers ScrollView auto-scroll-to-focus which pushes the field up
+        // when the keyboard appears. UIKit fields don't participate in that.
         let keyboardAppearanceRaw = block.field_config?["keyboard_appearance"]?.value as? String
-        let useUIKitField = keyboardAppearanceRaw == "light" || keyboardAppearanceRaw == "dark"
         // Show prefix location icon? (default true — user can opt out per-block)
         let showIcon = (block.field_config?["show_prefix_icon"]?.value as? Bool) ?? true
 
@@ -1122,26 +1129,19 @@ struct FormInputLocationPlaceholderBlock: View {
                     Image(systemName: "location.fill")
                         .foregroundColor(.secondary)
                 }
-                Group {
-                    if useUIKitField {
-                        UIKitTextField(
-                            text: $text,
-                            placeholder: block.field_placeholder ?? "Search location...",
-                            keyboardAppearance: .from(keyboardAppearanceRaw),
-                            autocorrection: false,
-                            autocapitalization: .words,
-                            returnKeyType: .search,
-                            isFocused: Binding(
-                                get: { isFocused },
-                                set: { isFocused = $0 }
-                            )
-                        )
-                        .frame(height: 24)
-                    } else {
-                        TextField(block.field_placeholder ?? "Search location...", text: $text)
-                            .focused($isFocused)
-                    }
-                }
+                UIKitTextField(
+                    text: $text,
+                    placeholder: block.field_placeholder ?? "Search location...",
+                    keyboardAppearance: .from(keyboardAppearanceRaw),
+                    autocorrection: false,
+                    autocapitalization: .words,
+                    returnKeyType: .search,
+                    isFocused: Binding(
+                        get: { isFocused },
+                        set: { isFocused = $0 }
+                    )
+                )
+                .frame(height: 24)
                 .onChange(of: text) { newValue in
                     // Skip the onChange that fires when we programmatically set
                     // text from a saved dict — we must NOT overwrite the full

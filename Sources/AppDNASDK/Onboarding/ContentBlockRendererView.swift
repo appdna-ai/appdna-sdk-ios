@@ -55,8 +55,13 @@ struct ContentBlockRendererView: View {
                 )
                 let collapseProgress = shouldCollapse ? min(max(scrollOffset / collapseThreshold, 0), 1) : 0
 
+                // Input selects (stacked/grid) treat element_height as minHeight
+                // so option cards can grow beyond the configured container height
+                // when text wraps. All other blocks use fixed height.
+                let isExpandableBlock = resolvedBlock.type == .input_select
+
                 renderBlock(resolvedBlock, animate: shouldAnimate)
-                    .applyRelativeSizing(width: resolvedBlock.element_width, height: resolvedBlock.element_height)
+                    .applyRelativeSizing(width: resolvedBlock.element_width, height: resolvedBlock.element_height, useMinHeight: isExpandableBlock)
                     .applyBlockContainerStyle(resolvedBlock)
                     // Sprint 7: Scroll-collapse — ONLY applied to blocks with collapse_on_scroll.
                     // .clipped() and .frame(maxHeight:) must NOT touch non-collapsible blocks
