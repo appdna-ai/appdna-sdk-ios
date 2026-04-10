@@ -49,6 +49,7 @@ struct ContentBlockRendererView: View {
                 let resolvedBlock = resolveBlockBindings(block, hookData: hookData, responses: responses)
                 renderBlock(resolvedBlock, animate: shouldAnimate)
                     .applyRelativeSizing(width: resolvedBlock.element_width, height: resolvedBlock.element_height)
+                    .applyBlockContainerStyle(resolvedBlock)
             }
         }
     }
@@ -948,6 +949,26 @@ struct ContentBlockRendererView: View {
         let direction = block.row_direction ?? "horizontal"
         let childFill = block.row_child_fill ?? true
 
+        // Column ratios: "1:2", "1:1:2", "2:3" — proportional widths for horizontal layout.
+        // Each number is a flex weight. Children map 1:1 to ratios; extra children get equal weight.
+        let ratioStr = (block.field_config?["column_ratios"]?.value as? String) ?? block.column_ratios
+        let ratios: [CGFloat] = parseColumnRatios(ratioStr)
+
+        // Row background: opacity + blur (same as select options)
+        let rowBgOpacity = CGFloat((block.field_config?["background_opacity"]?.value as? Double) ?? 1.0)
+        let rowUseBlur = (block.field_config?["blur_background"]?.value as? Bool) == true
+        let rowBorderW = CGFloat((block.field_config?["border_width"]?.value as? Double) ?? 0)
+        let rowBorderCol = (block.field_config?["border_color"]?.value as? String).map { Color(hex: $0) }
+        let rowBgCol = (block.field_config?["bg_color"]?.value as? String).map { Color(hex: $0) }
+        let rowCornerR = CGFloat((block.field_config?["corner_radius"]?.value as? Double) ?? 0)
+
+        // Leading icon slot (for info-card pattern: icon + children layout)
+        let leadingIcon = block.field_config?["leading_icon"]?.value as? String
+        let leadingIconSize = CGFloat((block.field_config?["leading_icon_size"]?.value as? Double) ?? 24)
+        let leadingIconColor = (block.field_config?["leading_icon_color"]?.value as? String).map { Color(hex: $0) }
+        let leadingIconBgColor = (block.field_config?["leading_icon_bg_color"]?.value as? String).map { Color(hex: $0) }
+        let leadingIconBgSize = CGFloat((block.field_config?["leading_icon_bg_size"]?.value as? Double) ?? (leadingIconSize + 16))
+
         // Vertical alignment for HStack, horizontal for VStack
         let vAlign: VerticalAlignment = {
             switch block.align_items {
@@ -967,6 +988,9 @@ struct ContentBlockRendererView: View {
         Group {
             if direction == "vertical" {
                 VStack(alignment: hAlign, spacing: rowGap) {
+                    if let icon = leadingIcon {
+                        rowLeadingIconView(icon: icon, size: leadingIconSize, color: leadingIconColor, bgColor: leadingIconBgColor, bgSize: leadingIconBgSize)
+                    }
                     ForEach(childBlocks) { child in
                         renderBlock(child)
                             .frame(maxWidth: childFill ? .infinity : nil)
@@ -975,14 +999,62 @@ struct ContentBlockRendererView: View {
                 }
             } else {
                 HStack(alignment: vAlign, spacing: rowGap) {
-                    ForEach(childBlocks) { child in
+                    if let icon = leadingIcon {
+                        rowLeadingIconView(icon: icon, size: leadingIconSize, color: leadingIconColor, bgColor: leadingIconBgColor, bgSize: leadingIconBgSize)
+                    }
+                    ForEach(Array(childBlocks.enumerated()), id: \.element.id) { idx, child in
+                        let weight = idx < ratios.count ? ratios[idx] : (ratios.isEmpty ? 1 : ratios.last!)
                         renderBlock(child)
                             .frame(maxWidth: childFill ? .infinity : nil)
+                            .layoutPriority(Double(weight))
                             .zIndex(child.overflow == "visible" ? 1 : 0)
                     }
                 }
             }
         }
+        // Row container styling: bg, border, blur, opacity
+        .if(rowBgCol != nil || rowBorderW > 0 || rowUseBlur) { view in
+            view
+                .padding(rowBorderW > 0 ? 12 : 0)
+                .background {
+                    ZStack {
+                        if rowUseBlur {
+                            RoundedRectangle(cornerRadius: rowCornerR).fill(.ultraThinMaterial)
+                        }
+                        if let bg = rowBgCol {
+                            RoundedRectangle(cornerRadius: rowCornerR).fill(bg.opacity(rowBgOpacity))
+                        }
+                        if rowBorderW > 0, let bc = rowBorderCol {
+                            RoundedRectangle(cornerRadius: rowCornerR).strokeBorder(bc, lineWidth: rowBorderW)
+                        }
+                    }
+                }
+        }
+    }
+
+    /// Leading icon with optional circle background (for screenshot 11 info-card rows).
+    @ViewBuilder
+    private func rowLeadingIconView(icon: String, size: CGFloat, color: Color?, bgColor: Color?, bgSize: CGFloat) -> some View {
+        ZStack {
+            if let bgColor {
+                Circle()
+                    .fill(bgColor.opacity(0.15))
+                    .frame(width: bgSize, height: bgSize)
+            }
+            if UIImage(systemName: icon) != nil {
+                Image(systemName: icon)
+                    .font(.system(size: size * 0.6))
+                    .foregroundColor(color ?? .primary)
+            } else {
+                Text(icon).font(.system(size: size * 0.6))
+            }
+        }
+    }
+
+    /// Parse "1:2" or "1:1:2" into proportional CGFloat weights.
+    private func parseColumnRatios(_ str: String?) -> [CGFloat] {
+        guard let str, !str.isEmpty else { return [] }
+        return str.split(separator: ":").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }.map { CGFloat($0) }
     }
 
     // MARK: - Custom View (SPEC-089d AC-026)

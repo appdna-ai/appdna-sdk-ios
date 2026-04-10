@@ -688,6 +688,45 @@ extension View {
     func applyRelativeSizing(width: String?, height: String?) -> some View {
         modifier(RelativeSizingModifier(width: width, height: height))
     }
+
+    /// Universal container styling for ANY content block: background opacity, blur,
+    /// border, and corner radius. Reads from field_config so all block types
+    /// (input, select, row, image, text, etc.) can be made transparent/blurred.
+    @ViewBuilder
+    func applyBlockContainerStyle(_ block: ContentBlock) -> some View {
+        let cfg = block.field_config
+        let bgOpacity = (cfg?["background_opacity"]?.value as? Double).map { CGFloat($0) }
+        let useBlur = (cfg?["blur_background"]?.value as? Bool) == true
+        let containerBg = cfg?["container_bg_color"]?.value as? String
+        let containerBorderW = (cfg?["container_border_width"]?.value as? Double).map { CGFloat($0) }
+        let containerBorderCol = cfg?["container_border_color"]?.value as? String
+        let containerCornerR = (cfg?["container_corner_radius"]?.value as? Double).map { CGFloat($0) }
+
+        // Only apply if at least one container style is set
+        if bgOpacity != nil || useBlur || containerBg != nil || containerBorderW != nil {
+            let cr = containerCornerR ?? 0
+            self
+                .background {
+                    ZStack {
+                        if useBlur {
+                            RoundedRectangle(cornerRadius: cr).fill(.ultraThinMaterial)
+                        }
+                        if let bg = containerBg {
+                            RoundedRectangle(cornerRadius: cr)
+                                .fill(Color(hex: bg).opacity(bgOpacity ?? 1.0))
+                        }
+                        if let bw = containerBorderW, bw > 0, let bc = containerBorderCol {
+                            RoundedRectangle(cornerRadius: cr)
+                                .strokeBorder(Color(hex: bc), lineWidth: bw)
+                        }
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: cr))
+                .opacity(bgOpacity ?? 1.0)
+        } else {
+            self
+        }
+    }
 }
 
 // MARK: - Nested Codable types for SPEC-089d block fields
@@ -962,6 +1001,7 @@ public struct ContentBlock: Codable, Identifiable {
     public let row_direction: String?       // horizontal (default), vertical
     public let row_distribution: String?    // fill, start, center, end, space_between, space_around
     public let row_child_fill: Bool?        // true (default) — each child gets maxWidth: .infinity
+    public let column_ratios: String?       // "1:2", "1:1:2" — proportional widths for horizontal layout
 
     // SPEC-089d Phase F: custom_view fields
     public let view_key: String?
@@ -1068,7 +1108,7 @@ public struct ContentBlock: Codable, Identifiable {
         case highlight_color, haptic_on_scroll, orientation, wheel_orientation, picker_presentation, picker_mode
         case picker_spacing, calendar_bg_color
         case children, stack_children, z_index, gap, wrap, justify, align_items
-        case row_direction, row_distribution, row_child_fill
+        case row_direction, row_distribution, row_child_fill, column_ratios
         case view_key, custom_config, placeholder_image_url, placeholder_text
         case particle_type, density, speed, secondary_color, size_range, fullscreen
         case min_value, max_value_picker, step_value, default_picker_value
@@ -1244,6 +1284,7 @@ public struct ContentBlock: Codable, Identifiable {
         self.justify = try c.decodeIfPresent(String.self, forKey: .justify)
         self.align_items = try c.decodeIfPresent(String.self, forKey: .align_items)
         self.row_direction = try c.decodeIfPresent(String.self, forKey: .row_direction)
+        self.column_ratios = try c.decodeIfPresent(String.self, forKey: .column_ratios)
         self.row_distribution = try c.decodeIfPresent(String.self, forKey: .row_distribution)
         self.row_child_fill = try c.decodeIfPresent(Bool.self, forKey: .row_child_fill)
         self.view_key = try c.decodeIfPresent(String.self, forKey: .view_key)
