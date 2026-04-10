@@ -1226,6 +1226,8 @@ struct FormInputLocationPlaceholderBlock: View {
                 let ddOpacity = cfgDouble(cfg?["dropdown_opacity"]) ?? 1.0
                 let ddFontSize = cfgDouble(cfg?["dropdown_font_size"]) ?? 14
                 let ddSubFontSize = cfgDouble(cfg?["dropdown_sub_font_size"]) ?? 12
+                let ddRowHeight = cfgDouble(cfg?["dropdown_row_height"])
+                let ddIconSize = cfgDouble(cfg?["dropdown_icon_size"]) ?? 24
 
                 let ddBg: Color = ddBgHex.map { Color(hex: $0) } ?? Color(.systemBackground)
                 let ddText: Color = ddTextHex.map { Color(hex: $0) } ?? .primary
@@ -1259,7 +1261,7 @@ struct FormInputLocationPlaceholderBlock: View {
                                         .font(.system(size: 10, weight: .semibold))
                                         .foregroundColor(ddIcon)
                                 }
-                                .frame(width: 24, height: 24)
+                                .frame(width: CGFloat(ddIconSize), height: CGFloat(ddIconSize))
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(result.title)
@@ -1273,9 +1275,9 @@ struct FormInputLocationPlaceholderBlock: View {
                                 }
                                 Spacer()
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(maxWidth: .infinity, minHeight: ddRowHeight.map { CGFloat($0) }, alignment: .leading)
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, ddRowHeight != nil ? 0 : 10)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
