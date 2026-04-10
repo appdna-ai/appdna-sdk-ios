@@ -295,11 +295,11 @@ struct FormInputSelectBlock: View {
         }
     }
 
-    // MARK: - Stacked (vertical cards with radio indicator)
+    // MARK: - Stacked (vertical cards with configurable selection indicator)
 
     @ViewBuilder
     private func stackedSelectView(options: [InputOption], fieldId: String) -> some View {
-        // Accent color — prefer fill_color, fall back to focused_border_color (console uses this), then active_color
+        let cfg = block.field_config
         let accentHex = block.field_style?.fill_color
             ?? block.field_style?.focused_border_color
             ?? block.active_color
@@ -307,40 +307,47 @@ struct FormInputSelectBlock: View {
         let fillCol = Color(hex: accentHex)
         let cornerR = CGFloat(block.field_style?.corner_radius ?? 10)
 
-        // Read option-specific colors from field_config (matches console preview logic)
-        let cfgOptBg = (block.field_config?["bg_color"]?.value as? String).map { Color(hex: $0) }
-        let cfgOptText = (block.field_config?["text_color"]?.value as? String).map { Color(hex: $0) }
-        let cfgOptBorder = (block.field_config?["border_color"]?.value as? String).map { Color(hex: $0) }
-        let cfgSelectedBg = (block.field_config?["selected_bg_color"]?.value as? String).map { Color(hex: $0) }
-        let cfgSelectedText = (block.field_config?["selected_text_color"]?.value as? String).map { Color(hex: $0) }
+        // Colors from field_config
+        let cfgOptBg = (cfg?["bg_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgOptText = (cfg?["text_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgOptBorder = (cfg?["border_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgSelectedBg = (cfg?["selected_bg_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgSelectedText = (cfg?["selected_text_color"]?.value as? String).map { Color(hex: $0) }
 
-        // Selected bg — field_config.selected_bg_color > accent at 15%
         let selectedBgCol = cfgSelectedBg ?? fillCol.opacity(0.15)
-        // Unselected bg — field_config.bg_color > field_style.background_color > white
         let optionBg: Color = cfgOptBg
             ?? block.field_style?.background_color.map { Color(hex: $0) }
             ?? Color.white
-        // Unselected text — field_config.text_color > field_style.text_color > block.text_color > primary
         let textCol: Color = cfgOptText
             ?? block.field_style?.text_color.map { Color(hex: $0) }
             ?? block.text_color.map { Color(hex: $0) }
             ?? block.style?.color.map { Color(hex: $0) }
             ?? .primary
-        // Selected text — field_config.selected_text_color > textCol
         let selectedTextCol: Color = cfgSelectedText ?? textCol
-        // Unselected border — field_config.border_color > field_style.border_color > accent at 30%
         let unselectedBorderCol: Color = cfgOptBorder
             ?? block.field_style?.border_color.map { Color(hex: $0) }
             ?? fillCol.opacity(0.3)
 
-        // Radio position — "left" (leading) or "right" (trailing, default)
-        let radioPosition = (block.field_config?["radio_position"]?.value as? String) ?? "right"
+        // Selection indicator: "radio" (default), "border", "both", "none"
+        let selectionIndicator = (cfg?["selection_indicator"]?.value as? String) ?? "radio"
+        let showRadio = selectionIndicator == "radio" || selectionIndicator == "both"
+        let showBorderHighlight = selectionIndicator == "border" || selectionIndicator == "both"
+        // Radio fill: "circle" (default), "checkmark", or any emoji/SF Symbol
+        let radioFill = (cfg?["radio_fill"]?.value as? String) ?? "circle"
+        // Radio position
+        let radioPosition = (cfg?["radio_position"]?.value as? String) ?? "right"
         let radioOnLeft = radioPosition == "left" || radioPosition == "leading"
+        // Border widths
+        let selectedBorderW = CGFloat((cfg?["selected_border_width"]?.value as? Double) ?? 2)
+        let unselectedBorderW = CGFloat((cfg?["unselected_border_width"]?.value as? Double) ?? 1)
+        // Background opacity + blur
+        let bgOpacity = CGFloat((cfg?["background_opacity"]?.value as? Double) ?? 1.0)
+        let useBlur = (cfg?["blur_background"]?.value as? Bool) == true
 
-        // Default text sizes from field_config (fallbacks when per-option not set)
-        let defaultTitleSize = (block.field_config?["title_font_size"]?.value as? Double) ?? 15
-        let defaultSubtitleSize = (block.field_config?["subtitle_font_size"]?.value as? Double) ?? 12
-        let defaultSubtitleColor = (block.field_config?["subtitle_color"]?.value as? String).map { Color(hex: $0) }
+        // Text sizes
+        let defaultTitleSize = (cfg?["title_font_size"]?.value as? Double) ?? 15
+        let defaultSubtitleSize = (cfg?["subtitle_font_size"]?.value as? Double) ?? 12
+        let defaultSubtitleColor = (cfg?["subtitle_color"]?.value as? String).map { Color(hex: $0) }
             ?? textCol.opacity(0.65)
 
         VStack(spacing: 8) {
@@ -349,58 +356,34 @@ struct FormInputSelectBlock: View {
                     ? selectedValues.contains(option.resolvedValue)
                     : selectedValue == option.resolvedValue
 
-                // Per-option style overrides
                 let optTitleColor: Color = option.title_color.map { Color(hex: $0) }
                     ?? (isSelected ? selectedTextCol : textCol)
                 let optSubtitleColor: Color = option.subtitle_color.map { Color(hex: $0) }
                     ?? defaultSubtitleColor
                 let optTitleSize: CGFloat = CGFloat(option.title_font_size ?? defaultTitleSize)
                 let optSubtitleSize: CGFloat = CGFloat(option.subtitle_font_size ?? defaultSubtitleSize)
-                let optTitleWeight: Font.Weight = {
-                    switch option.title_font_weight {
-                    case "regular": return .regular
-                    case "medium": return .medium
-                    case "semibold": return .semibold
-                    case "bold": return .bold
-                    default: return .regular
-                    }
-                }()
+                let optTitleWeight: Font.Weight = fontWeight(option.title_font_weight)
+
+                // Per-option border color overrides
+                let optBorderCol = option.selected_border_color.map { Color(hex: $0) } ?? fillCol
+                let optUnselBorderCol = option.border_color.map { Color(hex: $0) } ?? unselectedBorderCol
 
                 Button {
-                    if isMultiSelect {
-                        if selectedValues.contains(option.resolvedValue) {
-                            selectedValues.remove(option.resolvedValue)
-                        } else {
-                            selectedValues.insert(option.resolvedValue)
-                        }
-                        inputValues[fieldId] = Array(selectedValues)
-                    } else {
-                        selectedValue = option.resolvedValue
-                        inputValues[fieldId] = option.resolvedValue
-                    }
+                    toggleSelection(option: option, fieldId: fieldId)
                 } label: {
                     HStack(spacing: 12) {
-                        // Radio on left (if configured)
-                        if radioOnLeft {
-                            Image(systemName: isSelected
-                                ? (isMultiSelect ? "checkmark.circle.fill" : "largecircle.fill.circle")
-                                : "circle")
-                                .foregroundColor(fillCol)
-                                .font(.title3)
+                        // Radio on left
+                        if showRadio && radioOnLeft {
+                            radioIndicator(isSelected: isSelected, fillCol: fillCol, radioFill: radioFill)
                         }
+                        // Image with optional overlay circle
                         if let imgUrl = option.image_url, let url = URL(string: imgUrl) {
-                            BundledAsyncImage(url: url) { image in
-                                image.resizable().scaledToFill()
-                            } placeholder: {
-                                Color.gray.opacity(0.2)
-                            }
-                            .frame(width: 32, height: 32)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            imageWithOverlay(url: url, option: option, isSelected: isSelected, size: 32)
                         }
                         if let icon = option.icon, !icon.isEmpty {
                             Text(icon)
                         }
-                        // Title + optional subtitle
+                        // Title + subtitle
                         VStack(alignment: .leading, spacing: 2) {
                             Text(option.label ?? "")
                                 .font(.system(size: optTitleSize, weight: optTitleWeight))
@@ -412,25 +395,28 @@ struct FormInputSelectBlock: View {
                             }
                         }
                         Spacer()
-                        // Radio on right (default)
-                        if !radioOnLeft {
-                            Image(systemName: isSelected
-                                ? (isMultiSelect ? "checkmark.circle.fill" : "largecircle.fill.circle")
-                                : "circle")
-                                .foregroundColor(fillCol)
-                                .font(.title3)
+                        // Radio on right
+                        if showRadio && !radioOnLeft {
+                            radioIndicator(isSelected: isSelected, fillCol: fillCol, radioFill: radioFill)
                         }
                     }
                     .padding(12)
                     .background {
                         ZStack {
+                            if useBlur {
+                                RoundedRectangle(cornerRadius: cornerR)
+                                    .fill(.ultraThinMaterial)
+                            }
                             RoundedRectangle(cornerRadius: cornerR)
-                                .fill(isSelected ? selectedBgCol : optionBg)
-                            RoundedRectangle(cornerRadius: cornerR)
-                                .strokeBorder(
-                                    isSelected ? fillCol : unselectedBorderCol,
-                                    lineWidth: isSelected ? 2 : 1
-                                )
+                                .fill((isSelected ? selectedBgCol : optionBg).opacity(bgOpacity))
+                            if showBorderHighlight || selectionIndicator == "radio" || selectionIndicator == "none" {
+                                // Always show border for structure; highlight on selection
+                                RoundedRectangle(cornerRadius: cornerR)
+                                    .strokeBorder(
+                                        isSelected ? optBorderCol : optUnselBorderCol,
+                                        lineWidth: isSelected && showBorderHighlight ? selectedBorderW : unselectedBorderW
+                                    )
+                            }
                         }
                     }
                 }
@@ -439,10 +425,95 @@ struct FormInputSelectBlock: View {
         }
     }
 
-    // MARK: - Grid (2-column grid)
+    // MARK: - Radio indicator helper
+
+    @ViewBuilder
+    private func radioIndicator(isSelected: Bool, fillCol: Color, radioFill: String) -> some View {
+        switch radioFill {
+        case "checkmark":
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .foregroundColor(isSelected ? fillCol : .gray.opacity(0.4))
+                .font(.title3)
+        case "circle":
+            Image(systemName: isSelected
+                ? (isMultiSelect ? "checkmark.circle.fill" : "largecircle.fill.circle")
+                : "circle")
+                .foregroundColor(isSelected ? fillCol : .gray.opacity(0.4))
+                .font(.title3)
+        default:
+            // Emoji or custom SF Symbol name
+            if radioFill.count <= 2 && radioFill.unicodeScalars.allSatisfy({ $0.value > 127 }) {
+                // Emoji
+                Text(isSelected ? radioFill : "○")
+                    .font(.title3)
+            } else if UIImage(systemName: radioFill) != nil {
+                // SF Symbol
+                Image(systemName: isSelected ? radioFill : "circle")
+                    .foregroundColor(isSelected ? fillCol : .gray.opacity(0.4))
+                    .font(.title3)
+            } else {
+                // Fallback to default circle
+                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                    .foregroundColor(isSelected ? fillCol : .gray.opacity(0.4))
+                    .font(.title3)
+            }
+        }
+    }
+
+    // MARK: - Image with overlay circle helper
+
+    @ViewBuilder
+    private func imageWithOverlay(url: URL, option: InputOption, isSelected: Bool, size: CGFloat) -> some View {
+        ZStack {
+            BundledAsyncImage(url: url) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Color.gray.opacity(0.2)
+            }
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+
+            // Optional colored overlay circle
+            if let overlayHex = option.image_overlay_color {
+                let overlayOpacity = option.image_overlay_opacity ?? 0.3
+                Circle()
+                    .fill(Color(hex: overlayHex).opacity(overlayOpacity))
+                    .frame(width: size, height: size)
+            }
+        }
+    }
+
+    // MARK: - Selection toggle helper
+
+    private func toggleSelection(option: InputOption, fieldId: String) {
+        if isMultiSelect {
+            if selectedValues.contains(option.resolvedValue) {
+                selectedValues.remove(option.resolvedValue)
+            } else {
+                selectedValues.insert(option.resolvedValue)
+            }
+            inputValues[fieldId] = Array(selectedValues)
+        } else {
+            selectedValue = option.resolvedValue
+            inputValues[fieldId] = option.resolvedValue
+        }
+    }
+
+    private func fontWeight(_ raw: String?) -> Font.Weight {
+        switch raw {
+        case "regular": return .regular
+        case "medium": return .medium
+        case "semibold": return .semibold
+        case "bold": return .bold
+        default: return .regular
+        }
+    }
+
+    // MARK: - Grid (configurable columns with toggle icons, blur, tooltip)
 
     @ViewBuilder
     private func gridSelectView(options: [InputOption], fieldId: String) -> some View {
+        let cfg = block.field_config
         let accentHex = block.field_style?.fill_color
             ?? block.field_style?.focused_border_color
             ?? block.active_color
@@ -450,12 +521,11 @@ struct FormInputSelectBlock: View {
         let fillCol = Color(hex: accentHex)
         let cornerR = CGFloat(block.field_style?.corner_radius ?? 10)
 
-        // Read option-specific colors from field_config (matches console preview logic)
-        let cfgOptBg = (block.field_config?["bg_color"]?.value as? String).map { Color(hex: $0) }
-        let cfgOptText = (block.field_config?["text_color"]?.value as? String).map { Color(hex: $0) }
-        let cfgOptBorder = (block.field_config?["border_color"]?.value as? String).map { Color(hex: $0) }
-        let cfgSelectedBg = (block.field_config?["selected_bg_color"]?.value as? String).map { Color(hex: $0) }
-        let cfgSelectedText = (block.field_config?["selected_text_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgOptBg = (cfg?["bg_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgOptText = (cfg?["text_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgOptBorder = (cfg?["border_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgSelectedBg = (cfg?["selected_bg_color"]?.value as? String).map { Color(hex: $0) }
+        let cfgSelectedText = (cfg?["selected_text_color"]?.value as? String).map { Color(hex: $0) }
 
         let selectedBgCol = cfgSelectedBg ?? fillCol.opacity(0.15)
         let optionBg: Color = cfgOptBg
@@ -470,50 +540,120 @@ struct FormInputSelectBlock: View {
         let unselectedBorderCol: Color = cfgOptBorder
             ?? block.field_style?.border_color.map { Color(hex: $0) }
             ?? fillCol.opacity(0.3)
-        let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
 
-        LazyVGrid(columns: columns, spacing: 8) {
-            ForEach(options) { option in
-                let isSelected = selectedValue == option.resolvedValue
-                Button {
-                    selectedValue = option.resolvedValue
-                    inputValues[fieldId] = option.resolvedValue
-                } label: {
-                    VStack(spacing: 6) {
-                        // Optional image
-                        if let imgUrl = option.image_url, let url = URL(string: imgUrl) {
-                            BundledAsyncImage(url: url) { image in
-                                image.resizable().scaledToFill()
-                            } placeholder: {
-                                Color.gray.opacity(0.2)
+        // Grid configuration
+        let colCount = Int((cfg?["grid_columns"]?.value as? Double) ?? 2)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: max(colCount, 1))
+        let selectedBorderW = CGFloat((cfg?["selected_border_width"]?.value as? Double) ?? 2)
+        let unselectedBorderW = CGFloat((cfg?["unselected_border_width"]?.value as? Double) ?? 1)
+        let bgOpacity = CGFloat((cfg?["background_opacity"]?.value as? Double) ?? 1.0)
+        let useBlur = (cfg?["blur_background"]?.value as? Bool) == true
+        // Default toggle icons for grid (per-option overrides take priority)
+        let defaultSelectedIcon = (cfg?["selected_icon"]?.value as? String)
+        let defaultUnselectedIcon = (cfg?["unselected_icon"]?.value as? String)
+        // Show toggle icon overlay (top-right badge showing +/check)
+        let showToggleIcon = (cfg?["show_toggle_icon"]?.value as? Bool) ?? (defaultSelectedIcon != nil)
+        // Tooltip below grid
+        let tooltipText = (cfg?["tooltip_text"]?.value as? String)
+        let tooltipIcon = (cfg?["tooltip_icon"]?.value as? String) ?? "info.circle"
+
+        VStack(spacing: 8) {
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(options) { option in
+                    let isSelected = isMultiSelect
+                        ? selectedValues.contains(option.resolvedValue)
+                        : selectedValue == option.resolvedValue
+                    let optBorderCol = option.selected_border_color.map { Color(hex: $0) } ?? fillCol
+                    let optUnselBorderCol = option.border_color.map { Color(hex: $0) } ?? unselectedBorderCol
+
+                    Button {
+                        toggleSelection(option: option, fieldId: fieldId)
+                    } label: {
+                        ZStack(alignment: .topTrailing) {
+                            VStack(spacing: 6) {
+                                // Image with optional overlay
+                                if let imgUrl = option.image_url, let url = URL(string: imgUrl) {
+                                    imageWithOverlay(url: url, option: option, isSelected: isSelected, size: 40)
+                                }
+                                // Icon with state change (selected/unselected variants)
+                                if let icon = option.icon, !icon.isEmpty {
+                                    let resolvedIcon = isSelected
+                                        ? (option.selected_icon ?? defaultSelectedIcon ?? icon)
+                                        : (option.unselected_icon ?? defaultUnselectedIcon ?? icon)
+                                    // Detect SF Symbol vs emoji
+                                    if UIImage(systemName: resolvedIcon) != nil {
+                                        Image(systemName: resolvedIcon)
+                                            .font(.title2)
+                                            .foregroundColor(isSelected ? selectedTextCol : textCol)
+                                    } else {
+                                        Text(resolvedIcon).font(.title2)
+                                    }
+                                }
+                                // Label + subtitle
+                                Text(option.label ?? "")
+                                    .font(.subheadline)
+                                    .foregroundColor(isSelected ? selectedTextCol : textCol)
+                                    .multilineTextAlignment(.center)
+                                if let sub = option.subtitle, !sub.isEmpty {
+                                    Text(sub)
+                                        .font(.caption)
+                                        .foregroundColor(textCol.opacity(0.65))
+                                        .multilineTextAlignment(.center)
+                                }
                             }
-                            .frame(width: 40, height: 40)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .frame(maxWidth: .infinity, minHeight: 60)
+                            .padding(10)
+
+                            // Toggle icon badge (top-right, like screenshot 2-grid +/check)
+                            if showToggleIcon {
+                                let selIcon = option.selected_icon ?? defaultSelectedIcon ?? "checkmark"
+                                let unselIcon = option.unselected_icon ?? defaultUnselectedIcon ?? "plus"
+                                let badgeIcon = isSelected ? selIcon : unselIcon
+                                Group {
+                                    if UIImage(systemName: badgeIcon) != nil {
+                                        Image(systemName: badgeIcon)
+                                            .font(.system(size: 10, weight: .bold))
+                                    } else {
+                                        Text(badgeIcon).font(.system(size: 10))
+                                    }
+                                }
+                                .foregroundColor(isSelected ? selectedTextCol : textCol.opacity(0.5))
+                                .frame(width: 20, height: 20)
+                                .background(Circle().fill(isSelected ? fillCol.opacity(0.2) : Color.clear))
+                                .padding(6)
+                            }
                         }
-                        // Optional icon emoji
-                        if let icon = option.icon, !icon.isEmpty {
-                            Text(icon).font(.title2)
+                        .background {
+                            ZStack {
+                                if useBlur {
+                                    RoundedRectangle(cornerRadius: cornerR)
+                                        .fill(.ultraThinMaterial)
+                                }
+                                RoundedRectangle(cornerRadius: cornerR)
+                                    .fill((isSelected ? selectedBgCol : optionBg).opacity(bgOpacity))
+                                RoundedRectangle(cornerRadius: cornerR)
+                                    .strokeBorder(
+                                        isSelected ? optBorderCol : optUnselBorderCol,
+                                        lineWidth: isSelected ? selectedBorderW : unselectedBorderW
+                                    )
+                            }
                         }
-                        Text(option.label ?? "")
-                            .font(.subheadline)
-                            .foregroundColor(isSelected ? selectedTextCol : textCol)
-                            .multilineTextAlignment(.center)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 60)
-                    .padding(10)
-                    .background {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: cornerR)
-                                .fill(isSelected ? selectedBgCol : optionBg)
-                            RoundedRectangle(cornerRadius: cornerR)
-                                .strokeBorder(
-                                    isSelected ? fillCol : unselectedBorderCol,
-                                    lineWidth: isSelected ? 2 : 1
-                                )
-                        }
-                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+            }
+
+            // Tooltip below grid
+            if let tooltip = tooltipText, !tooltip.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: tooltipIcon)
+                        .font(.caption)
+                        .foregroundColor(textCol.opacity(0.5))
+                    Text(tooltip)
+                        .font(.caption)
+                        .foregroundColor(textCol.opacity(0.5))
+                }
+                .padding(.top, 4)
             }
         }
     }

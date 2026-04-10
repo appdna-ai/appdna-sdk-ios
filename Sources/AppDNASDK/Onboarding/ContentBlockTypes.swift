@@ -327,6 +327,15 @@ public struct InputOption: Codable, Identifiable {
     public let title_font_size: Double?
     public let subtitle_font_size: Double?
     public let title_font_weight: String?  // regular, medium, semibold, bold
+    // Grid toggle: icon to show when selected/unselected (SF Symbol name or emoji)
+    public let selected_icon: String?
+    public let unselected_icon: String?
+    // Image overlay: colored circle with opacity rendered over the option image
+    public let image_overlay_color: String?
+    public let image_overlay_opacity: Double?
+    // Per-option border overrides
+    public let border_color: String?
+    public let selected_border_color: String?
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -343,6 +352,12 @@ public struct InputOption: Codable, Identifiable {
         self.title_font_size = try container.decodeIfPresent(Double.self, forKey: .title_font_size)
         self.subtitle_font_size = try container.decodeIfPresent(Double.self, forKey: .subtitle_font_size)
         self.title_font_weight = try container.decodeIfPresent(String.self, forKey: .title_font_weight)
+        self.selected_icon = try container.decodeIfPresent(String.self, forKey: .selected_icon)
+        self.unselected_icon = try container.decodeIfPresent(String.self, forKey: .unselected_icon)
+        self.image_overlay_color = try container.decodeIfPresent(String.self, forKey: .image_overlay_color)
+        self.image_overlay_opacity = try container.decodeIfPresent(Double.self, forKey: .image_overlay_opacity)
+        self.border_color = try container.decodeIfPresent(String.self, forKey: .border_color)
+        self.selected_border_color = try container.decodeIfPresent(String.self, forKey: .selected_border_color)
     }
 
     /// Non-optional value — falls back to id if value is nil.
@@ -352,6 +367,9 @@ public struct InputOption: Codable, Identifiable {
         case id, label, value, icon, image_url
         case subtitle, title_color, subtitle_color
         case title_font_size, subtitle_font_size, title_font_weight
+        case selected_icon, unselected_icon
+        case image_overlay_color, image_overlay_opacity
+        case border_color, selected_border_color
     }
 }
 
