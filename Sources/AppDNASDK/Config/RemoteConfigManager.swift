@@ -209,19 +209,54 @@ final class RemoteConfigManager {
         }
         let basePath = "\(firestorePath)/config"
 
-        // Fetch all 6 config documents in parallel
+        // Fetch all config documents in parallel.
+        // For paywalls, onboarding, and surveys: prefer per-item docs (via index)
+        // to avoid the 1MB mega-doc limit. Fall back to legacy mega-doc if no index.
         let group = DispatchGroup()
 
+        // Paywalls: index → per-item docs, fallback → mega-doc
         group.enter()
-        db.document("\(basePath)/paywalls").getDocument { [weak self] snapshot, error in
-            defer { group.leave() }
-            if let data = snapshot?.data() {
-                self?.parsePaywalls(data)
-            } else if let error {
-                Log.error("Failed to fetch paywalls config: \(error.localizedDescription)")
-            }
-        }
+        self.fetchViaIndex(
+            db: db, basePath: basePath,
+            indexPath: "paywall_index", indexKey: "paywalls",
+            itemCollection: "paywalls",
+            megaDocPath: "paywalls",
+            parseItem: { [weak self] id, data in self?.parseSinglePaywall(id: id, data: data) },
+            parseMegaDoc: { [weak self] data in self?.parsePaywalls(data) },
+            onComplete: { group.leave() }
+        )
 
+        // Onboarding: index → per-item docs, fallback → mega-doc
+        group.enter()
+        self.fetchViaIndex(
+            db: db, basePath: basePath,
+            indexPath: "onboarding_index", indexKey: "flows",
+            itemCollection: "onboarding",
+            megaDocPath: "onboarding",
+            parseItem: { [weak self] id, data in self?.parseSingleOnboardingFlow(id: id, data: data) },
+            parseMegaDoc: { [weak self] data in self?.parseOnboarding(data) },
+            extraIndexParse: { [weak self] indexData in
+                // Extract active_flow_id from the index
+                if let activeId = indexData["active_flow_id"] as? String {
+                    self?.queue.async { self?.activeOnboardingFlowId = activeId }
+                }
+            },
+            onComplete: { group.leave() }
+        )
+
+        // Surveys: index → per-item docs, fallback → mega-doc
+        group.enter()
+        self.fetchViaIndex(
+            db: db, basePath: basePath,
+            indexPath: "survey_index", indexKey: "surveys",
+            itemCollection: "surveys",
+            megaDocPath: "surveys",
+            parseItem: { [weak self] id, data in self?.parseSingleSurvey(id: id, data: data) },
+            parseMegaDoc: { [weak self] data in self?.parseSurveys(data) },
+            onComplete: { group.leave() }
+        )
+
+        // Experiments — lightweight, keep mega-doc pattern
         group.enter()
         db.document("\(basePath)/experiments").getDocument { [weak self] snapshot, error in
             defer { group.leave() }
@@ -232,11 +267,11 @@ final class RemoteConfigManager {
             }
         }
 
+        // Flags — lightweight, keep mega-doc pattern
         group.enter()
         db.document("\(basePath)/flags").getDocument { [weak self] snapshot, error in
             defer { group.leave() }
             if let data = snapshot?.data() {
-                // Unwrap "flags" wrapper: Firestore doc is { flags: { key1: {...}, key2: {...} } }
                 let unwrapped = (data["flags"] as? [String: Any]) ?? data
                 self?.queue.async { self?.flags = unwrapped }
                 if let jsonData = try? JSONSerialization.data(withJSONObject: unwrapped) {
@@ -247,6 +282,7 @@ final class RemoteConfigManager {
             }
         }
 
+        // Flows (legacy zero-code) — lightweight, keep mega-doc
         group.enter()
         db.document("\(basePath)/flows").getDocument { [weak self] snapshot, error in
             defer { group.leave() }
@@ -260,18 +296,7 @@ final class RemoteConfigManager {
             }
         }
 
-        // v0.2: Onboarding flows
-        group.enter()
-        db.document("\(basePath)/onboarding").getDocument { [weak self] snapshot, error in
-            defer { group.leave() }
-            if let data = snapshot?.data() {
-                self?.parseOnboarding(data)
-            } else if let error {
-                Log.error("Failed to fetch onboarding config: \(error.localizedDescription)")
-            }
-        }
-
-        // v0.2: In-app messages
+        // In-app messages — lightweight, keep mega-doc
         group.enter()
         db.document("\(basePath)/messages").getDocument { [weak self] snapshot, error in
             defer { group.leave() }
@@ -282,18 +307,7 @@ final class RemoteConfigManager {
             }
         }
 
-        // v0.3: Surveys
-        group.enter()
-        db.document("\(basePath)/surveys").getDocument { [weak self] snapshot, error in
-            defer { group.leave() }
-            if let data = snapshot?.data() {
-                self?.parseSurveys(data)
-            } else if let error {
-                Log.error("Failed to fetch surveys config: \(error.localizedDescription)")
-            }
-        }
-
-        // SPEC-089c: Fetch screen_index for server-driven UI
+        // SPEC-089c: Screen index for server-driven UI
         group.enter()
         db.document("\(basePath)/screen_index").getDocument { [weak self] snapshot, error in
             defer { group.leave() }
@@ -512,6 +526,146 @@ final class RemoteConfigManager {
             Log.info("Screen index loaded: \(index.screens?.count ?? 0) screens, \(index.flows?.count ?? 0) flows, \(index.slots?.count ?? 0) slots")
         } catch {
             Log.error("Failed to parse screen_index: \(error)")
+        }
+    }
+
+    // MARK: - Per-item fetch via index (enterprise-grade)
+
+    /// Generic helper: try to load items via a lightweight index document.
+    /// If the index exists, fan out to individual per-item documents.
+    /// If no index, fall back to the legacy mega-document.
+    ///
+    /// This avoids the 1MB Firestore limit for config types with many items
+    /// (paywalls, onboarding flows, surveys) while staying backward-compatible
+    /// with older backends that only write the mega-doc.
+    private func fetchViaIndex(
+        db: Firestore,
+        basePath: String,
+        indexPath: String,
+        indexKey: String,
+        itemCollection: String,
+        megaDocPath: String,
+        parseItem: @escaping (String, [String: Any]) -> Void,
+        parseMegaDoc: @escaping ([String: Any]) -> Void,
+        extraIndexParse: (([String: Any]) -> Void)? = nil,
+        onComplete: @escaping () -> Void
+    ) {
+        db.document("\(basePath)/\(indexPath)").getDocument { [weak self] snapshot, error in
+            guard let self else { onComplete(); return }
+
+            if let indexData = snapshot?.data(),
+               let itemsMap = indexData[indexKey] as? [String: Any],
+               !itemsMap.isEmpty {
+                // Index exists — fetch individual docs in parallel
+                Log.debug("[\(indexPath)] Found index with \(itemsMap.count) items, fetching individually")
+                extraIndexParse?(indexData)
+
+                let itemGroup = DispatchGroup()
+                for itemId in itemsMap.keys {
+                    itemGroup.enter()
+                    db.document("\(basePath)/\(itemCollection)/\(itemId)").getDocument { itemSnapshot, itemError in
+                        defer { itemGroup.leave() }
+                        if let itemData = itemSnapshot?.data() {
+                            parseItem(itemId, itemData)
+                        } else if let itemError {
+                            Log.warning("[\(indexPath)] Failed to fetch item \(itemId): \(itemError.localizedDescription)")
+                        }
+                    }
+                }
+                itemGroup.notify(queue: .global()) {
+                    onComplete()
+                }
+            } else {
+                // No index — fall back to legacy mega-doc
+                Log.debug("[\(indexPath)] No index found, falling back to mega-doc \(megaDocPath)")
+                db.document("\(basePath)/\(megaDocPath)").getDocument { megaSnapshot, megaError in
+                    defer { onComplete() }
+                    if let data = megaSnapshot?.data() {
+                        parseMegaDoc(data)
+                    } else if let megaError {
+                        Log.error("Failed to fetch \(megaDocPath) config: \(megaError.localizedDescription)")
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Per-item parsers (for index-based fetching)
+
+    private func parseSinglePaywall(id: String, data: [String: Any]) {
+        do {
+            let jsonData = try Self.sanitizedJSONData(data)
+            let config = try Self.snakeCaseDecoder.decode(PaywallConfig.self, from: jsonData)
+            queue.async { self.paywalls[id] = config }
+        } catch {
+            Log.error("Failed to decode individual paywall '\(id)': \(error)")
+        }
+    }
+
+    private func parseSingleOnboardingFlow(id: String, data: [String: Any]) {
+        do {
+            let jsonData = try Self.sanitizedJSONData(data)
+            let config = try Self.snakeCaseDecoder.decode(OnboardingFlowConfig.self, from: jsonData)
+            queue.async { self.onboardingFlows[id] = config }
+        } catch {
+            Log.error("Failed to decode individual onboarding flow '\(id)': \(error)")
+        }
+    }
+
+    private func parseSingleSurvey(id: String, data: [String: Any]) {
+        do {
+            let jsonData = try Self.sanitizedJSONData(data)
+            let config = try Self.snakeCaseDecoder.decode(SurveyConfig.self, from: jsonData)
+            queue.async {
+                self.surveys[id] = config
+                self.surveyUpdateHandler?(self.surveys)
+            }
+        } catch {
+            Log.error("Failed to decode individual survey '\(id)': \(error)")
+        }
+    }
+
+    /// Fetch a single paywall config on-demand by ID (for lazy loading).
+    func fetchPaywallConfig(id: String, completion: @escaping (PaywallConfig?) -> Void) {
+        guard let firestorePath else { completion(nil); return }
+        guard let db = AppDNA.firestoreDB else { completion(nil); return }
+        let basePath = "\(firestorePath)/config"
+        db.document("\(basePath)/paywalls/\(id)").getDocument { [weak self] snapshot, error in
+            guard let data = snapshot?.data() else {
+                completion(nil)
+                return
+            }
+            do {
+                let jsonData = try Self.sanitizedJSONData(data)
+                let config = try Self.snakeCaseDecoder.decode(PaywallConfig.self, from: jsonData)
+                self?.queue.async { self?.paywalls[id] = config }
+                completion(config)
+            } catch {
+                Log.error("Failed to decode paywall '\(id)': \(error)")
+                completion(nil)
+            }
+        }
+    }
+
+    /// Fetch a single onboarding flow on-demand by ID (for lazy loading).
+    func fetchOnboardingConfig(id: String, completion: @escaping (OnboardingFlowConfig?) -> Void) {
+        guard let firestorePath else { completion(nil); return }
+        guard let db = AppDNA.firestoreDB else { completion(nil); return }
+        let basePath = "\(firestorePath)/config"
+        db.document("\(basePath)/onboarding/\(id)").getDocument { [weak self] snapshot, error in
+            guard let data = snapshot?.data() else {
+                completion(nil)
+                return
+            }
+            do {
+                let jsonData = try Self.sanitizedJSONData(data)
+                let config = try Self.snakeCaseDecoder.decode(OnboardingFlowConfig.self, from: jsonData)
+                self?.queue.async { self?.onboardingFlows[id] = config }
+                completion(config)
+            } catch {
+                Log.error("Failed to decode onboarding flow '\(id)': \(error)")
+                completion(nil)
+            }
         }
     }
 
