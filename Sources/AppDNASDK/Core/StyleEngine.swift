@@ -14,14 +14,18 @@ public struct TextStyleConfig: Codable {
     public let opacity: Double?
 }
 
-/// Background style (color, gradient, or image).
+/// Background style (color, gradient, image, or animation).
 public struct BackgroundStyleConfig: Codable {
-    public let type: String?         // "color", "gradient", "image"
+    public let type: String?         // "color", "gradient", "image", "lottie", "rive"
     public let color: String?
     public let gradient: GradientConfig?
     public let image_url: String?
     public let image_fit: String?    // "cover", "contain", "fill", "none"
     public let overlay: String?      // hex color overlay
+    // Animation backgrounds (item #1)
+    public let lottie_url: String?   // Lottie animation URL for fullscreen bg
+    public let rive_url: String?     // Rive animation URL for fullscreen bg
+    public let animation_loop: Bool? // Loop animation (default true)
 }
 
 public struct GradientConfig: Codable {
@@ -279,6 +283,43 @@ enum StyleEngine {
                             Color.clear
                         }
                     }
+                }
+                if let overlay = bg?.overlay {
+                    Color(hex: overlay)
+                }
+            }
+        case "lottie":
+            // Full-screen Lottie animation background (item #1)
+            ZStack {
+                if let urlStr = bg?.lottie_url {
+                    LottieBlockView(block: LottieBlock(
+                        lottie_url: urlStr, lottie_json: nil,
+                        autoplay: true, loop: bg?.animation_loop ?? true,
+                        speed: 1.0, width: nil,
+                        height: UIScreen.main.bounds.height,
+                        alignment: "center",
+                        play_on_scroll: nil, play_on_tap: nil, color_overrides: nil
+                    ))
+                    .ignoresSafeArea()
+                }
+                if let overlay = bg?.overlay {
+                    Color(hex: overlay)
+                }
+            }
+        case "rive":
+            // Full-screen Rive animation background (item #1)
+            ZStack {
+                if let urlStr = bg?.rive_url {
+                    RiveBlockView(block: RiveBlock(
+                        rive_url: urlStr,
+                        artboard: nil,
+                        state_machine: "State Machine 1",
+                        autoplay: true,
+                        height: UIScreen.main.bounds.height,
+                        alignment: "center",
+                        inputs: nil, trigger_on_step_complete: nil
+                    ))
+                    .ignoresSafeArea()
                 }
                 if let overlay = bg?.overlay {
                     Color(hex: overlay)
