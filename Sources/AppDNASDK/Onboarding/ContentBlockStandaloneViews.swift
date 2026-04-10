@@ -393,18 +393,18 @@ struct OrbitingIconsLoaderView: View {
     var body: some View {
         // Pull orbiting config from field_config (dictionary-based, no schema changes)
         let cfg = block.field_config
-        let size: CGFloat = CGFloat((cfg?["size"]?.value as? Double) ?? 240)
-        let orbitRadius: CGFloat = CGFloat((cfg?["orbit_radius"]?.value as? Double) ?? 80)
-        let orbitDurationMs: Double = Double((cfg?["orbit_duration_ms"]?.value as? Int) ?? (cfg?["orbit_duration_ms"]?.value as? Double).map { Int($0) } ?? 6000)
-        let centralSize: CGFloat = CGFloat((cfg?["central_size"]?.value as? Double) ?? 10)
+        let size: CGFloat = CGFloat((cfgDouble(cfg?["size"])) ?? 240)
+        let orbitRadius: CGFloat = CGFloat((cfgDouble(cfg?["orbit_radius"])) ?? 80)
+        let orbitDurationMs: Double = Double((cfg?["orbit_duration_ms"]?.value as? Int) ?? (cfgDouble(cfg?["orbit_duration_ms"])).map { Int($0) } ?? 6000)
+        let centralSize: CGFloat = CGFloat((cfgDouble(cfg?["central_size"])) ?? 10)
         let centralImageUrl = cfg?["central_image_url"]?.value as? String
         let centralBgColorHex = cfg?["central_bg_color"]?.value as? String ?? "#FEE2E2"
         let ringColorHex = cfg?["ring_color"]?.value as? String
-        let ringWidth: CGFloat = CGFloat((cfg?["ring_width"]?.value as? Double) ?? 1)
+        let ringWidth: CGFloat = CGFloat((cfgDouble(cfg?["ring_width"])) ?? 1)
         let animatedBg = (cfg?["animated_bg"]?.value as? String) ?? "none"
         let animatedBgHex = cfg?["animated_bg_color"]?.value as? String ?? "#EEEEEE"
-        let labelSize = CGFloat((cfg?["label_font_size"]?.value as? Double) ?? 17)
-        let subtitleSize = CGFloat((cfg?["subtitle_font_size"]?.value as? Double) ?? 14)
+        let labelSize = CGFloat((cfgDouble(cfg?["label_font_size"])) ?? 17)
+        let subtitleSize = CGFloat((cfgDouble(cfg?["subtitle_font_size"])) ?? 14)
         let subtitleColorHex = cfg?["subtitle_color"]?.value as? String ?? "#E11D48"
         let labelColorHex = cfg?["label_color"]?.value as? String ?? "#0F172A"
         let showPercentage = block.show_percentage ?? false
@@ -427,7 +427,7 @@ struct OrbitingIconsLoaderView: View {
                 let effectiveRingColor = ringColorHex ?? "#D1D5DB"
                 // Use configured opacity or a visible default (0.5) so rings
                 // are clearly visible on both light and dark backgrounds.
-                let ringOpacity = CGFloat((cfg?["ring_opacity"]?.value as? Double) ?? 0.5)
+                let ringOpacity = CGFloat((cfgDouble(cfg?["ring_opacity"])) ?? 0.5)
                 Circle()
                     .stroke(Color(hex: effectiveRingColor).opacity(ringOpacity), lineWidth: ringWidth)
                     .frame(width: orbitRadius * 2, height: orbitRadius * 2)
@@ -989,11 +989,11 @@ struct DateWheelPickerBlockView: View {
         let calendarBg = (block.field_config?["calendar_bg_color"]?.value as? String)
             ?? block.calendar_bg_color ?? "#FFFFFF"
         let wheelBg = (block.field_config?["wheel_bg_color"]?.value as? String) ?? calendarBg
-        let pickerCornerRadius = CGFloat((block.field_config?["picker_corner_radius"]?.value as? Double) ?? 12)
+        let pickerCornerRadius = CGFloat((cfgDouble(block.field_config?["picker_corner_radius"])) ?? 12)
         let wheelTextColorHex = (block.field_config?["wheel_text_color"]?.value as? String)
         let pickerBorderColor = (block.field_config?["picker_border_color"]?.value as? String)
-        let pickerBorderWidth = CGFloat((block.field_config?["picker_border_width"]?.value as? Double) ?? 0)
-        let pickerPadding = CGFloat((block.field_config?["picker_padding"]?.value as? Double) ?? 0)
+        let pickerBorderWidth = CGFloat((cfgDouble(block.field_config?["picker_border_width"])) ?? 0)
+        let pickerPadding = CGFloat((cfgDouble(block.field_config?["picker_padding"])) ?? 0)
 
         VStack(spacing: 8) {
             if isFieldMode {

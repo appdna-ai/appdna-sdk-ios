@@ -712,10 +712,10 @@ extension View {
         let useBlur = (cfg?["blur_background"]?.value as? Bool) == true
         let containerBg = cfg?["container_bg_color"]?.value as? String
         let hasBg = containerBg != nil && containerBg != "" && containerBg != "#ffffff" && containerBg != "#FFFFFF" && containerBg != "transparent"
-        let containerBorderW = (cfg?["container_border_width"]?.value as? Double).flatMap { $0 > 0 ? CGFloat($0) : nil }
+        let containerBorderW = (cfgDouble(cfg?["container_border_width"])).flatMap { $0 > 0 ? CGFloat($0) : nil }
         let hasBorder = containerBorderW != nil && (cfg?["container_border_color"]?.value as? String) != nil
-        let bgOpacity = CGFloat((cfg?["background_opacity"]?.value as? Double) ?? 1.0)
-        let containerCornerR = CGFloat((cfg?["container_corner_radius"]?.value as? Double) ?? 0)
+        let bgOpacity = CGFloat((cfgDouble(cfg?["background_opacity"])) ?? 1.0)
+        let containerCornerR = CGFloat((cfgDouble(cfg?["container_corner_radius"])) ?? 0)
 
         if useBlur || hasBg || hasBorder {
             self

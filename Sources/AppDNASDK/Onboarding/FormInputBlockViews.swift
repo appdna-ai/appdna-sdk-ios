@@ -29,11 +29,20 @@ func formFieldLabel(_ block: ContentBlock) -> some View {
     FormFieldLabelView(block: block)
 }
 
+/// Extract a numeric value from AnyCodable, handling both Int and Double.
+/// JSON integers decode as Int via AnyCodable, so `as? Double` silently fails.
+func cfgDouble(_ val: AnyCodable?) -> Double? {
+    guard let v = val?.value else { return nil }
+    if let d = v as? Double { return d }
+    if let i = v as? Int { return Double(i) }
+    return nil
+}
+
 /// Read configurable field height from field_config.field_height (points).
 /// Returns nil if not set — callers use `.frame(minHeight:)` so it only
 /// affects the input container when explicitly configured.
 func fieldHeight(_ block: ContentBlock) -> CGFloat? {
-    (block.field_config?["field_height"]?.value as? Double).map { CGFloat($0) }
+    cfgDouble(block.field_config?["field_height"]).map { CGFloat($0) }
 }
 
 /// Generic text-based input (text, number, email, phone, url).
@@ -339,15 +348,15 @@ struct FormInputSelectBlock: View {
         let radioPosition = (cfg?["radio_position"]?.value as? String) ?? "right"
         let radioOnLeft = radioPosition == "left" || radioPosition == "leading"
         // Border widths
-        let selectedBorderW = CGFloat((cfg?["selected_border_width"]?.value as? Double) ?? 2)
-        let unselectedBorderW = CGFloat((cfg?["unselected_border_width"]?.value as? Double) ?? 1)
+        let selectedBorderW = CGFloat((cfgDouble(cfg?["selected_border_width"])) ?? 2)
+        let unselectedBorderW = CGFloat((cfgDouble(cfg?["unselected_border_width"])) ?? 1)
         // Background opacity + blur
-        let bgOpacity = CGFloat((cfg?["background_opacity"]?.value as? Double) ?? 1.0)
+        let bgOpacity = CGFloat((cfgDouble(cfg?["background_opacity"])) ?? 1.0)
         let useBlur = (cfg?["blur_background"]?.value as? Bool) == true
 
         // Text sizes
-        let defaultTitleSize = (cfg?["title_font_size"]?.value as? Double) ?? 15
-        let defaultSubtitleSize = (cfg?["subtitle_font_size"]?.value as? Double) ?? 12
+        let defaultTitleSize = (cfgDouble(cfg?["title_font_size"])) ?? 15
+        let defaultSubtitleSize = (cfgDouble(cfg?["subtitle_font_size"])) ?? 12
         let defaultSubtitleColor = (cfg?["subtitle_color"]?.value as? String).map { Color(hex: $0) }
             ?? textCol.opacity(0.65)
 
@@ -546,10 +555,10 @@ struct FormInputSelectBlock: View {
             ?? fillCol.opacity(0.3)
 
         // Grid configuration
-        let colCount = max(Int((cfg?["grid_columns"]?.value as? Double) ?? 2), 1)
-        let selectedBorderW = CGFloat((cfg?["selected_border_width"]?.value as? Double) ?? 2)
-        let unselectedBorderW = CGFloat((cfg?["unselected_border_width"]?.value as? Double) ?? 1)
-        let bgOpacity = CGFloat((cfg?["background_opacity"]?.value as? Double) ?? 1.0)
+        let colCount = max(Int((cfgDouble(cfg?["grid_columns"])) ?? 2), 1)
+        let selectedBorderW = CGFloat((cfgDouble(cfg?["selected_border_width"])) ?? 2)
+        let unselectedBorderW = CGFloat((cfgDouble(cfg?["unselected_border_width"])) ?? 1)
+        let bgOpacity = CGFloat((cfgDouble(cfg?["background_opacity"])) ?? 1.0)
         let useBlur = (cfg?["blur_background"]?.value as? Bool) == true
         // Default toggle icons for grid (per-option overrides take priority)
         let defaultSelectedIcon = (cfg?["selected_icon"]?.value as? String)

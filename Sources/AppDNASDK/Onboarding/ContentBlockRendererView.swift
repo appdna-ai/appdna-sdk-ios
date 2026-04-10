@@ -51,7 +51,7 @@ struct ContentBlockRendererView: View {
                 let shouldCollapse = resolvedBlock.collapse_on_scroll == true
                 // Collapse threshold: how many points of scroll before this block hides
                 let collapseThreshold = CGFloat(
-                    (resolvedBlock.field_config?["collapse_threshold"]?.value as? Double) ?? 50
+                    (cfgDouble(resolvedBlock.field_config?["collapse_threshold"])) ?? 50
                 )
                 let collapseProgress = shouldCollapse ? min(max(scrollOffset / collapseThreshold, 0), 1) : 0
 
@@ -997,19 +997,19 @@ struct ContentBlockRendererView: View {
         let ratios: [CGFloat] = parseColumnRatios(ratioStr)
 
         // Row background: opacity + blur (same as select options)
-        let rowBgOpacity = CGFloat((block.field_config?["background_opacity"]?.value as? Double) ?? 1.0)
+        let rowBgOpacity = CGFloat((cfgDouble(block.field_config?["background_opacity"])) ?? 1.0)
         let rowUseBlur = (block.field_config?["blur_background"]?.value as? Bool) == true
-        let rowBorderW = CGFloat((block.field_config?["border_width"]?.value as? Double) ?? 0)
+        let rowBorderW = CGFloat((cfgDouble(block.field_config?["border_width"])) ?? 0)
         let rowBorderCol = (block.field_config?["border_color"]?.value as? String).map { Color(hex: $0) }
         let rowBgCol = (block.field_config?["bg_color"]?.value as? String).map { Color(hex: $0) }
-        let rowCornerR = CGFloat((block.field_config?["corner_radius"]?.value as? Double) ?? 0)
+        let rowCornerR = CGFloat((cfgDouble(block.field_config?["corner_radius"])) ?? 0)
 
         // Leading icon slot (for info-card pattern: icon + children layout)
         let leadingIcon = block.field_config?["leading_icon"]?.value as? String
-        let leadingIconSize = CGFloat((block.field_config?["leading_icon_size"]?.value as? Double) ?? 24)
+        let leadingIconSize = CGFloat((cfgDouble(block.field_config?["leading_icon_size"])) ?? 24)
         let leadingIconColor = (block.field_config?["leading_icon_color"]?.value as? String).map { Color(hex: $0) }
         let leadingIconBgColor = (block.field_config?["leading_icon_bg_color"]?.value as? String).map { Color(hex: $0) }
-        let leadingIconBgSize = CGFloat((block.field_config?["leading_icon_bg_size"]?.value as? Double) ?? (leadingIconSize + 16))
+        let leadingIconBgSize = CGFloat((cfgDouble(block.field_config?["leading_icon_bg_size"])) ?? (leadingIconSize + 16))
 
         // Vertical alignment for HStack, horizontal for VStack
         let vAlign: VerticalAlignment = {
