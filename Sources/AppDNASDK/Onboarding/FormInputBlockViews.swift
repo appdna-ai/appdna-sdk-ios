@@ -609,6 +609,7 @@ struct FormInputSelectBlock: View {
                                 }
                             }
                             .frame(maxWidth: .infinity, minHeight: fieldHeight(block) ?? 60)
+                            .fixedSize(horizontal: false, vertical: true)
                             .padding(10)
 
                             // Toggle icon badge (top-right, like screenshot 2-grid +/check)

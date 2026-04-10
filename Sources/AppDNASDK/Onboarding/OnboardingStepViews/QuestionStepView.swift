@@ -125,9 +125,18 @@ struct QuestionStepView: View {
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(optionTextColor)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let sub = option.subtitle, !sub.isEmpty {
+                    Text(sub.interpolated())
+                        .font(.caption)
+                        .foregroundColor(optionTextColor.opacity(0.65))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: 100)
+            .frame(maxWidth: .infinity, minHeight: 80)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius)

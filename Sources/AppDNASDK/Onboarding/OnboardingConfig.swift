@@ -341,6 +341,7 @@ public struct QuestionOption: Codable, Identifiable {
     public let id: String?
     public let label: String?
     public let icon: String?
+    public let subtitle: String?
 }
 
 public enum SelectionMode: String, Codable {
