@@ -38,8 +38,8 @@ final class OnboardingConfigTests: XCTestCase {
                 cta_text: "Continue",
                 skip_enabled: nil,
                 options: [
-                    QuestionOption(id: "lose_weight", label: "Lose Weight", icon: "🏃"),
-                    QuestionOption(id: "build_muscle", label: "Build Muscle", icon: "💪"),
+                    QuestionOption(id: "lose_weight", label: "Lose Weight", icon: "🏃", subtitle: nil),
+                    QuestionOption(id: "build_muscle", label: "Build Muscle", icon: "💪", subtitle: nil),
                 ],
                 selection_mode: .single,
                 items: nil,
@@ -129,7 +129,7 @@ final class OnboardingConfigTests: XCTestCase {
     // MARK: - QuestionOption
 
     func testQuestionOptionIdentifiable() {
-        let option = QuestionOption(id: "opt_1", label: "Option 1", icon: "✅")
+        let option = QuestionOption(id: "opt_1", label: "Option 1", icon: "✅", subtitle: nil)
         XCTAssertEqual(option.id, "opt_1")
         XCTAssertEqual(option.label, "Option 1")
     }
