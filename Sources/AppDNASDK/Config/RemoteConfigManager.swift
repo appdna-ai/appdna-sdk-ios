@@ -319,6 +319,12 @@ final class RemoteConfigManager {
         }
 
         group.notify(queue: .global()) {
+            // Re-cache all in-memory configs to disk. This ensures the disk
+            // cache stays fresh whether configs came from per-item docs (index)
+            // or from the legacy mega-doc. Without this, per-item fetches would
+            // leave the disk cache stale and offline restarts would fail.
+            self.cacheAllFetchedConfigs()
+
             self.configCache.markFetched()
             Log.info("Remote config fetched successfully")
             self.eventTracker?.track(event: "config_fetched", properties: nil)
@@ -526,6 +532,61 @@ final class RemoteConfigManager {
             Log.info("Screen index loaded: \(index.screens?.count ?? 0) screens, \(index.flows?.count ?? 0) flows, \(index.slots?.count ?? 0) slots")
         } catch {
             Log.error("Failed to parse screen_index: \(error)")
+        }
+    }
+
+    // MARK: - Disk cache sync
+
+    /// Re-serialize in-memory configs to disk cache in mega-doc format.
+    /// Called after all Firestore fetches complete so the disk cache is always
+    /// fresh, regardless of whether configs came from per-item docs or mega-doc.
+    private func cacheAllFetchedConfigs() {
+        queue.async {
+            let encoder = JSONEncoder()
+
+            // Paywalls → { "paywalls": { id: config, ... } }
+            if !self.paywalls.isEmpty {
+                var dict: [String: Any] = [:]
+                for (id, config) in self.paywalls {
+                    if let data = try? encoder.encode(config),
+                       let obj = try? JSONSerialization.jsonObject(with: data) {
+                        dict[id] = obj
+                    }
+                }
+                if let jsonData = try? JSONSerialization.data(withJSONObject: ["paywalls": dict]) {
+                    self.configCache.storePaywalls(jsonData)
+                }
+            }
+
+            // Onboarding → { "active_flow_id": ..., "flows": { id: config, ... } }
+            if !self.onboardingFlows.isEmpty {
+                var dict: [String: Any] = [:]
+                for (id, config) in self.onboardingFlows {
+                    if let data = try? encoder.encode(config),
+                       let obj = try? JSONSerialization.jsonObject(with: data) {
+                        dict[id] = obj
+                    }
+                }
+                var payload: [String: Any] = ["flows": dict]
+                if let activeId = self.activeOnboardingFlowId { payload["active_flow_id"] = activeId }
+                if let jsonData = try? JSONSerialization.data(withJSONObject: payload) {
+                    self.configCache.storeOnboarding(jsonData)
+                }
+            }
+
+            // Surveys → { "surveys": { id: config, ... } }
+            if !self.surveys.isEmpty {
+                var dict: [String: Any] = [:]
+                for (id, config) in self.surveys {
+                    if let data = try? encoder.encode(config),
+                       let obj = try? JSONSerialization.jsonObject(with: data) {
+                        dict[id] = obj
+                    }
+                }
+                if let jsonData = try? JSONSerialization.data(withJSONObject: ["surveys": dict]) {
+                    self.configCache.storeSurveys(jsonData)
+                }
+            }
         }
     }
 
