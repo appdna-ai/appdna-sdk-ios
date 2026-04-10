@@ -405,7 +405,8 @@ struct FormInputSelectBlock: View {
                         }
                     }
                     .padding(12)
-                    .frame(minHeight: fieldHeight(block), alignment: .center)
+                    .frame(maxWidth: .infinity, minHeight: fieldHeight(block), alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
                     .background {
                         ZStack {
                             if useBlur {
