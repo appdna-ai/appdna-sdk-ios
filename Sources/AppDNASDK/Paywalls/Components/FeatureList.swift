@@ -13,6 +13,10 @@ struct FeatureList: View {
     /// over sectionStyle.elements["icon"].textStyle.color. Exposed in the console
     /// Content tab for easier access than the Style tab.
     var iconColorOverride: String? = nil
+    /// Circle background behind each feature icon (screenshot 10 effect)
+    var iconBgColor: String? = nil
+    var iconBgOpacity: CGFloat = 0.15
+    var iconBgSize: CGFloat = 32
 
     private var itemTextStyle: TextStyleConfig? {
         // Console saves under "item_text" key; fall back to legacy "item" key for older configs
@@ -53,9 +57,7 @@ struct FeatureList: View {
             VStack(alignment: .leading, spacing: gap) {
                 ForEach(features, id: \.self) { feature in
                     HStack(spacing: 12) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(iconColor ?? Color(hex: "#6366F1"))
-                            .font(.body)
+                        featureIcon()
                         if let ts = itemTextStyle {
                             Text(feature).applyTextStyle(ts)
                         } else {
@@ -72,14 +74,30 @@ struct FeatureList: View {
     private func richItemRow(_ item: PaywallGenericItem) -> some View {
         let isIncluded = item.included ?? true
         HStack(spacing: 12) {
-            // Icon: custom emoji/SF Symbol, or default check/cross
-            if let emoji = item.emoji, !emoji.isEmpty {
+            // Icon: custom emoji/SF Symbol, or default check/cross — with optional circle bg
+            featureIcon(item: item, isIncluded: isIncluded)
+
+            // Text
+            if let ts = itemTextStyle {
+                Text(item.displayText ?? "").applyTextStyle(ts)
+            } else {
+                Text(item.displayText ?? "").font(.body).foregroundColor(.primary)
+            }
+        }
+        .opacity(isIncluded ? 1.0 : 0.4)
+    }
+
+    /// Renders a feature icon with optional circle background (screenshot 10).
+    @ViewBuilder
+    private func featureIcon(item: PaywallGenericItem? = nil, isIncluded: Bool = true) -> some View {
+        let icon: some View = Group {
+            if let emoji = item?.emoji, !emoji.isEmpty {
                 Text(emoji).font(.body)
-            } else if let iconName = item.icon, !iconName.isEmpty {
+            } else if let iconName = item?.icon, !iconName.isEmpty {
                 Image(systemName: iconName)
                     .foregroundColor(iconColor ?? (isIncluded ? Color(hex: "#6366F1") : Color(hex: "#EF4444")))
                     .font(.body)
-            } else if let imageUrl = item.image_url, let url = URL(string: imageUrl) {
+            } else if let imageUrl = item?.image_url, let url = URL(string: imageUrl) {
                 BundledAsyncImage(url: url) { img in
                     img.resizable().scaledToFit()
                 } placeholder: {
@@ -92,14 +110,18 @@ struct FeatureList: View {
                     .foregroundColor(isIncluded ? (iconColor ?? Color(hex: "#6366F1")) : Color(hex: "#EF4444").opacity(0.5))
                     .font(.body)
             }
-
-            // Text
-            if let ts = itemTextStyle {
-                Text(item.displayText ?? "").applyTextStyle(ts)
-            } else {
-                Text(item.displayText ?? "").font(.body).foregroundColor(.primary)
-            }
         }
-        .opacity(isIncluded ? 1.0 : 0.4)
+
+        if let bgHex = iconBgColor {
+            ZStack {
+                Circle()
+                    .fill(Color(hex: bgHex).opacity(iconBgOpacity))
+                    .frame(width: iconBgSize, height: iconBgSize)
+                icon
+            }
+            .frame(width: iconBgSize, height: iconBgSize)
+        } else {
+            icon
+        }
     }
 }

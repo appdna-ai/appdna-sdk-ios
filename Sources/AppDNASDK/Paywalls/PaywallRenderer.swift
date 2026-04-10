@@ -447,7 +447,10 @@ struct PaywallRenderer: View {
                 columns: Int(section.data?.featureColumns ?? 1),
                 gap: section.data?.featureGap ?? 12,
                 sectionStyle: section.style,
-                iconColorOverride: section.data?.iconColor)
+                iconColorOverride: section.data?.iconColor,
+                iconBgColor: section.data?.iconBgColor,
+                iconBgOpacity: section.data?.iconBgOpacity ?? 0.15,
+                iconBgSize: section.data?.iconBgSize ?? 32)
                 .applyContainerStyle(section.style?.container))
         case "plans":
             // Plans can be in section.data.plans OR top-level config.plans

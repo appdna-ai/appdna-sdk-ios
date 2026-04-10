@@ -101,6 +101,12 @@ struct PlanCard: View {
                             }
                         }
 
+                        // Subtitle above price (if configured)
+                        if showSubtitle && cardStyle.subtitlePosition == "above_price",
+                           let desc = plan.description, !desc.isEmpty {
+                            planSubtitleView(desc)
+                        }
+
                         // Row 2: Price display
                         HStack(spacing: 4) {
                             if let ts = priceTextStyle {
@@ -126,12 +132,17 @@ struct PlanCard: View {
                             }
                         }
 
-                        // Description
-                        if showSubtitle, let desc = plan.description, !desc.isEmpty {
-                            Text(desc)
-                                .font(.caption)
-                                .foregroundColor(isSelected && selectedTextColor != nil ? effectiveTextColor.opacity(0.8) : .secondary)
-                                .lineLimit(2)
+                        // Subtitle below price (default position) or below name
+                        if showSubtitle && cardStyle.subtitlePosition != "above_price",
+                           let desc = plan.description, !desc.isEmpty {
+                            planSubtitleView(desc)
+                        }
+
+                        // Divider between price/subtitle and features
+                        if cardStyle.showDivider {
+                            Divider()
+                                .background(Color(hex: cardStyle.dividerColor ?? "#E5E7EB"))
+                                .padding(.vertical, 2)
                         }
 
                         // Savings text
@@ -215,6 +226,16 @@ struct PlanCard: View {
         .animation(.easeInOut(duration: 0.2), value: isSelected)
     }
 
+    // MARK: - Subtitle helper
+
+    @ViewBuilder
+    private func planSubtitleView(_ desc: String) -> some View {
+        Text(desc)
+            .font(.caption)
+            .foregroundColor(isSelected && selectedTextColor != nil ? effectiveTextColor.opacity(0.8) : .secondary)
+            .lineLimit(2)
+    }
+
     // MARK: - Badge helpers
 
     private var badgePositionValue: String { cardStyle.badgePosition ?? "top_right" }
@@ -231,28 +252,38 @@ struct PlanCard: View {
     private func badgeView(_ badge: String) -> some View {
         let text = loc?("plan.\(planIndex).badge", badge) ?? badge
         let shape = cardStyle.badgeStyle ?? "capsule"
+        let borderW = cardStyle.badgeBorderWidth ?? 0
+        let borderCol = cardStyle.badgeBorderColor.map { Color(hex: $0) } ?? .clear
 
         if !text.isEmpty {
-            if let ts = badgeTextStyle {
-                Text(text)
-                    .applyTextStyle(ts)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(badgeBg)
-                    .clipShape(badgeShape(shape))
-            } else {
-                Text(text)
-                    .font(.caption2.bold())
-                    .foregroundColor(badgeFg)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(badgeBg)
-                    .clipShape(badgeShape(shape))
+            HStack(spacing: 4) {
+                // Badge icon (SF Symbol or emoji)
+                if let icon = cardStyle.badgeIcon, !icon.isEmpty {
+                    if UIImage(systemName: icon) != nil {
+                        Image(systemName: icon)
+                            .font(.system(size: 10, weight: .bold))
+                    } else {
+                        Text(icon).font(.system(size: 10))
+                    }
+                }
+                if let ts = badgeTextStyle {
+                    Text(text).applyTextStyle(ts)
+                } else {
+                    Text(text)
+                        .font(.caption2.bold())
+                        .foregroundColor(badgeFg)
+                }
             }
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(badgeBg)
+            .clipShape(badgeShape(shape))
+            .overlay(
+                badgeShape(shape)
+                    .stroke(borderCol, lineWidth: borderW)
+            )
         }
     }
 
@@ -283,6 +314,14 @@ struct PlanCardStyle {
     var selectedTextColor: String? = nil      // Flips plan text colors when selected
     var unselectedBorderColor: String? = nil  // Default subtle gray when nil
     var selectedScale: CGFloat? = nil
+    // Badge enhancements (#12)
+    var badgeBorderColor: String? = nil
+    var badgeBorderWidth: CGFloat? = nil
+    var badgeIcon: String? = nil      // SF Symbol or emoji before badge text
+    // Plan card extras
+    var subtitlePosition: String? = nil  // "below_name", "below_price" (default), "above_price"
+    var showDivider: Bool = false        // Divider line between price and features
+    var dividerColor: String? = nil
     // Show flags
     var showIcon: Bool = false
     var showImage: Bool = false
@@ -310,6 +349,12 @@ struct PlanCardStyle {
         self.selectedTextColor = data?.selectedTextColor
         self.unselectedBorderColor = data?.unselectedBorderColor
         self.selectedScale = data?.selectedScale
+        self.badgeBorderColor = data?.badgeBorderColor
+        self.badgeBorderWidth = data?.badgeBorderWidth
+        self.badgeIcon = data?.badgeIcon
+        self.subtitlePosition = data?.subtitlePosition
+        self.showDivider = data?.showDivider ?? false
+        self.dividerColor = data?.dividerColor
         self.showIcon = data?.showPlanIcons ?? false
         self.showImage = data?.showPlanImages ?? false
         self.showSubtitle = data?.showPlanSubtitles ?? false

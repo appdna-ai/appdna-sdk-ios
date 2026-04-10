@@ -201,6 +201,9 @@ struct PaywallSectionData: Codable {
     let columns: AnyCodable?
     let iconSize: CGFloat?
     let iconColor: String?
+    let iconBgColor: String?       // Circle bg behind feature icons (screenshot 10)
+    let iconBgOpacity: CGFloat?    // Circle opacity (default 0.15)
+    let iconBgSize: CGFloat?       // Circle diameter (default 32)
     let spacing: CGFloat?
 
     // SPEC-089d: Comparison table section
@@ -263,10 +266,16 @@ struct PaywallSectionData: Codable {
     let cardPadding: CGFloat?
     let cardGap: CGFloat?
     let cardShadow: AnyCodable?  // Bool or String ("none", "sm", "md", "lg")
-    let badgePosition: String?       // top_left, top_right, inline (default)
+    let badgePosition: String?       // top_left, top_right, inline, inside (default)
     let badgeStyle: String?          // capsule, rectangle, rounded
     let badgeBgColor: String?
     let badgeTextColor: String?
+    let badgeBorderColor: String?    // Border color for badge
+    let badgeBorderWidth: CGFloat?   // Border width for badge
+    let badgeIcon: String?           // SF Symbol or emoji before badge text
+    let subtitlePosition: String?    // "below_name", "below_price" (default), "above_price"
+    let showDivider: Bool?           // Divider between price and features
+    let dividerColor: String?        // Divider color
     let selectedBorderColor: String?
     let selectedBgColor: String?
     let selectedTextColor: String?      // Text color applied to all plan text elements when selected
@@ -348,6 +357,9 @@ struct PaywallSectionData: Codable {
         case compact, columns
         case iconSize = "icon_size"
         case iconColor = "icon_color"
+        case iconBgColor = "icon_bg_color"
+        case iconBgOpacity = "icon_bg_opacity"
+        case iconBgSize = "icon_bg_size"
         case spacing
         case tableColumns = "table_columns"
         case tableRows = "rows"
@@ -378,6 +390,12 @@ struct PaywallSectionData: Codable {
         case badgeStyle = "badge_style"
         case badgeBgColor = "badge_bg_color"
         case badgeTextColor = "badge_text_color"
+        case badgeBorderColor = "badge_border_color"
+        case badgeBorderWidth = "badge_border_width"
+        case badgeIcon = "badge_icon"
+        case subtitlePosition = "subtitle_position"
+        case showDivider = "show_divider"
+        case dividerColor = "divider_color"
         case selectedBorderColor = "selected_border_color"
         case selectedBgColor = "selected_bg_color"
         case selectedTextColor = "selected_text_color"
