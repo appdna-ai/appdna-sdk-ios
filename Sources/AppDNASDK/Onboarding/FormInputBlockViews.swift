@@ -384,18 +384,21 @@ struct FormInputSelectBlock: View {
                         if let icon = option.icon, !icon.isEmpty {
                             Text(icon)
                         }
-                        // Title + subtitle
+                        // Title + subtitle — fixedSize vertical so text wraps fully
                         VStack(alignment: .leading, spacing: 2) {
                             Text(option.label ?? "")
                                 .font(.system(size: optTitleSize, weight: optTitleWeight))
                                 .foregroundColor(optTitleColor)
+                                .fixedSize(horizontal: false, vertical: true)
                             if let sub = option.subtitle, !sub.isEmpty {
                                 Text(sub)
                                     .font(.system(size: optSubtitleSize))
                                     .foregroundColor(optSubtitleColor)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
-                        Spacer()
+                        .layoutPriority(1)
+                        Spacer(minLength: 0)
                         // Radio on right
                         if showRadio && !radioOnLeft {
                             radioIndicator(isSelected: isSelected, fillCol: fillCol, radioFill: radioFill)
