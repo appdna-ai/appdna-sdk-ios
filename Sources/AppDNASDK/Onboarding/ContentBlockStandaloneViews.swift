@@ -423,12 +423,16 @@ struct OrbitingIconsLoaderView: View {
                         .frame(width: size * (1.0 + 0.1 * bgPulse), height: size * (1.0 + 0.1 * bgPulse))
                 }
 
-                // Ring (optional visible orbit path)
-                if let ringColorHex {
-                    Circle()
-                        .stroke(Color(hex: ringColorHex).opacity(0.3), lineWidth: ringWidth)
-                        .frame(width: orbitRadius * 2, height: orbitRadius * 2)
-                }
+                // Orbit ring — always visible with a subtle default
+                let effectiveRingColor = ringColorHex ?? "#D1D5DB"
+                Circle()
+                    .stroke(Color(hex: effectiveRingColor).opacity(0.2), lineWidth: ringWidth)
+                    .frame(width: orbitRadius * 2, height: orbitRadius * 2)
+
+                // Inner ring (subtle, at 60% radius) for depth
+                Circle()
+                    .stroke(Color(hex: effectiveRingColor).opacity(0.08), lineWidth: max(1, ringWidth * 0.5))
+                    .frame(width: orbitRadius * 1.2, height: orbitRadius * 1.2)
 
                 // Central dot/image
                 if let urlStr = centralImageUrl, let url = URL(string: urlStr) {
@@ -445,39 +449,59 @@ struct OrbitingIconsLoaderView: View {
                         .frame(width: centralSize, height: centralSize)
                 }
 
-                // Orbiting icons — rotate the container ZStack as a unit.
-                // Using .rotationEffect on a container (instead of computing
-                // cos/sin offsets from the animated angle) because cos(θ+360°)
-                // == cos(θ), so SwiftUI saw identical start/end offsets and
-                // produced no visible animation. .rotationEffect handles full
-                // revolutions correctly.
+                // Orbiting icons — two layers rotating in opposite directions
+                // for a richer "solar system" effect. Odd-indexed icons orbit
+                // on an inner ring counter-clockwise; even on outer clockwise.
+                // Each icon gets a subtle scale pulse for a breathing effect.
+
+                // Outer orbit (clockwise)
                 ZStack {
                     ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
-                        let baseAngle = item.icon_orbit_angle ?? (360.0 * Double(idx) / Double(max(items.count, 1)))
-                        let angleRad = baseAngle * .pi / 180
-                        let xOffset = CGFloat(cos(angleRad)) * orbitRadius
-                        let yOffset = CGFloat(sin(angleRad)) * orbitRadius
-                        let iconSize: CGFloat = CGFloat(item.icon_size ?? 48)
-                        let iconBgHex = item.icon_bg_color ?? "#BE123C"
-                        OrbitingIconView(
-                            item: item,
-                            size: iconSize,
-                            bgColor: Color(hex: iconBgHex)
-                        )
-                        .offset(x: xOffset, y: yOffset)
+                        if idx % 2 == 0 || items.count <= 2 {
+                            let baseAngle = item.icon_orbit_angle ?? (360.0 * Double(idx) / Double(max(items.count, 1)))
+                            let angleRad = baseAngle * .pi / 180
+                            let xOff = CGFloat(cos(angleRad)) * orbitRadius
+                            let yOff = CGFloat(sin(angleRad)) * orbitRadius
+                            let iconSize: CGFloat = CGFloat(item.icon_size ?? 48)
+                            let iconBgHex = item.icon_bg_color ?? "#BE123C"
+                            OrbitingIconView(item: item, size: iconSize, bgColor: Color(hex: iconBgHex))
+                                .scaleEffect(1.0 + 0.08 * bgPulse)
+                                .offset(x: xOff, y: yOff)
+                        }
                     }
                 }
                 .rotationEffect(Angle(degrees: rotation))
+
+                // Inner orbit (counter-clockwise, smaller radius) — only when 3+ items
+                if items.count > 2 {
+                    ZStack {
+                        ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
+                            if idx % 2 == 1 {
+                                let innerRadius = orbitRadius * 0.6
+                                let baseAngle = item.icon_orbit_angle ?? (360.0 * Double(idx) / Double(max(items.count, 1)))
+                                let angleRad = baseAngle * .pi / 180
+                                let xOff = CGFloat(cos(angleRad)) * innerRadius
+                                let yOff = CGFloat(sin(angleRad)) * innerRadius
+                                let iconSize: CGFloat = CGFloat(item.icon_size ?? 40) * 0.85
+                                let iconBgHex = item.icon_bg_color ?? "#BE123C"
+                                OrbitingIconView(item: item, size: iconSize, bgColor: Color(hex: iconBgHex))
+                                    .scaleEffect(1.0 + 0.05 * bgPulse)
+                                    .opacity(0.9)
+                                    .offset(x: xOff, y: yOff)
+                            }
+                        }
+                    }
+                    .rotationEffect(Angle(degrees: -rotation * 0.7))
+                }
             }
             .frame(width: size, height: size)
             .onAppear {
                 withAnimation(.linear(duration: orbitDurationMs / 1000.0).repeatForever(autoreverses: false)) {
                     rotation = 360
                 }
-                if animatedBg == "pulse" {
-                    withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                        bgPulse = 1.0
-                    }
+                // Breathing pulse — always on for premium feel
+                withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                    bgPulse = 1.0
                 }
             }
 

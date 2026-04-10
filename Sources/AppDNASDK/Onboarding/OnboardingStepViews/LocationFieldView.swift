@@ -58,13 +58,22 @@ struct LocationFieldView: View {
                     .foregroundColor(.secondary)
                     .font(.system(size: 14))
 
-                TextField(placeholder, text: $query)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 15))
-                    .focused($isFocused)
-                    .onChange(of: query) { newValue in
-                        onQueryChanged(newValue)
+                // Use UIKitTextField to prevent SwiftUI's auto-scroll-to-focus
+                // behavior which pushes the location field upward when keyboard
+                // appears. UIKit-backed fields don't participate in SwiftUI's
+                // ScrollView focus tracking system.
+                UIKitTextField(
+                    text: $query,
+                    placeholder: placeholder,
+                    keyboardType: .default,
+                    onEditingChanged: { editing in
+                        if editing { isFocused = true } else { isFocused = false }
                     }
+                )
+                .frame(height: 20)
+                .onChange(of: query) { newValue in
+                    onQueryChanged(newValue)
+                }
 
                 if isLoading {
                     ProgressView()

@@ -39,15 +39,6 @@ struct ThreeZoneStepLayout: View {
                 // Normal: top content scrollable, center below it
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 12) {
-                        // Invisible scroll offset tracker
-                        GeometryReader { geo in
-                            Color.clear.preference(
-                                key: ScrollOffsetPrefKey.self,
-                                value: -geo.frame(in: .named("stepScroll")).minY
-                            )
-                        }
-                        .frame(height: 0)
-
                         if !topBlocks.isEmpty {
                             zoneRenderer(blocks: topBlocks, scrollOffset: scrollOffset)
                                 .padding(.top, 16)
@@ -67,6 +58,18 @@ struct ThreeZoneStepLayout: View {
                     }
                 }
                 .coordinateSpace(name: "stepScroll")
+                // Scroll offset tracker as overlay — doesn't participate in
+                // VStack layout, so it can't push content or interfere with
+                // keyboard avoidance scroll positioning.
+                .overlay(alignment: .top) {
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ScrollOffsetPrefKey.self,
+                            value: -geo.frame(in: .named("stepScroll")).minY
+                        )
+                    }
+                    .frame(height: 0)
+                }
                 .onPreferenceChange(ScrollOffsetPrefKey.self) { value in
                     scrollOffset = value
                 }

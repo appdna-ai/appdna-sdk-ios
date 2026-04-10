@@ -75,8 +75,9 @@ struct FormInputTextBlock: View {
                         .textFieldStyle(.plain)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
-            .frame(minHeight: fieldHeight(block))
+            .frame(minHeight: fieldHeight(block), alignment: .center)
             .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
             .cornerRadius(cornerRadius)
             .overlay(
@@ -283,7 +284,7 @@ struct FormInputSelectBlock: View {
         .pickerStyle(.menu)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(8)
-        .frame(minHeight: fieldHeight(block))
+        .frame(minHeight: fieldHeight(block), alignment: .center)
         .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
         .cornerRadius(CGFloat(block.field_style?.corner_radius ?? 8))
         .overlay(
@@ -383,24 +384,29 @@ struct FormInputSelectBlock: View {
                         if let icon = option.icon, !icon.isEmpty {
                             Text(icon)
                         }
-                        // Title + subtitle
+                        // Title + subtitle — fixedSize vertical so text wraps fully
                         VStack(alignment: .leading, spacing: 2) {
                             Text(option.label ?? "")
                                 .font(.system(size: optTitleSize, weight: optTitleWeight))
                                 .foregroundColor(optTitleColor)
+                                .fixedSize(horizontal: false, vertical: true)
                             if let sub = option.subtitle, !sub.isEmpty {
                                 Text(sub)
                                     .font(.system(size: optSubtitleSize))
                                     .foregroundColor(optSubtitleColor)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
-                        Spacer()
+                        .layoutPriority(1)
+                        Spacer(minLength: 0)
                         // Radio on right
                         if showRadio && !radioOnLeft {
                             radioIndicator(isSelected: isSelected, fillCol: fillCol, radioFill: radioFill)
                         }
                     }
                     .padding(12)
+                    .frame(maxWidth: .infinity, minHeight: fieldHeight(block), alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
                     .background {
                         ZStack {
                             if useBlur {
@@ -410,7 +416,6 @@ struct FormInputSelectBlock: View {
                             RoundedRectangle(cornerRadius: cornerR)
                                 .fill((isSelected ? selectedBgCol : optionBg).opacity(bgOpacity))
                             if showBorderHighlight || selectionIndicator == "radio" || selectionIndicator == "none" {
-                                // Always show border for structure; highlight on selection
                                 RoundedRectangle(cornerRadius: cornerR)
                                     .strokeBorder(
                                         isSelected ? optBorderCol : optUnselBorderCol,
@@ -594,14 +599,16 @@ struct FormInputSelectBlock: View {
                                     .font(.subheadline)
                                     .foregroundColor(isSelected ? selectedTextCol : textCol)
                                     .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
                                 if let sub = option.subtitle, !sub.isEmpty {
                                     Text(sub)
                                         .font(.caption)
                                         .foregroundColor(textCol.opacity(0.65))
                                         .multilineTextAlignment(.center)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
-                            .frame(maxWidth: .infinity, minHeight: 60)
+                            .frame(maxWidth: .infinity, minHeight: fieldHeight(block) ?? 60)
                             .padding(10)
 
                             // Toggle icon badge (top-right, like screenshot 2-grid +/check)
