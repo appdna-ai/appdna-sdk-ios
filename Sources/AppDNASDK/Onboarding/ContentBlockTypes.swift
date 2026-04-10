@@ -695,15 +695,24 @@ extension View {
     @ViewBuilder
     func applyBlockContainerStyle(_ block: ContentBlock) -> some View {
         let cfg = block.field_config
-        let bgOpacity = (cfg?["background_opacity"]?.value as? Double).map { CGFloat($0) }
+        // Only read values that are explicitly set AND non-empty
+        let bgOpacity = (cfg?["background_opacity"]?.value as? Double).flatMap { $0 < 1.0 ? CGFloat($0) : nil }
         let useBlur = (cfg?["blur_background"]?.value as? Bool) == true
-        let containerBg = cfg?["container_bg_color"]?.value as? String
-        let containerBorderW = (cfg?["container_border_width"]?.value as? Double).map { CGFloat($0) }
+        let containerBg: String? = {
+            guard let s = cfg?["container_bg_color"]?.value as? String,
+                  !s.isEmpty, s != "transparent", s != "clear", s != "#ffffff", s != "#FFFFFF"
+            else { return nil }
+            return s
+        }()
+        let containerBorderW: CGFloat? = {
+            guard let v = cfg?["container_border_width"]?.value as? Double, v > 0 else { return nil }
+            return CGFloat(v)
+        }()
         let containerBorderCol = cfg?["container_border_color"]?.value as? String
         let containerCornerR = (cfg?["container_corner_radius"]?.value as? Double).map { CGFloat($0) }
 
-        // Only apply if at least one container style is set
-        if bgOpacity != nil || useBlur || containerBg != nil || containerBorderW != nil {
+        // Only apply if at least one meaningful container style is set
+        if useBlur || containerBg != nil || containerBorderW != nil {
             let cr = containerCornerR ?? 0
             self
                 .background {
@@ -715,7 +724,7 @@ extension View {
                             RoundedRectangle(cornerRadius: cr)
                                 .fill(Color(hex: bg).opacity(bgOpacity ?? 1.0))
                         }
-                        if let bw = containerBorderW, bw > 0, let bc = containerBorderCol {
+                        if let bw = containerBorderW, let bc = containerBorderCol, !bc.isEmpty {
                             RoundedRectangle(cornerRadius: cr)
                                 .strokeBorder(Color(hex: bc), lineWidth: bw)
                         }

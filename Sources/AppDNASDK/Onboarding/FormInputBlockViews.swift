@@ -75,8 +75,9 @@ struct FormInputTextBlock: View {
                         .textFieldStyle(.plain)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
-            .frame(minHeight: fieldHeight(block))
+            .frame(minHeight: fieldHeight(block), alignment: .center)
             .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
             .cornerRadius(cornerRadius)
             .overlay(
@@ -283,7 +284,7 @@ struct FormInputSelectBlock: View {
         .pickerStyle(.menu)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(8)
-        .frame(minHeight: fieldHeight(block))
+        .frame(minHeight: fieldHeight(block), alignment: .center)
         .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
         .cornerRadius(CGFloat(block.field_style?.corner_radius ?? 8))
         .overlay(
@@ -401,6 +402,7 @@ struct FormInputSelectBlock: View {
                         }
                     }
                     .padding(12)
+                    .frame(minHeight: fieldHeight(block), alignment: .center)
                     .background {
                         ZStack {
                             if useBlur {
@@ -410,7 +412,6 @@ struct FormInputSelectBlock: View {
                             RoundedRectangle(cornerRadius: cornerR)
                                 .fill((isSelected ? selectedBgCol : optionBg).opacity(bgOpacity))
                             if showBorderHighlight || selectionIndicator == "radio" || selectionIndicator == "none" {
-                                // Always show border for structure; highlight on selection
                                 RoundedRectangle(cornerRadius: cornerR)
                                     .strokeBorder(
                                         isSelected ? optBorderCol : optUnselBorderCol,
