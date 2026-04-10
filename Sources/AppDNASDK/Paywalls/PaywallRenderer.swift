@@ -86,6 +86,8 @@ struct PaywallRenderer: View {
 
     // SPEC-089d: Toggle state for toggle sections
     @State private var toggleStates: [String: Bool] = [:]
+    // Scroll offset for collapse-on-scroll sections
+    @State private var scrollOffset: CGFloat = 0
     // SPEC-089d: Promo input state
     @State private var promoCode: String = ""
     @State private var promoState: PromoState = .idle
@@ -96,6 +98,15 @@ struct PaywallRenderer: View {
             ScrollView(showsIndicators: false) {
                 // spacing: 0 — per-section margins handle all spacing
                 VStack(spacing: 0) {
+                    // Scroll offset tracker (invisible)
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: PaywallScrollOffsetPrefKey.self,
+                            value: -geo.frame(in: .named("paywallScroll")).minY
+                        )
+                    }
+                    .frame(height: 0)
+
                     // CTA and sticky_footer are pinned outside scroll via safeAreaInset.
                     // Sections are bucket-sorted by position.vertical_align so
                     // "top" renders first, "bottom" renders last within the scroll area.
@@ -106,11 +117,26 @@ struct PaywallRenderer: View {
                         // below the CTA, so skip them here too.
                         let isPinnedLegal = section.type == "legal" && pinnedFooterLegalIds.contains(section.id ?? "")
                         if section.type != "cta" && section.type != "sticky_footer" && !isPinnedLegal {
-                            sectionView(for: section)
+                            let shouldCollapse = section.collapse_on_scroll == true
+                            let collapseProgress = shouldCollapse ? min(max(scrollOffset / 50, 0), 1) : 0
+
+                            if shouldCollapse {
+                                sectionView(for: section)
+                                    .opacity(Double(1 - collapseProgress))
+                                    .frame(maxHeight: collapseProgress >= 1 ? 0 : .infinity)
+                                    .clipped()
+                                    .animation(.easeInOut(duration: 0.15), value: collapseProgress >= 1)
+                            } else {
+                                sectionView(for: section)
+                            }
                         }
                     }
                 }
                 .padding(config.layout?.padding ?? 20)
+            }
+            .coordinateSpace(name: "paywallScroll")
+            .onPreferenceChange(PaywallScrollOffsetPrefKey.self) { value in
+                scrollOffset = value
             }
             .safeAreaInset(edge: .bottom) {
                 // Bottom-pinned CTA + sticky footer (Apple HIG pattern)
@@ -2314,5 +2340,14 @@ struct HorizontalPlansView: View {
                 rowHeight = height
             }
         }
+    }
+}
+
+// MARK: - Scroll offset preference key for collapse-on-scroll
+
+private struct PaywallScrollOffsetPrefKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }

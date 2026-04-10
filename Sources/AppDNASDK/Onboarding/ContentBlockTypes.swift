@@ -336,6 +336,9 @@ public struct InputOption: Codable, Identifiable {
     // Per-option border overrides
     public let border_color: String?
     public let selected_border_color: String?
+    // Per-option selected state overrides (each option can have its own highlight color)
+    public let selected_bg_color: String?
+    public let selected_text_color: String?
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -358,6 +361,8 @@ public struct InputOption: Codable, Identifiable {
         self.image_overlay_opacity = try container.decodeIfPresent(Double.self, forKey: .image_overlay_opacity)
         self.border_color = try container.decodeIfPresent(String.self, forKey: .border_color)
         self.selected_border_color = try container.decodeIfPresent(String.self, forKey: .selected_border_color)
+        self.selected_bg_color = try container.decodeIfPresent(String.self, forKey: .selected_bg_color)
+        self.selected_text_color = try container.decodeIfPresent(String.self, forKey: .selected_text_color)
     }
 
     /// Non-optional value — falls back to id if value is nil.
@@ -370,6 +375,7 @@ public struct InputOption: Codable, Identifiable {
         case selected_icon, unselected_icon
         case image_overlay_color, image_overlay_opacity
         case border_color, selected_border_color
+        case selected_bg_color, selected_text_color
     }
 }
 

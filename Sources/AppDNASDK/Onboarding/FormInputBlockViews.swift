@@ -38,11 +38,22 @@ func cfgDouble(_ val: AnyCodable?) -> Double? {
     return nil
 }
 
-/// Read configurable field height from field_config.field_height (points).
-/// Returns nil if not set — callers use `.frame(minHeight:)` so it only
-/// affects the input container when explicitly configured.
+/// Read configurable field height — checks element_height first (console sizing),
+/// then falls back to field_config.field_height (legacy).
+/// Returns nil if neither is set.
 func fieldHeight(_ block: ContentBlock) -> CGFloat? {
-    cfgDouble(block.field_config?["field_height"]).map { CGFloat($0) }
+    // element_height takes priority (set via console height control)
+    if let eh = block.element_height {
+        if let sv = SizeValue.parse(eh) {
+            switch sv {
+            case .px(let val): return val
+            case .percent(let frac): return UIScreen.main.bounds.height * frac
+            default: break
+            }
+        }
+    }
+    // Fallback: field_config.field_height (points)
+    return cfgDouble(block.field_config?["field_height"]).map { CGFloat($0) }
 }
 
 /// Generic text-based input (text, number, email, phone, url).
@@ -186,6 +197,7 @@ struct FormInputPasswordBlock: View {
                 }
             }
             .padding(12)
+            .frame(minHeight: fieldHeight(block))
             .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
             .cornerRadius(cornerRadius)
             .overlay(
@@ -366,8 +378,11 @@ struct FormInputSelectBlock: View {
                     ? selectedValues.contains(option.resolvedValue)
                     : selectedValue == option.resolvedValue
 
+                // Per-option color overrides — each option can have its own highlight
+                let optSelectedBg = option.selected_bg_color.map { Color(hex: $0) } ?? selectedBgCol
+                let optSelectedText = option.selected_text_color.map { Color(hex: $0) } ?? selectedTextCol
                 let optTitleColor: Color = option.title_color.map { Color(hex: $0) }
-                    ?? (isSelected ? selectedTextCol : textCol)
+                    ?? (isSelected ? optSelectedText : textCol)
                 let optSubtitleColor: Color = option.subtitle_color.map { Color(hex: $0) }
                     ?? defaultSubtitleColor
                 let optTitleSize: CGFloat = CGFloat(option.title_font_size ?? defaultTitleSize)
@@ -422,7 +437,7 @@ struct FormInputSelectBlock: View {
                                     .fill(.ultraThinMaterial)
                             }
                             RoundedRectangle(cornerRadius: cornerR)
-                                .fill((isSelected ? selectedBgCol : optionBg).opacity(bgOpacity))
+                                .fill((isSelected ? optSelectedBg : optionBg).opacity(bgOpacity))
                             if showBorderHighlight || selectionIndicator == "radio" || selectionIndicator == "none" {
                                 RoundedRectangle(cornerRadius: cornerR)
                                     .strokeBorder(
@@ -583,6 +598,8 @@ struct FormInputSelectBlock: View {
                                 : selectedValue == option.resolvedValue
                             let optBorderCol = option.selected_border_color.map { Color(hex: $0) } ?? fillCol
                             let optUnselBorderCol = option.border_color.map { Color(hex: $0) } ?? unselectedBorderCol
+                            let optSelectedBg = option.selected_bg_color.map { Color(hex: $0) } ?? selectedBgCol
+                            let optSelectedText = option.selected_text_color.map { Color(hex: $0) } ?? selectedTextCol
 
                             Button {
                                 toggleSelection(option: option, fieldId: fieldId)
@@ -601,7 +618,7 @@ struct FormInputSelectBlock: View {
                                             if UIImage(systemName: resolvedIcon) != nil {
                                                 Image(systemName: resolvedIcon)
                                                     .font(.title2)
-                                                    .foregroundColor(isSelected ? selectedTextCol : textCol)
+                                                    .foregroundColor(isSelected ? optSelectedText : textCol)
                                             } else {
                                                 Text(resolvedIcon).font(.title2)
                                             }
@@ -609,7 +626,7 @@ struct FormInputSelectBlock: View {
                                         // Label + subtitle
                                         Text(option.label ?? "")
                                             .font(.subheadline)
-                                            .foregroundColor(isSelected ? selectedTextCol : textCol)
+                                            .foregroundColor(isSelected ? optSelectedText : textCol)
                                             .multilineTextAlignment(.center)
                                             .fixedSize(horizontal: false, vertical: true)
                                         if let sub = option.subtitle, !sub.isEmpty {
@@ -636,7 +653,7 @@ struct FormInputSelectBlock: View {
                                                 Text(badgeIcon).font(.system(size: 10))
                                             }
                                         }
-                                        .foregroundColor(isSelected ? selectedTextCol : textCol.opacity(0.5))
+                                        .foregroundColor(isSelected ? optSelectedText : textCol.opacity(0.5))
                                         .frame(width: 20, height: 20)
                                         .background(Circle().fill(isSelected ? fillCol.opacity(0.2) : Color.clear))
                                         .padding(6)
@@ -649,7 +666,7 @@ struct FormInputSelectBlock: View {
                                                 .fill(.ultraThinMaterial)
                                         }
                                         RoundedRectangle(cornerRadius: cornerR)
-                                            .fill((isSelected ? selectedBgCol : optionBg).opacity(bgOpacity))
+                                            .fill((isSelected ? optSelectedBg : optionBg).opacity(bgOpacity))
                                         RoundedRectangle(cornerRadius: cornerR)
                                             .strokeBorder(
                                                 isSelected ? optBorderCol : optUnselBorderCol,
@@ -1179,6 +1196,7 @@ struct FormInputLocationPlaceholderBlock: View {
                 }
             }
             .padding(12)
+            .frame(minHeight: fieldHeight(block))
             .background(bgColor)
             .cornerRadius(cornerRadius)
             .overlay(

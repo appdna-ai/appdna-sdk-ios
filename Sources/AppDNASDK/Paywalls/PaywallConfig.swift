@@ -61,6 +61,8 @@ struct PaywallSection: Codable {
     private let _config: PaywallSectionData?
     // SPEC-084: Per-section styling
     let style: SectionStyleConfig?
+    /// When true, this section fades out and collapses to 0 height as the user scrolls.
+    let collapse_on_scroll: Bool?
 
     /// Non-optional accessor defaulting to "unknown" when Firestore omits the field.
     var type: String { _type ?? "unknown" }
@@ -74,6 +76,7 @@ struct PaywallSection: Codable {
         case _data = "data"
         case _config = "config"
         case style
+        case collapse_on_scroll
     }
 }
 
