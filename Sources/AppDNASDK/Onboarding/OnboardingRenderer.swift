@@ -707,34 +707,53 @@ struct OnboardingFlowHost: View {
                                     flowCompleted(currentResponses)
                                     return
                                 }
-                                let bridge = OnboardingPaywallBridge(
-                                    onPurchased: {
-                                        tracker?.track(event: "onboarding_completed", properties: [
-                                            "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_purchased",
-                                        ])
-                                        flowCompleted(currentResponses)
-                                    },
-                                    onDismissedWithoutPurchase: {
-                                        switch onDismissBehavior {
-                                        case "block":
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                                guard let vc = AppDNA.topViewController() else { return }
-                                                AppDNA.presentPaywall(id: paywallId, from: vc)
+
+                                // Present paywall with a dismiss-aware bridge.
+                                // For "block" mode, the bridge re-presents with itself
+                                // as delegate so the purchase/dismiss cycle stays
+                                // functional. Capped at 3 attempts to prevent infinite
+                                // loops if the paywall keeps being dismissed.
+                                func presentWithBridge(from vc: UIViewController, attempt: Int = 0) {
+                                    let maxAttempts = 3
+                                    let bridge = OnboardingPaywallBridge(
+                                        onPurchased: {
+                                            tracker?.track(event: "onboarding_completed", properties: [
+                                                "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_purchased",
+                                            ])
+                                            flowCompleted(currentResponses)
+                                        },
+                                        onDismissedWithoutPurchase: {
+                                            switch onDismissBehavior {
+                                            case "block":
+                                                if attempt < maxAttempts {
+                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                                        guard let nextVC = AppDNA.topViewController() else { return }
+                                                        presentWithBridge(from: nextVC, attempt: attempt + 1)
+                                                    }
+                                                } else {
+                                                    // Max attempts reached — let user proceed
+                                                    tracker?.track(event: "onboarding_completed", properties: [
+                                                        "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_block_exhausted",
+                                                    ])
+                                                    flowCompleted(currentResponses)
+                                                }
+                                            case "skip_to_end":
+                                                tracker?.track(event: "onboarding_completed", properties: [
+                                                    "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_skipped",
+                                                ])
+                                                flowCompleted(currentResponses)
+                                            default: // "continue"
+                                                tracker?.track(event: "onboarding_completed", properties: [
+                                                    "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_dismissed",
+                                                ])
+                                                flowCompleted(currentResponses)
                                             }
-                                        case "skip_to_end":
-                                            tracker?.track(event: "onboarding_completed", properties: [
-                                                "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_skipped",
-                                            ])
-                                            flowCompleted(currentResponses)
-                                        default: // "continue"
-                                            tracker?.track(event: "onboarding_completed", properties: [
-                                                "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_dismissed",
-                                            ])
-                                            flowCompleted(currentResponses)
                                         }
-                                    }
-                                )
-                                AppDNA.presentPaywall(id: paywallId, from: rootVC, delegate: bridge)
+                                    )
+                                    AppDNA.presentPaywall(id: paywallId, from: vc, delegate: bridge)
+                                }
+
+                                presentWithBridge(from: rootVC)
                             }
                         }
                     } else {

@@ -29,6 +29,13 @@ func formFieldLabel(_ block: ContentBlock) -> some View {
     FormFieldLabelView(block: block)
 }
 
+/// Read configurable field height from field_config.field_height (points).
+/// Returns nil if not set — callers use `.frame(minHeight:)` so it only
+/// affects the input container when explicitly configured.
+func fieldHeight(_ block: ContentBlock) -> CGFloat? {
+    (block.field_config?["field_height"]?.value as? Double).map { CGFloat($0) }
+}
+
 /// Generic text-based input (text, number, email, phone, url).
 struct FormInputTextBlock: View {
     let block: ContentBlock
@@ -69,6 +76,7 @@ struct FormInputTextBlock: View {
                 }
             }
             .padding(12)
+            .frame(minHeight: fieldHeight(block))
             .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
             .cornerRadius(cornerRadius)
             .overlay(
@@ -275,11 +283,12 @@ struct FormInputSelectBlock: View {
         .pickerStyle(.menu)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(8)
+        .frame(minHeight: fieldHeight(block))
         .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
         .cornerRadius(CGFloat(block.field_style?.corner_radius ?? 8))
         .overlay(
             RoundedRectangle(cornerRadius: CGFloat(block.field_style?.corner_radius ?? 8))
-                .stroke(Color(hex: block.field_style?.border_color ?? "#D1D5DB"), lineWidth: 1)
+                .stroke(Color(hex: block.field_style?.border_color ?? "#D1D5DB"), lineWidth: CGFloat(block.field_style?.border_width ?? 1))
         )
         .onChange(of: selectedValue) { newValue in
             inputValues[fieldId] = newValue
@@ -1062,7 +1071,7 @@ struct FormInputLocationPlaceholderBlock: View {
                 .cornerRadius(cornerRadius)
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(borderColor, lineWidth: 1)
+                        .stroke(borderColor, lineWidth: borderWidth)
                 )
                 .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
             }
@@ -1224,6 +1233,7 @@ struct FormInputImagePickerPlaceholderBlock: View {
         let fieldId = block.field_id ?? block.id
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
+        let borderWidth = CGFloat(block.field_style?.border_width ?? 1)
 
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
@@ -1240,7 +1250,7 @@ struct FormInputImagePickerPlaceholderBlock: View {
                         .cornerRadius(cornerRadius)
                         .overlay(
                             RoundedRectangle(cornerRadius: cornerRadius)
-                                .stroke(borderColor, lineWidth: 1)
+                                .stroke(borderColor, lineWidth: borderWidth)
                         )
                         .overlay(alignment: .topTrailing) {
                             Image(systemName: "pencil.circle.fill")

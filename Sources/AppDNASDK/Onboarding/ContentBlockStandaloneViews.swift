@@ -445,22 +445,29 @@ struct OrbitingIconsLoaderView: View {
                         .frame(width: centralSize, height: centralSize)
                 }
 
-                // Orbiting icons
-                ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
-                    let baseAngle = item.icon_orbit_angle ?? (360.0 * Double(idx) / Double(max(items.count, 1)))
-                    let angleDeg = baseAngle + rotation
-                    let angleRad = angleDeg * .pi / 180
-                    let xOffset = CGFloat(cos(angleRad)) * orbitRadius
-                    let yOffset = CGFloat(sin(angleRad)) * orbitRadius
-                    let iconSize: CGFloat = CGFloat(item.icon_size ?? 48)
-                    let iconBgHex = item.icon_bg_color ?? "#BE123C"
-                    OrbitingIconView(
-                        item: item,
-                        size: iconSize,
-                        bgColor: Color(hex: iconBgHex)
-                    )
-                    .offset(x: xOffset, y: yOffset)
+                // Orbiting icons — rotate the container ZStack as a unit.
+                // Using .rotationEffect on a container (instead of computing
+                // cos/sin offsets from the animated angle) because cos(θ+360°)
+                // == cos(θ), so SwiftUI saw identical start/end offsets and
+                // produced no visible animation. .rotationEffect handles full
+                // revolutions correctly.
+                ZStack {
+                    ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
+                        let baseAngle = item.icon_orbit_angle ?? (360.0 * Double(idx) / Double(max(items.count, 1)))
+                        let angleRad = baseAngle * .pi / 180
+                        let xOffset = CGFloat(cos(angleRad)) * orbitRadius
+                        let yOffset = CGFloat(sin(angleRad)) * orbitRadius
+                        let iconSize: CGFloat = CGFloat(item.icon_size ?? 48)
+                        let iconBgHex = item.icon_bg_color ?? "#BE123C"
+                        OrbitingIconView(
+                            item: item,
+                            size: iconSize,
+                            bgColor: Color(hex: iconBgHex)
+                        )
+                        .offset(x: xOffset, y: yOffset)
+                    }
                 }
+                .rotationEffect(Angle(degrees: rotation))
             }
             .frame(width: size, height: size)
             .onAppear {
