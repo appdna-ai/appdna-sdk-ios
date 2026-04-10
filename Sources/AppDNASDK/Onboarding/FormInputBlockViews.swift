@@ -38,6 +38,16 @@ func cfgDouble(_ val: AnyCodable?) -> Double? {
     return nil
 }
 
+/// Gradient direction helpers for angle-based gradients.
+func gradientStart(_ angleDeg: Double) -> UnitPoint {
+    let rad = angleDeg * .pi / 180
+    return UnitPoint(x: 0.5 - cos(rad) * 0.5, y: 0.5 + sin(rad) * 0.5)
+}
+func gradientEnd(_ angleDeg: Double) -> UnitPoint {
+    let rad = angleDeg * .pi / 180
+    return UnitPoint(x: 0.5 + cos(rad) * 0.5, y: 0.5 - sin(rad) * 0.5)
+}
+
 /// Read configurable field height — checks element_height first (console sizing),
 /// then falls back to field_config.field_height (legacy).
 /// Returns nil if neither is set.
@@ -1205,6 +1215,23 @@ struct FormInputLocationPlaceholderBlock: View {
             )
 
             if showResults && !searchCompleter.results.isEmpty {
+                // Dropdown styling from field_config
+                let cfg = block.field_config
+                let ddBgHex = cfg?["dropdown_bg_color"]?.value as? String
+                let ddTextHex = cfg?["dropdown_text_color"]?.value as? String
+                let ddSubtextHex = cfg?["dropdown_subtext_color"]?.value as? String
+                let ddIconHex = cfg?["dropdown_icon_color"]?.value as? String
+                let ddIconBgHex = cfg?["dropdown_icon_bg_color"]?.value as? String
+                let ddIconBgGrad = cfg?["dropdown_icon_bg_gradient"]?.value as? [String: Any]
+                let ddOpacity = cfgDouble(cfg?["dropdown_opacity"]) ?? 1.0
+                let ddFontSize = cfgDouble(cfg?["dropdown_font_size"]) ?? 14
+                let ddSubFontSize = cfgDouble(cfg?["dropdown_sub_font_size"]) ?? 12
+
+                let ddBg: Color = ddBgHex.map { Color(hex: $0) } ?? Color(.systemBackground)
+                let ddText: Color = ddTextHex.map { Color(hex: $0) } ?? .primary
+                let ddSubtext: Color = ddSubtextHex.map { Color(hex: $0) } ?? .secondary
+                let ddIcon: Color = ddIconHex.map { Color(hex: $0) } ?? .white
+
                 VStack(alignment: .leading, spacing: 0) {
                     let visible = Array(searchCompleter.results.prefix(5).enumerated())
                     ForEach(visible, id: \.offset) { idx, result in
@@ -1212,21 +1239,36 @@ struct FormInputLocationPlaceholderBlock: View {
                             selectResult(result, fieldId: fieldId)
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "mappin")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                // Icon with optional gradient background
+                                ZStack {
+                                    if let grad = ddIconBgGrad,
+                                       let colors = grad["colors"] as? [String], colors.count >= 2 {
+                                        let angle = grad["angle"] as? Double ?? 180
+                                        let gradColors = colors.map { Color(hex: $0) }
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(LinearGradient(
+                                                colors: gradColors,
+                                                startPoint: gradientStart(angle),
+                                                endPoint: gradientEnd(angle)
+                                            ))
+                                    } else if let iconBg = ddIconBgHex {
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color(hex: iconBg))
+                                    }
+                                    Image(systemName: "mappin")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(ddIcon)
+                                }
+                                .frame(width: 24, height: 24)
+
                                 VStack(alignment: .leading, spacing: 2) {
-                                    // Display formatted location: show title only
-                                    // (MKLocalSearchCompletion.title is typically the
-                                    // city/place name). We defer the full city/state/
-                                    // country resolution to selectResult via MKPlacemark.
                                     Text(result.title)
-                                        .font(.subheadline)
-                                        .foregroundColor(.primary)
+                                        .font(.system(size: CGFloat(ddFontSize)))
+                                        .foregroundColor(ddText)
                                     if !result.subtitle.isEmpty {
                                         Text(result.subtitle)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
+                                            .font(.system(size: CGFloat(ddSubFontSize)))
+                                            .foregroundColor(ddSubtext)
                                     }
                                 }
                                 Spacer()
@@ -1242,7 +1284,7 @@ struct FormInputLocationPlaceholderBlock: View {
                         }
                     }
                 }
-                .background(Color(.systemBackground))
+                .background(ddBg.opacity(ddOpacity))
                 .cornerRadius(cornerRadius)
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius)
