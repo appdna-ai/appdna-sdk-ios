@@ -745,6 +745,7 @@ public struct SocialProviderConfig: Codable {
     public let type: String?    // apple, google, email, facebook, github
     public let label: String?
     public let enabled: Bool?
+    public let icon_style: String?  // "default", "monochrome_light", "monochrome_dark", "filled", "outline"
 }
 
 /// A single item for the `animated_loading` checklist OR for the

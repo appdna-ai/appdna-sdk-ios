@@ -634,7 +634,7 @@ struct ContentBlockRendererView: View {
                     onAction("social_login", providerType)
                 } label: {
                     HStack(spacing: 10) {
-                        socialLoginIcon(providerType)
+                        socialLoginIcon(providerType, iconStyle: provider.icon_style)
                         Text(provider.label ?? socialLoginDefaultLabel(providerType))
                             .font(.body.weight(.semibold))
                     }
@@ -665,26 +665,45 @@ struct ContentBlockRendererView: View {
 
     // Social login helpers
 
-    private func socialLoginIcon(_ type: String) -> AnyView {
+    /// Social login icon with configurable style.
+    /// icon_style: "default", "monochrome_light" (white icons), "monochrome_dark" (black icons),
+    ///             "filled" (colored bg), "outline" (border only).
+    private func socialLoginIcon(_ type: String, iconStyle: String? = nil) -> AnyView {
+        let style = iconStyle ?? "default"
+        // Monochrome styles force icon color; default uses provider-native colors
+        let monoColor: Color? = style == "monochrome_light" ? .white
+            : style == "monochrome_dark" ? .black
+            : nil
+
         switch type {
         case "apple":
             return AnyView(Image(systemName: "applelogo")
-                .font(.body.weight(.medium)))
+                .font(.body.weight(.medium))
+                .foregroundColor(monoColor))
         case "google":
+            if let mono = monoColor {
+                return AnyView(Text("G")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(mono))
+            }
             return AnyView(Text("G")
                 .font(.system(size: 18, weight: .bold, design: .rounded)))
         case "email":
             return AnyView(Image(systemName: "envelope.fill")
-                .font(.body))
+                .font(.body)
+                .foregroundColor(monoColor))
         case "facebook":
             return AnyView(Text("f")
-                .font(.system(size: 20, weight: .bold, design: .rounded)))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(monoColor ?? Color(hex: "#1877F2")))
         case "github":
             return AnyView(Image(systemName: "chevron.left.forwardslash.chevron.right")
-                .font(.body))
+                .font(.body)
+                .foregroundColor(monoColor))
         default:
             return AnyView(Image(systemName: "person.fill")
-                .font(.body))
+                .font(.body)
+                .foregroundColor(monoColor))
         }
     }
 
