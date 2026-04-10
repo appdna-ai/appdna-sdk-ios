@@ -250,8 +250,15 @@ enum StyleEngine {
     @ViewBuilder
     static func backgroundView(_ bg: BackgroundStyleConfig?) -> some View {
         switch bg?.type {
+        case "transparent", "clear", "none":
+            Color.clear
         case "color":
-            Color(hex: bg?.color ?? "#FFFFFF")
+            let colorVal = bg?.color ?? "#FFFFFF"
+            if colorVal == "transparent" || colorVal == "clear" {
+                Color.clear
+            } else {
+                Color(hex: colorVal)
+            }
         case "gradient":
             if let grad = bg?.gradient, let stops = grad.stops, stops.count >= 2 {
                 switch grad.type {

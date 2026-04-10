@@ -376,8 +376,14 @@ struct PaywallRenderer: View {
                 }
             }
         case "color":
-            Color(hex: bg?.color ?? bg?.value ?? "#FFFFFF")
-                .ignoresSafeArea()
+            let colorVal = bg?.color ?? bg?.value ?? "#FFFFFF"
+            if colorVal == "transparent" || colorVal == "clear" {
+                Color.clear.ignoresSafeArea()
+            } else {
+                Color(hex: colorVal).ignoresSafeArea()
+            }
+        case "transparent", "clear", "none":
+            Color.clear.ignoresSafeArea()
         default:
             Color(.systemBackground).ignoresSafeArea()
         }
