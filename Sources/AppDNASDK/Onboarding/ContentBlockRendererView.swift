@@ -58,11 +58,16 @@ struct ContentBlockRendererView: View {
                 renderBlock(resolvedBlock, animate: shouldAnimate)
                     .applyRelativeSizing(width: resolvedBlock.element_width, height: resolvedBlock.element_height)
                     .applyBlockContainerStyle(resolvedBlock)
-                    // Sprint 7: Scroll-collapse — block fades out + shrinks as user scrolls
-                    .opacity(shouldCollapse ? Double(1 - collapseProgress) : 1)
-                    .frame(maxHeight: shouldCollapse ? (collapseProgress >= 1 ? 0 : .infinity) : .infinity)
-                    .clipped()
-                    .animation(.easeInOut(duration: 0.15), value: collapseProgress >= 1)
+                    // Sprint 7: Scroll-collapse — ONLY applied to blocks with collapse_on_scroll.
+                    // .clipped() and .frame(maxHeight:) must NOT touch non-collapsible blocks
+                    // because they clip dropdowns, overlays, and overflow content.
+                    .if(shouldCollapse) { view in
+                        view
+                            .opacity(Double(1 - collapseProgress))
+                            .frame(maxHeight: collapseProgress >= 1 ? 0 : .infinity)
+                            .clipped()
+                            .animation(.easeInOut(duration: 0.15), value: collapseProgress >= 1)
+                    }
             }
         }
     }
