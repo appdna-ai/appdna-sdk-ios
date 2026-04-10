@@ -721,8 +721,7 @@ extension View {
                         }
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: cr))
-                .opacity(bgOpacity ?? 1.0)
+                .cornerRadius(cr)
         } else {
             self
         }
