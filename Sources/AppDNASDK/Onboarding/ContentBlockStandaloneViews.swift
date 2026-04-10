@@ -670,6 +670,14 @@ struct CircularGaugeBlockView: View {
         // Percentage placement: "center" (default), "below", "above", "none"
         let pctLocation = block.percentage_location ?? "center"
 
+        // Gradient fill — if gradient_start_color + gradient_end_color are set,
+        // use an AngularGradient for the fill stroke instead of solid color.
+        // This enables the pink→red arc fill from screenshot 3.
+        let cfg = block.field_config
+        let gradStartHex = cfg?["gradient_start_color"]?.value as? String
+        let gradEndHex = cfg?["gradient_end_color"]?.value as? String
+        let useGradient = gradStartHex != nil && gradEndHex != nil
+
         // Needle/arrow styling — prefer dedicated arrow_color over fallbacks
         let needleCol = Color(hex: block.arrow_color ?? block.label_color ?? "#1F2937")
         let needleW = CGFloat(block.arrow_stroke_width ?? 3)
@@ -705,9 +713,22 @@ struct CircularGaugeBlockView: View {
                     // Track (full arc)
                     SpeedometerArcShape(progress: 1.0, sweepDegrees: speedoSweep, radius: radius, centerY: centerY)
                         .stroke(trackCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
-                    // Fill (animated)
-                    SpeedometerArcShape(progress: animatedProgress, sweepDegrees: speedoSweep, radius: radius, centerY: centerY)
-                        .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
+                    // Fill (animated) — supports gradient or solid
+                    if useGradient, let startHex = gradStartHex, let endHex = gradEndHex {
+                        SpeedometerArcShape(progress: animatedProgress, sweepDegrees: speedoSweep, radius: radius, centerY: centerY)
+                            .stroke(
+                                AngularGradient(
+                                    colors: [Color(hex: startHex), Color(hex: endHex)],
+                                    center: UnitPoint(x: 0.5, y: centerY / (centerY + radius)),
+                                    startAngle: .degrees(270 - speedoSweep / 2),
+                                    endAngle: .degrees(270 - speedoSweep / 2 + speedoSweep * Double(animatedProgress))
+                                ),
+                                style: StrokeStyle(lineWidth: strokeW, lineCap: .round)
+                            )
+                    } else {
+                        SpeedometerArcShape(progress: animatedProgress, sweepDegrees: speedoSweep, radius: radius, centerY: centerY)
+                            .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
+                    }
 
                     // Needle — rotated around its own hub center, then positioned at arc center
                     let needleLen = radius - strokeW / 2 - 12
@@ -770,10 +791,20 @@ struct CircularGaugeBlockView: View {
                     case "radial":
                         Circle()
                             .stroke(trackCol, lineWidth: strokeW * 2)
-                        Circle()
-                            .trim(from: 0, to: animatedProgress)
-                            .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW * 2, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
+                        if useGradient, let startHex = gradStartHex, let endHex = gradEndHex {
+                            Circle()
+                                .trim(from: 0, to: animatedProgress)
+                                .stroke(
+                                    AngularGradient(colors: [Color(hex: startHex), Color(hex: endHex)], center: .center, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * Double(animatedProgress))),
+                                    style: StrokeStyle(lineWidth: strokeW * 2, lineCap: .round)
+                                )
+                                .rotationEffect(.degrees(-90))
+                        } else {
+                            Circle()
+                                .trim(from: 0, to: animatedProgress)
+                                .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW * 2, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                        }
                         if pctLocation == "center" {
                             VStack(spacing: 2) {
                                 Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
@@ -788,10 +819,20 @@ struct CircularGaugeBlockView: View {
                     default: // "arc"
                         Circle()
                             .stroke(trackCol, lineWidth: strokeW)
-                        Circle()
-                            .trim(from: 0, to: animatedProgress)
-                            .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
+                        if useGradient, let startHex = gradStartHex, let endHex = gradEndHex {
+                            Circle()
+                                .trim(from: 0, to: animatedProgress)
+                                .stroke(
+                                    AngularGradient(colors: [Color(hex: startHex), Color(hex: endHex)], center: .center, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * Double(animatedProgress))),
+                                    style: StrokeStyle(lineWidth: strokeW, lineCap: .round)
+                                )
+                                .rotationEffect(.degrees(-90))
+                        } else {
+                            Circle()
+                                .trim(from: 0, to: animatedProgress)
+                                .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                        }
                         if pctLocation == "center" {
                             VStack(spacing: 2) {
                                 Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
