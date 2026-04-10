@@ -1066,6 +1066,8 @@ public struct ContentBlock: Codable, Identifiable {
 
     // Overflow control: "visible" disables clipping (e.g. for images that bleed out of rows)
     public let overflow: String?
+    // Sprint 7: Scroll-collapse — block fades out and shrinks to 0 height when scrolled
+    public let collapse_on_scroll: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id, type, text, style, level
@@ -1120,7 +1122,7 @@ public struct ContentBlock: Codable, Identifiable {
         case field_label, field_placeholder, field_required, field_style, field_options, multi_select, field_config
         case visibility_condition, entrance_animation, pressed_style, bindings
         case element_width, element_height
-        case overflow
+        case overflow, collapse_on_scroll
     }
 
     public init(from decoder: Decoder) throws {
@@ -1326,5 +1328,6 @@ public struct ContentBlock: Codable, Identifiable {
         self.element_width = try c.decodeIfPresent(String.self, forKey: .element_width)
         self.element_height = try c.decodeIfPresent(String.self, forKey: .element_height)
         self.overflow = try c.decodeIfPresent(String.self, forKey: .overflow)
+        self.collapse_on_scroll = try c.decodeIfPresent(Bool.self, forKey: .collapse_on_scroll)
     }
 }

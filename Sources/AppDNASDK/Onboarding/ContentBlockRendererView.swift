@@ -21,6 +21,8 @@ struct ContentBlockRendererView: View {
     /// When true, vertical_align is handled by the parent ThreeZoneStepLayout (zone partitioning),
     /// so BlockPositionModifier should not map vertical_align to frame alignment.
     var isZoneManaged: Bool = false
+    /// Scroll offset from parent ScrollView — used for collapse_on_scroll blocks (Sprint 7).
+    var scrollOffset: CGFloat = 0
 
     var body: some View {
         let visibleBlocks = blocks.filter { block in
@@ -31,7 +33,6 @@ struct ContentBlockRendererView: View {
             )
         }
         // Entrance animation cap: max 10 animated blocks per step
-        // Pre-compute which block IDs should be animated (first 10 with animations)
         let animatedBlockIds: Set<String> = {
             var ids = Set<String>()
             for block in visibleBlocks {
@@ -47,9 +48,21 @@ struct ContentBlockRendererView: View {
             ForEach(visibleBlocks) { block in
                 let shouldAnimate = animatedBlockIds.contains(block.id)
                 let resolvedBlock = resolveBlockBindings(block, hookData: hookData, responses: responses)
+                let shouldCollapse = resolvedBlock.collapse_on_scroll == true
+                // Collapse threshold: how many points of scroll before this block hides
+                let collapseThreshold = CGFloat(
+                    (resolvedBlock.field_config?["collapse_threshold"]?.value as? Double) ?? 50
+                )
+                let collapseProgress = shouldCollapse ? min(max(scrollOffset / collapseThreshold, 0), 1) : 0
+
                 renderBlock(resolvedBlock, animate: shouldAnimate)
                     .applyRelativeSizing(width: resolvedBlock.element_width, height: resolvedBlock.element_height)
                     .applyBlockContainerStyle(resolvedBlock)
+                    // Sprint 7: Scroll-collapse — block fades out + shrinks as user scrolls
+                    .opacity(shouldCollapse ? Double(1 - collapseProgress) : 1)
+                    .frame(maxHeight: shouldCollapse ? (collapseProgress >= 1 ? 0 : .infinity) : .infinity)
+                    .clipped()
+                    .animation(.easeInOut(duration: 0.15), value: collapseProgress >= 1)
             }
         }
     }

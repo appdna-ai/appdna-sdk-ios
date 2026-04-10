@@ -16,6 +16,9 @@ struct ThreeZoneStepLayout: View {
     var currentStepIndex: Int = 0
     var totalSteps: Int = 1
 
+    /// Scroll offset tracked for collapse_on_scroll blocks (Sprint 7).
+    @State private var scrollOffset: CGFloat = 0
+
     var body: some View {
         let visible = blocks.filter {
             evaluateVisibilityCondition($0.visibility_condition, responses: responses, hookData: hookData)
@@ -36,18 +39,25 @@ struct ThreeZoneStepLayout: View {
                 // Normal: top content scrollable, center below it
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 12) {
+                        // Invisible scroll offset tracker
+                        GeometryReader { geo in
+                            Color.clear.preference(
+                                key: ScrollOffsetPrefKey.self,
+                                value: -geo.frame(in: .named("stepScroll")).minY
+                            )
+                        }
+                        .frame(height: 0)
+
                         if !topBlocks.isEmpty {
-                            zoneRenderer(blocks: topBlocks)
+                            zoneRenderer(blocks: topBlocks, scrollOffset: scrollOffset)
                                 .padding(.top, 16)
                         }
                         if !centerBlocks.isEmpty {
-                            zoneRenderer(blocks: centerBlocks)
+                            zoneRenderer(blocks: centerBlocks, scrollOffset: scrollOffset)
                                 .padding(.top, 20)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    // Tap the scrollable background to dismiss the keyboard —
-                    // hides location autocomplete and other focused inputs.
                     .contentShape(Rectangle())
                     .onTapGesture {
                         UIApplication.shared.sendAction(
@@ -56,10 +66,11 @@ struct ThreeZoneStepLayout: View {
                         )
                     }
                 }
+                .coordinateSpace(name: "stepScroll")
+                .onPreferenceChange(ScrollOffsetPrefKey.self) { value in
+                    scrollOffset = value
+                }
                 .scrollDismissesKeyboardCompat()
-                // Prevent keyboard auto-scroll from repositioning siblings above
-                // the focused field — critical for location block's inline
-                // dropdown so Partner's name / other fields don't get pushed up.
                 .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
@@ -74,7 +85,7 @@ struct ThreeZoneStepLayout: View {
     }
 
     @ViewBuilder
-    private func zoneRenderer(blocks: [ContentBlock]) -> some View {
+    private func zoneRenderer(blocks: [ContentBlock], scrollOffset: CGFloat = 0) -> some View {
         ContentBlockRendererView(
             blocks: blocks,
             onAction: onAction,
@@ -85,7 +96,8 @@ struct ThreeZoneStepLayout: View {
             inputValues: $inputValues,
             currentStepIndex: currentStepIndex,
             totalSteps: totalSteps,
-            isZoneManaged: true
+            isZoneManaged: true,
+            scrollOffset: scrollOffset
         )
         // Use ~8% of screen width for responsive margins across all devices
         .padding(.horizontal, max(24, UIScreen.main.bounds.width * 0.08))
@@ -104,5 +116,14 @@ struct ThreeZoneStepLayout: View {
             }
         }
         return (top, center, bottom)
+    }
+}
+
+// MARK: - Scroll offset tracking
+
+private struct ScrollOffsetPrefKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
