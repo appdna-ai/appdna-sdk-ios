@@ -599,14 +599,16 @@ struct FormInputSelectBlock: View {
                                     .font(.subheadline)
                                     .foregroundColor(isSelected ? selectedTextCol : textCol)
                                     .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
                                 if let sub = option.subtitle, !sub.isEmpty {
                                     Text(sub)
                                         .font(.caption)
                                         .foregroundColor(textCol.opacity(0.65))
                                         .multilineTextAlignment(.center)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
-                            .frame(maxWidth: .infinity, minHeight: 60)
+                            .frame(maxWidth: .infinity, minHeight: fieldHeight(block) ?? 60)
                             .padding(10)
 
                             // Toggle icon badge (top-right, like screenshot 2-grid +/check)

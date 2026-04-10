@@ -695,42 +695,35 @@ extension View {
     @ViewBuilder
     func applyBlockContainerStyle(_ block: ContentBlock) -> some View {
         let cfg = block.field_config
-        // Only read values that are explicitly set AND non-empty
-        let bgOpacity = (cfg?["background_opacity"]?.value as? Double).flatMap { $0 < 1.0 ? CGFloat($0) : nil }
+        // Completely opt-in: only apply when blur is on OR container_bg_color
+        // is explicitly set to a visible value. Prevents phantom backgrounds
+        // from stale/default color picker values.
         let useBlur = (cfg?["blur_background"]?.value as? Bool) == true
-        let containerBg: String? = {
-            guard let s = cfg?["container_bg_color"]?.value as? String,
-                  !s.isEmpty, s != "transparent", s != "clear", s != "#ffffff", s != "#FFFFFF"
-            else { return nil }
-            return s
-        }()
-        let containerBorderW: CGFloat? = {
-            guard let v = cfg?["container_border_width"]?.value as? Double, v > 0 else { return nil }
-            return CGFloat(v)
-        }()
-        let containerBorderCol = cfg?["container_border_color"]?.value as? String
-        let containerCornerR = (cfg?["container_corner_radius"]?.value as? Double).map { CGFloat($0) }
+        let containerBg = cfg?["container_bg_color"]?.value as? String
+        let hasBg = containerBg != nil && containerBg != "" && containerBg != "#ffffff" && containerBg != "#FFFFFF" && containerBg != "transparent"
+        let containerBorderW = (cfg?["container_border_width"]?.value as? Double).flatMap { $0 > 0 ? CGFloat($0) : nil }
+        let hasBorder = containerBorderW != nil && (cfg?["container_border_color"]?.value as? String) != nil
+        let bgOpacity = CGFloat((cfg?["background_opacity"]?.value as? Double) ?? 1.0)
+        let containerCornerR = CGFloat((cfg?["container_corner_radius"]?.value as? Double) ?? 0)
 
-        // Only apply if at least one meaningful container style is set
-        if useBlur || containerBg != nil || containerBorderW != nil {
-            let cr = containerCornerR ?? 0
+        if useBlur || hasBg || hasBorder {
             self
                 .background {
                     ZStack {
                         if useBlur {
-                            RoundedRectangle(cornerRadius: cr).fill(.ultraThinMaterial)
+                            RoundedRectangle(cornerRadius: containerCornerR).fill(.ultraThinMaterial)
                         }
-                        if let bg = containerBg {
-                            RoundedRectangle(cornerRadius: cr)
-                                .fill(Color(hex: bg).opacity(bgOpacity ?? 1.0))
+                        if hasBg, let bg = containerBg {
+                            RoundedRectangle(cornerRadius: containerCornerR)
+                                .fill(Color(hex: bg).opacity(bgOpacity))
                         }
-                        if let bw = containerBorderW, let bc = containerBorderCol, !bc.isEmpty {
-                            RoundedRectangle(cornerRadius: cr)
+                        if let bw = containerBorderW, let bc = cfg?["container_border_color"]?.value as? String, !bc.isEmpty {
+                            RoundedRectangle(cornerRadius: containerCornerR)
                                 .strokeBorder(Color(hex: bc), lineWidth: bw)
                         }
                     }
                 }
-                .cornerRadius(cr)
+                .cornerRadius(containerCornerR)
         } else {
             self
         }
