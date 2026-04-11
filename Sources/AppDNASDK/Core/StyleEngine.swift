@@ -12,6 +12,7 @@ public struct TextStyleConfig: Codable {
     public let line_height: Double?
     public let letter_spacing: Double?
     public let opacity: Double?
+    public let text_transform: String?  // "none", "uppercase", "lowercase"
 }
 
 /// Background style (color, gradient, image, or animation).
@@ -143,10 +144,16 @@ extension View {
             .lineSpacing(lineSpacing(s.line_height, s.font_size))
             .opacity(s.opacity ?? 1.0)
 
+        var result = base
         if #available(iOS 16.0, *), let spacing = s.letter_spacing, spacing != 0 {
-            return AnyView(base.kerning(CGFloat(spacing)))
+            result = AnyView(result.kerning(CGFloat(spacing)))
         }
-        return AnyView(base)
+        // Apply text_transform (uppercase/lowercase)
+        switch s.text_transform {
+        case "uppercase": return AnyView(result.textCase(.uppercase))
+        case "lowercase": return AnyView(result.textCase(.lowercase))
+        default: return AnyView(result)
+        }
     }
 
     /// Apply ElementStyleConfig to a container view.

@@ -79,32 +79,20 @@ struct FormInputTextBlock: View {
         let placeholder = block.field_placeholder ?? block.text ?? ""
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
-        // Read keyboard appearance from field_config (console option):
-        // "default" (respect device) | "light" | "dark"
+        // Always use UIKitTextField — SwiftUI TextField has focus/dark mode issues.
         let keyboardAppearanceRaw = block.field_config?["keyboard_appearance"]?.value as? String
-        let useUIKitField = keyboardAppearanceRaw == "light" || keyboardAppearanceRaw == "dark"
 
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
 
-            Group {
-                if useUIKitField {
-                    // Use UIKit-backed field to get explicit keyboardAppearance control
-                    UIKitTextField(
-                        text: $text,
-                        placeholder: placeholder,
-                        keyboardType: keyboardType,
-                        keyboardAppearance: .from(keyboardAppearanceRaw),
-                        returnKeyType: .done
-                    )
-                    .frame(height: 24)
-                } else {
-                    // Default SwiftUI TextField — unchanged behavior
-                    TextField(placeholder, text: $text)
-                        .keyboardType(keyboardType)
-                        .textFieldStyle(.plain)
-                }
-            }
+            UIKitTextField(
+                text: $text,
+                placeholder: placeholder,
+                keyboardType: keyboardType,
+                keyboardAppearance: .from(keyboardAppearanceRaw),
+                returnKeyType: .done
+            )
+            .frame(height: 24)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
             .frame(minHeight: fieldHeight(block), alignment: .center)
@@ -171,33 +159,22 @@ struct FormInputPasswordBlock: View {
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
         let keyboardAppearanceRaw = block.field_config?["keyboard_appearance"]?.value as? String
-        let useUIKitField = keyboardAppearanceRaw == "light" || keyboardAppearanceRaw == "dark"
 
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
 
             HStack {
-                Group {
-                    if useUIKitField {
-                        UIKitTextField(
-                            text: $text,
-                            placeholder: placeholder,
-                            keyboardAppearance: .from(keyboardAppearanceRaw),
-                            isSecure: !showPassword,
-                            textContentType: .password,
-                            autocorrection: false,
-                            autocapitalization: .none,
-                            returnKeyType: .done
-                        )
-                        .frame(height: 24)
-                    } else if showPassword {
-                        TextField(placeholder, text: $text)
-                            .textFieldStyle(.plain)
-                    } else {
-                        SecureField(placeholder, text: $text)
-                            .textFieldStyle(.plain)
-                    }
-                }
+                UIKitTextField(
+                    text: $text,
+                    placeholder: placeholder,
+                    keyboardAppearance: .from(keyboardAppearanceRaw),
+                    isSecure: !showPassword,
+                    textContentType: .password,
+                    autocorrection: false,
+                    autocapitalization: .none,
+                    returnKeyType: .done
+                )
+                .frame(height: 24)
 
                 Button {
                     showPassword.toggle()

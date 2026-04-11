@@ -694,8 +694,8 @@ struct CircularGaugeBlockView: View {
         let shouldAnimate = block.animate ?? true
         let animDuration = Double(block.animation_duration_ms ?? 800) / 1000.0
         let showPct = block.show_percentage ?? false
-        // Percentage placement: "center" (default), "below", "above", "none"
-        let pctLocation = block.percentage_location ?? "center"
+        // Percentage placement: "below" (default), "center", "above", "none"
+        let pctLocation = block.percentage_location ?? "below"
 
         // Gradient fill — if gradient_start_color + gradient_end_color are set,
         // use an AngularGradient for the fill stroke instead of solid color.
