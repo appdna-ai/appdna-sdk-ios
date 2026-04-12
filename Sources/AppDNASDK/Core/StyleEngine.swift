@@ -7,7 +7,13 @@ public struct TextStyleConfig: Codable {
     public let font_family: String?
     public let font_size: Double?
     public let font_weight: Int?
-    public let color: String?
+    /// var (not let) so callers can build a copy with a different color when
+    /// a higher-priority override needs to replace the decoded value.
+    /// `SwiftUI.Text.foregroundColor` is baked in at view construction, so
+    /// applying a second `.foregroundColor` modifier downstream is a no-op —
+    /// the only reliable override path is to feed `applyTextStyle` a style
+    /// with the new color already in place.
+    public var color: String?
     public let alignment: String?
     public let line_height: Double?
     public let letter_spacing: Double?
@@ -23,6 +29,11 @@ public struct BackgroundStyleConfig: Codable {
     public let image_url: String?
     public let image_fit: String?    // "cover", "contain", "fill", "none"
     public let overlay: String?      // hex color overlay
+    /// Opacity applied to the overlay color (0–1). When nil, treats a
+    /// 6-digit hex as fully opaque (legacy) EXCEPT when overlay is pure
+    /// black/white — those default to 0.4 so images aren't silently
+    /// obliterated by an editor-seeded default color.
+    public let overlay_opacity: Double?
     // Animation backgrounds (item #1)
     public let lottie_url: String?   // Lottie animation URL for fullscreen bg
     public let rive_url: String?     // Rive animation URL for fullscreen bg
@@ -300,8 +311,22 @@ enum StyleEngine {
                         }
                     }
                 }
-                if let overlay = bg?.overlay {
-                    Color(hex: overlay)
+                if let overlay = bg?.overlay, !overlay.isEmpty, overlay.lowercased() != "transparent" {
+                    // If overlay_opacity is set explicitly, use it.
+                    // Otherwise, a 6-digit pure-black / pure-white overlay
+                    // (editor default) defaults to 0.4 so the image is
+                    // visible. 8-digit hex is respected as-is (alpha baked in).
+                    let defaultedOpacity: Double? = {
+                        if let o = bg?.overlay_opacity { return o }
+                        let lowered = overlay.lowercased()
+                        let looksLikeDefault = lowered == "#000000" || lowered == "#ffffff" || lowered == "000000" || lowered == "ffffff"
+                        return looksLikeDefault ? 0.4 : nil
+                    }()
+                    if let op = defaultedOpacity {
+                        Color(hex: overlay).opacity(op)
+                    } else {
+                        Color(hex: overlay)
+                    }
                 }
             }
         case "lottie":
@@ -318,8 +343,22 @@ enum StyleEngine {
                     ))
                     .ignoresSafeArea()
                 }
-                if let overlay = bg?.overlay {
-                    Color(hex: overlay)
+                if let overlay = bg?.overlay, !overlay.isEmpty, overlay.lowercased() != "transparent" {
+                    // If overlay_opacity is set explicitly, use it.
+                    // Otherwise, a 6-digit pure-black / pure-white overlay
+                    // (editor default) defaults to 0.4 so the image is
+                    // visible. 8-digit hex is respected as-is (alpha baked in).
+                    let defaultedOpacity: Double? = {
+                        if let o = bg?.overlay_opacity { return o }
+                        let lowered = overlay.lowercased()
+                        let looksLikeDefault = lowered == "#000000" || lowered == "#ffffff" || lowered == "000000" || lowered == "ffffff"
+                        return looksLikeDefault ? 0.4 : nil
+                    }()
+                    if let op = defaultedOpacity {
+                        Color(hex: overlay).opacity(op)
+                    } else {
+                        Color(hex: overlay)
+                    }
                 }
             }
         case "rive":
@@ -337,8 +376,22 @@ enum StyleEngine {
                     ))
                     .ignoresSafeArea()
                 }
-                if let overlay = bg?.overlay {
-                    Color(hex: overlay)
+                if let overlay = bg?.overlay, !overlay.isEmpty, overlay.lowercased() != "transparent" {
+                    // If overlay_opacity is set explicitly, use it.
+                    // Otherwise, a 6-digit pure-black / pure-white overlay
+                    // (editor default) defaults to 0.4 so the image is
+                    // visible. 8-digit hex is respected as-is (alpha baked in).
+                    let defaultedOpacity: Double? = {
+                        if let o = bg?.overlay_opacity { return o }
+                        let lowered = overlay.lowercased()
+                        let looksLikeDefault = lowered == "#000000" || lowered == "#ffffff" || lowered == "000000" || lowered == "ffffff"
+                        return looksLikeDefault ? 0.4 : nil
+                    }()
+                    if let op = defaultedOpacity {
+                        Color(hex: overlay).opacity(op)
+                    } else {
+                        Color(hex: overlay)
+                    }
                 }
             }
         default:
