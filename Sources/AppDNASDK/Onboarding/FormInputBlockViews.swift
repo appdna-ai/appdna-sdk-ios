@@ -90,13 +90,15 @@ struct FormInputTextBlock: View {
                 placeholder: placeholder,
                 keyboardType: keyboardType,
                 keyboardAppearance: .from(keyboardAppearanceRaw),
-                returnKeyType: .done
+                returnKeyType: .done,
+                textColor: block.field_style?.text_color.map { UIColor(Color(hex: $0)) },
+                placeholderColor: block.field_style?.placeholder_color.map { UIColor(Color(hex: $0)) }
             )
             .frame(height: 24)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
             .frame(minHeight: fieldHeight(block), alignment: .center)
-            .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
+            .background(Color(hex: block.field_style?.background_color ?? "transparent"))
             .cornerRadius(cornerRadius)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
@@ -130,7 +132,7 @@ struct FormInputTextAreaBlock: View {
             TextEditor(text: $text)
                 .frame(minHeight: CGFloat(minLines * 22))
                 .padding(4)
-                .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
+                .background(Color(hex: block.field_style?.background_color ?? "transparent"))
                 .cornerRadius(cornerRadius)
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius)
@@ -172,7 +174,9 @@ struct FormInputPasswordBlock: View {
                     textContentType: .password,
                     autocorrection: false,
                     autocapitalization: .none,
-                    returnKeyType: .done
+                    returnKeyType: .done,
+                    textColor: block.field_style?.text_color.map { UIColor(Color(hex: $0)) },
+                    placeholderColor: block.field_style?.placeholder_color.map { UIColor(Color(hex: $0)) }
                 )
                 .frame(height: 24)
 
@@ -185,7 +189,7 @@ struct FormInputPasswordBlock: View {
             }
             .padding(12)
             .frame(minHeight: fieldHeight(block))
-            .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
+            .background(Color(hex: block.field_style?.background_color ?? "transparent"))
             .cornerRadius(cornerRadius)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
@@ -293,7 +297,7 @@ struct FormInputSelectBlock: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(8)
         .frame(minHeight: fieldHeight(block), alignment: .center)
-        .background(Color(hex: block.field_style?.background_color ?? "#FFFFFF"))
+        .background(Color(hex: block.field_style?.background_color ?? "transparent"))
         .cornerRadius(CGFloat(block.field_style?.corner_radius ?? 8))
         .overlay(
             RoundedRectangle(cornerRadius: CGFloat(block.field_style?.corner_radius ?? 8))
@@ -326,7 +330,7 @@ struct FormInputSelectBlock: View {
         let selectedBgCol = cfgSelectedBg ?? fillCol.opacity(0.15)
         let optionBg: Color = cfgOptBg
             ?? block.field_style?.background_color.map { Color(hex: $0) }
-            ?? Color.white
+            ?? Color.clear
         let textCol: Color = cfgOptText
             ?? block.field_style?.text_color.map { Color(hex: $0) }
             ?? block.text_color.map { Color(hex: $0) }
@@ -545,7 +549,7 @@ struct FormInputSelectBlock: View {
         let selectedBgCol = cfgSelectedBg ?? fillCol.opacity(0.15)
         let optionBg: Color = cfgOptBg
             ?? block.field_style?.background_color.map { Color(hex: $0) }
-            ?? Color.white
+            ?? Color.clear
         let textCol: Color = cfgOptText
             ?? block.field_style?.text_color.map { Color(hex: $0) }
             ?? block.text_color.map { Color(hex: $0) }
@@ -1048,7 +1052,7 @@ struct FormInputPlaceholderBlock: View {
             }
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(16)
-            .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
+            .background(Color(hex: block.field_style?.background_color ?? "transparent"))
             .cornerRadius(cornerRadius)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
@@ -1122,7 +1126,7 @@ struct FormInputLocationPlaceholderBlock: View {
         let borderWidth = CGFloat(block.field_style?.border_width ?? 1)
         // Same default background as FormInputTextBlock — location must look
         // like any other iOS text field, not a differently-styled widget.
-        let bgColor = Color(hex: block.field_style?.background_color ?? "#FFFFFF")
+        let bgColor = Color(hex: block.field_style?.background_color ?? "transparent")
         // Always use UIKitTextField for location — SwiftUI's TextField
         // triggers ScrollView auto-scroll-to-focus which pushes the field up
         // when the keyboard appears. UIKit fields don't participate in that.
@@ -1149,6 +1153,8 @@ struct FormInputLocationPlaceholderBlock: View {
                     autocorrection: false,
                     autocapitalization: .words,
                     returnKeyType: .search,
+                    textColor: block.field_style?.text_color.map { UIColor(Color(hex: $0)) },
+                    placeholderColor: block.field_style?.placeholder_color.map { UIColor(Color(hex: $0)) },
                     isFocused: Binding(
                         get: { isFocused },
                         set: { isFocused = $0 }
@@ -1466,7 +1472,7 @@ struct FormInputImagePickerPlaceholderBlock: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(16)
-                    .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
+                    .background(Color(hex: block.field_style?.background_color ?? "transparent"))
                     .cornerRadius(cornerRadius)
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius)
@@ -1534,7 +1540,7 @@ struct FormInputSignatureBlock: View {
                     }
                 }
                 .frame(maxWidth: .infinity, minHeight: 120)
-                .background(Color(hex: block.field_style?.background_color ?? "#F9FAFB"))
+                .background(Color(hex: block.field_style?.background_color ?? "transparent"))
                 .cornerRadius(cornerRadius)
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius)

@@ -283,6 +283,7 @@ struct PaywallSectionData: Codable {
     let selectedBgColor: String?
     let selectedTextColor: String?      // Text color applied to all plan text elements when selected
     let unselectedBorderColor: String?  // Border color for non-selected cards (defaults to a subtle gray)
+    let unselectedBgColor: String?      // Background color for non-selected cards (supports "transparent")
     let selectedScale: CGFloat?
 
     enum CodingKeys: String, CodingKey {
@@ -403,6 +404,7 @@ struct PaywallSectionData: Codable {
         case selectedBgColor = "selected_bg_color"
         case selectedTextColor = "selected_text_color"
         case unselectedBorderColor = "unselected_border_color"
+        case unselectedBgColor = "unselected_bg_color"
         case selectedScale = "selected_scale"
         case layout, orientation
         case planDisplayStyle = "plan_display_style"

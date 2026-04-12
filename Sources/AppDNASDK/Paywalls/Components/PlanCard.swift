@@ -189,7 +189,10 @@ struct PlanCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(isSelected ? (selectedBg ?? Color(.systemBackground)) : Color(.systemBackground))
+                    .fill({
+                        let unselBg = cardStyle.unselectedBgColor.map { Color(hex: $0) } ?? Color(.systemBackground)
+                        return isSelected ? (selectedBg ?? unselBg) : unselBg
+                    }())
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
@@ -313,6 +316,7 @@ struct PlanCardStyle {
     var selectedBgColor: String? = nil
     var selectedTextColor: String? = nil      // Flips plan text colors when selected
     var unselectedBorderColor: String? = nil  // Default subtle gray when nil
+    var unselectedBgColor: String? = nil      // Default system background when nil; supports "transparent"
     var selectedScale: CGFloat? = nil
     // Badge enhancements (#12)
     var badgeBorderColor: String? = nil
@@ -348,6 +352,7 @@ struct PlanCardStyle {
         self.selectedBgColor = data?.selectedBgColor
         self.selectedTextColor = data?.selectedTextColor
         self.unselectedBorderColor = data?.unselectedBorderColor
+        self.unselectedBgColor = data?.unselectedBgColor
         self.selectedScale = data?.selectedScale
         self.badgeBorderColor = data?.badgeBorderColor
         self.badgeBorderWidth = data?.badgeBorderWidth

@@ -26,6 +26,7 @@ struct UIKitTextField: UIViewRepresentable {
     var font: UIFont? = nil
     var textColor: UIColor? = nil
     var tintColor: UIColor? = nil
+    var placeholderColor: UIColor? = nil
     /// Binding for focus. When this is set and the value is true, the field
     /// becomes first responder; when false, it resigns.
     var isFocused: Binding<Bool>? = nil
@@ -53,7 +54,14 @@ struct UIKitTextField: UIViewRepresentable {
         if tf.text != text {
             tf.text = text
         }
-        if tf.placeholder != placeholder {
+        // Apply placeholder with optional color via attributedPlaceholder
+        if let placeholderColor = placeholderColor {
+            let attrs: [NSAttributedString.Key: Any] = [.foregroundColor: placeholderColor]
+            let attr = NSAttributedString(string: placeholder, attributes: attrs)
+            if tf.attributedPlaceholder != attr {
+                tf.attributedPlaceholder = attr
+            }
+        } else if tf.placeholder != placeholder {
             tf.placeholder = placeholder
         }
         if tf.keyboardType != keyboardType {
@@ -104,7 +112,14 @@ struct UIKitTextField: UIViewRepresentable {
 
     private func applyNonReactive(tf: UITextField) {
         tf.text = text
-        tf.placeholder = placeholder
+        if let placeholderColor = placeholderColor {
+            tf.attributedPlaceholder = NSAttributedString(
+                string: placeholder,
+                attributes: [.foregroundColor: placeholderColor]
+            )
+        } else {
+            tf.placeholder = placeholder
+        }
         tf.keyboardType = keyboardType
         tf.keyboardAppearance = keyboardAppearance
         tf.isSecureTextEntry = isSecure
