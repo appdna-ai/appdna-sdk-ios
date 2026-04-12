@@ -385,6 +385,7 @@ struct FormInputSelectBlock: View {
                     : selectedValue == option.resolvedValue
 
                 // Per-option color overrides — each option can have its own highlight
+                let optUnselectedBg = option.bg_color.map { Color(hex: $0) } ?? optionBg
                 let optSelectedBg = option.selected_bg_color.map { Color(hex: $0) } ?? selectedBgCol
                 let optSelectedText = option.selected_text_color.map { Color(hex: $0) } ?? selectedTextCol
                 let optTitleColor: Color = option.title_color.map { Color(hex: $0) }
@@ -443,7 +444,7 @@ struct FormInputSelectBlock: View {
                                     .fill(.ultraThinMaterial)
                             }
                             RoundedRectangle(cornerRadius: cornerR)
-                                .fill((isSelected ? optSelectedBg : optionBg).opacity(bgOpacity))
+                                .fill((isSelected ? optSelectedBg : optUnselectedBg).opacity(bgOpacity))
                             if showBorderHighlight || selectionIndicator == "radio" || selectionIndicator == "none" {
                                 RoundedRectangle(cornerRadius: cornerR)
                                     .strokeBorder(
@@ -604,6 +605,7 @@ struct FormInputSelectBlock: View {
                                 : selectedValue == option.resolvedValue
                             let optBorderCol = option.selected_border_color.map { Color(hex: $0) } ?? fillCol
                             let optUnselBorderCol = option.border_color.map { Color(hex: $0) } ?? unselectedBorderCol
+                            let optUnselectedBg = option.bg_color.map { Color(hex: $0) } ?? optionBg
                             let optSelectedBg = option.selected_bg_color.map { Color(hex: $0) } ?? selectedBgCol
                             let optSelectedText = option.selected_text_color.map { Color(hex: $0) } ?? selectedTextCol
 
@@ -672,7 +674,7 @@ struct FormInputSelectBlock: View {
                                                 .fill(.ultraThinMaterial)
                                         }
                                         RoundedRectangle(cornerRadius: cornerR)
-                                            .fill((isSelected ? optSelectedBg : optionBg).opacity(bgOpacity))
+                                            .fill((isSelected ? optSelectedBg : optUnselectedBg).opacity(bgOpacity))
                                         RoundedRectangle(cornerRadius: cornerR)
                                             .strokeBorder(
                                                 isSelected ? optBorderCol : optUnselBorderCol,

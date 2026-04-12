@@ -336,6 +336,9 @@ public struct InputOption: Codable, Identifiable {
     // Per-option border overrides
     public let border_color: String?
     public let selected_border_color: String?
+    // Per-option bg for the unselected state. Falls through to
+    // field_config.bg_color / field_style.background_color when nil.
+    public let bg_color: String?
     // Per-option selected state overrides (each option can have its own highlight color)
     public let selected_bg_color: String?
     public let selected_text_color: String?
@@ -361,6 +364,7 @@ public struct InputOption: Codable, Identifiable {
         self.image_overlay_opacity = try container.decodeIfPresent(Double.self, forKey: .image_overlay_opacity)
         self.border_color = try container.decodeIfPresent(String.self, forKey: .border_color)
         self.selected_border_color = try container.decodeIfPresent(String.self, forKey: .selected_border_color)
+        self.bg_color = try container.decodeIfPresent(String.self, forKey: .bg_color)
         self.selected_bg_color = try container.decodeIfPresent(String.self, forKey: .selected_bg_color)
         self.selected_text_color = try container.decodeIfPresent(String.self, forKey: .selected_text_color)
     }
@@ -375,7 +379,7 @@ public struct InputOption: Codable, Identifiable {
         case selected_icon, unselected_icon
         case image_overlay_color, image_overlay_opacity
         case border_color, selected_border_color
-        case selected_bg_color, selected_text_color
+        case bg_color, selected_bg_color, selected_text_color
     }
 }
 
@@ -729,7 +733,10 @@ extension View {
         let hasBg = containerBg != nil && containerBg != "" && containerBg != "#ffffff" && containerBg != "#FFFFFF" && containerBg != "transparent"
         let containerBorderW = (cfgDouble(cfg?["container_border_width"])).flatMap { $0 > 0 ? CGFloat($0) : nil }
         let hasBorder = containerBorderW != nil && (cfg?["container_border_color"]?.value as? String) != nil
-        let bgOpacity = CGFloat((cfgDouble(cfg?["background_opacity"])) ?? 1.0)
+        // `container_opacity` (whole wrapper) takes priority; falls back to
+        // `background_opacity` for backward compat where that key was the only
+        // opacity control exposed.
+        let bgOpacity = CGFloat((cfgDouble(cfg?["container_opacity"])) ?? (cfgDouble(cfg?["background_opacity"])) ?? 1.0)
         let containerCornerR = CGFloat((cfgDouble(cfg?["container_corner_radius"])) ?? 0)
 
         if useBlur || hasBg || hasBorder {
