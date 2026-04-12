@@ -137,3 +137,45 @@ struct CTAButton: View {
         }
     }
 }
+
+/// Restore-purchase link rendered outside the CTA section's container so its
+/// background is always the page background (transparent) — even when the
+/// CTA section uses a solid container color for the subscribe button.
+struct RestoreLinkView: View {
+    let text: String?
+    let show: Bool
+    var textColor: String? = nil
+    var fontSize: CGFloat? = nil
+    var style: TextStyleConfig? = nil
+    let onRestore: (() -> Void)?
+
+    var body: some View {
+        if show, let text = text, !text.isEmpty {
+            Button(action: { onRestore?() }) {
+                let directColor: Color? = textColor.map { Color(hex: $0) }
+                let directFont: Font = fontSize.map { .system(size: $0) } ?? .subheadline
+                if let directColor = directColor {
+                    Text(text)
+                        .font(directFont)
+                        .foregroundColor(directColor)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .contentShape(Rectangle())
+                } else if let ts = style {
+                    Text(text)
+                        .applyTextStyle(ts)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .contentShape(Rectangle())
+                } else {
+                    Text(text)
+                        .font(directFont)
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .contentShape(Rectangle())
+                }
+            }
+        }
+    }
+}

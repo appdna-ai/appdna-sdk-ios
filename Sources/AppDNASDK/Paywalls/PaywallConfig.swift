@@ -204,6 +204,10 @@ struct PaywallSectionData: Codable {
     let columns: AnyCodable?
     let iconSize: CGFloat?
     let iconColor: String?
+    /// Direct text color for feature list items — takes priority over
+    /// `style.elements.item_text.text_style.color`. Exposed in the console
+    /// Content tab so users don't have to drop into the Style tab.
+    let itemTextColor: String?
     let iconBgColor: String?       // Circle bg behind feature icons (screenshot 10)
     let iconBgOpacity: CGFloat?    // Circle opacity (default 0.15)
     let iconBgSize: CGFloat?       // Circle diameter (default 32)
@@ -361,6 +365,7 @@ struct PaywallSectionData: Codable {
         case compact, columns
         case iconSize = "icon_size"
         case iconColor = "icon_color"
+        case itemTextColor = "item_text_color"
         case iconBgColor = "icon_bg_color"
         case iconBgOpacity = "icon_bg_opacity"
         case iconBgSize = "icon_bg_size"

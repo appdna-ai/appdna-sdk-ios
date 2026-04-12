@@ -1,5 +1,15 @@
 import SwiftUI
 
+private extension View {
+    /// Applies `foregroundColor` only when the color is non-nil. Lets callers
+    /// conditionally override a foregroundColor set earlier in the chain
+    /// (e.g. by `.applyTextStyle`) without branching the whole view body.
+    @ViewBuilder
+    func foregroundColorIfSet(_ color: Color?) -> some View {
+        if let color = color { self.foregroundColor(color) } else { self }
+    }
+}
+
 /// Checkmark feature list for paywalls.
 /// Supports plain string features and rich structured items with icons, images, and excluded state.
 struct FeatureList: View {
@@ -13,6 +23,11 @@ struct FeatureList: View {
     /// over sectionStyle.elements["icon"].textStyle.color. Exposed in the console
     /// Content tab for easier access than the Style tab.
     var iconColorOverride: String? = nil
+    /// Direct text color from section.data.item_text_color — takes priority
+    /// over sectionStyle.elements["item_text"].text_style.color. Mirrors the
+    /// icon_color / iconColorOverride pattern so a Content-tab value always
+    /// wins when both are set.
+    var itemTextColorOverride: String? = nil
     /// Circle background behind each feature icon (screenshot 10 effect)
     var iconBgColor: String? = nil
     var iconBgOpacity: CGFloat = 0.15
@@ -22,6 +37,13 @@ struct FeatureList: View {
         // Console saves under "item_text" key; fall back to legacy "item" key for older configs
         sectionStyle?.elements?["item_text"]?.textStyle
             ?? sectionStyle?.elements?["item"]?.textStyle
+    }
+    /// Applied AFTER applyTextStyle to force the content-tab color on top of
+    /// whatever the style tab specified. Avoids mutating TextStyleConfig
+    /// (whose fields are let-constants and used in Codable decoding).
+    private var itemTextColorOverrideResolved: Color? {
+        guard let hex = itemTextColorOverride, !hex.isEmpty else { return nil }
+        return Color(hex: hex)
     }
     private var iconColor: Color? {
         // Priority: section.data.icon_color (Content tab) > style.elements.icon.textStyle.color (Style tab)
@@ -58,16 +80,24 @@ struct FeatureList: View {
                 ForEach(features, id: \.self) { feature in
                     HStack(spacing: 12) {
                         featureIcon()
-                        if let ts = itemTextStyle {
-                            Text(feature).applyTextStyle(ts)
-                        } else {
-                            Text(feature).font(.body).foregroundColor(.primary)
-                        }
+                        itemText(feature)
                     }
                 }
             }
             .padding(.horizontal)
         }
+    }
+
+    @ViewBuilder
+    private func itemText(_ text: String) -> some View {
+        Group {
+            if let ts = itemTextStyle {
+                Text(text).applyTextStyle(ts)
+            } else {
+                Text(text).font(.body).foregroundColor(.primary)
+            }
+        }
+        .foregroundColorIfSet(itemTextColorOverrideResolved)
     }
 
     @ViewBuilder
@@ -78,11 +108,7 @@ struct FeatureList: View {
             featureIcon(item: item, isIncluded: isIncluded)
 
             // Text
-            if let ts = itemTextStyle {
-                Text(item.displayText ?? "").applyTextStyle(ts)
-            } else {
-                Text(item.displayText ?? "").font(.body).foregroundColor(.primary)
-            }
+            itemText(item.displayText ?? "")
         }
         .opacity(isIncluded ? 1.0 : 0.4)
     }

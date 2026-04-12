@@ -146,23 +146,44 @@ struct PaywallRenderer: View {
                         let topLevelText = config.cta?.text
                         let sectionText = ctaSec.data?.ctaText ?? ctaSec.data?.text
                         let ctaText = topLevelText ?? sectionText
-                        CTAButton(
-                            cta: config.cta,
-                            isPurchasing: isPurchasing,
-                            onTap: handleCTATap,
-                            loc: loc,
-                            sectionStyle: ctaSec.style,
-                            ctaGradient: ctaSec.data?.ctaGradient,
-                            textOverride: ctaText,
-                            restoreText: ctaSec.data?.restoreText,
-                            showRestore: ctaSec.data?.showRestore ?? false,
-                            restorePosition: ctaSec.data?.restorePosition ?? "below",
-                            restoreTextColor: ctaSec.data?.restoreTextColor,
-                            restoreFontSize: ctaSec.data?.restoreFontSize.map { CGFloat($0) },
+                        let showRestore = ctaSec.data?.showRestore ?? false
+                        let restorePosition = ctaSec.data?.restorePosition ?? "below"
+                        // Restore button rendered OUTSIDE `.applyContainerStyle`
+                        // so the CTA section's container bg/shadow doesn't extend
+                        // under it — restore is effectively a text link and
+                        // should always show through to the page background,
+                        // regardless of what container styling the subscribe
+                        // button has.
+                        let restoreView = RestoreLinkView(
+                            text: ctaSec.data?.restoreText,
+                            show: showRestore,
+                            textColor: ctaSec.data?.restoreTextColor,
+                            fontSize: ctaSec.data?.restoreFontSize.map { CGFloat($0) },
+                            style: ctaSec.style?.elements?["restore_text"]?.textStyle,
                             onRestore: onRestore
                         )
-                        .ctaAnimation(config.animation?.cta_animation)
-                        .applyContainerStyle(ctaSec.style?.container)
+                        VStack(spacing: 8) {
+                            if showRestore && restorePosition == "above" {
+                                restoreView
+                            }
+                            CTAButton(
+                                cta: config.cta,
+                                isPurchasing: isPurchasing,
+                                onTap: handleCTATap,
+                                loc: loc,
+                                sectionStyle: ctaSec.style,
+                                ctaGradient: ctaSec.data?.ctaGradient,
+                                textOverride: ctaText,
+                                restoreText: nil,          // rendered outside
+                                showRestore: false,        // rendered outside
+                                onRestore: nil
+                            )
+                            .ctaAnimation(config.animation?.cta_animation)
+                            .applyContainerStyle(ctaSec.style?.container)
+                            if showRestore && restorePosition != "above" {
+                                restoreView
+                            }
+                        }
                         .padding(.bottom, 8)
                     } else if let cta = config.cta {
                         // Fallback: top-level CTA button (when no CTA section exists in layout)
@@ -480,6 +501,7 @@ struct PaywallRenderer: View {
                 gap: section.data?.featureGap ?? 12,
                 sectionStyle: section.style,
                 iconColorOverride: section.data?.iconColor,
+                itemTextColorOverride: section.data?.itemTextColor,
                 iconBgColor: section.data?.iconBgColor,
                 iconBgOpacity: section.data?.iconBgOpacity ?? 0.15,
                 iconBgSize: section.data?.iconBgSize ?? 32)
