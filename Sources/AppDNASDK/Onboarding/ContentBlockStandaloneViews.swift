@@ -790,13 +790,24 @@ struct CircularGaugeBlockView: View {
                             y: centerY + endpointOffsetY + strokeW / 2 + minMaxFontSz
                         )
 
-                    // Center value label — positioned inside the "bowl" (below arc center line)
-                    if pctLocation == "center" {
+                    // Center value label — positioned inside the "bowl" (below arc center line).
+                    // Renders when ANY of:
+                    //   - pctLocation == "center" (explicit)
+                    //   - showPct == true (user wants a % somewhere) and no above/below slot chosen
+                    //   - block.text is non-empty (user set a "Center Label" value, which is
+                    //     implicitly centered — previously that text was silently dropped
+                    //     unless they also set pctLocation to "center")
+                    let hasCenterText = (block.text?.isEmpty == false)
+                    let pctExplicitElsewhere = pctLocation == "above" || pctLocation == "below"
+                    let shouldShowCenter = pctLocation == "center"
+                        || hasCenterText
+                        || (showPct && !pctExplicitElsewhere)
+                    if shouldShowCenter {
                         VStack(spacing: 2) {
                             Text(
                                 showPct
                                     ? "\(Int(animatedProgress * 100))%"
-                                    : ((block.text?.isEmpty == false) ? block.text! : "\(Int(value))")
+                                    : (hasCenterText ? block.text! : "\(Int(value))")
                             )
                                 .font(.system(size: labelFontSz, weight: .bold))
                                 .foregroundColor(labelCol)
@@ -832,12 +843,12 @@ struct CircularGaugeBlockView: View {
                                 .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW * 2, lineCap: .round))
                                 .rotationEffect(.degrees(-90))
                         }
-                        if pctLocation == "center" {
+                        if pctLocation == "center" || (block.text?.isEmpty == false) || (showPct && pctLocation != "above" && pctLocation != "below") {
                             VStack(spacing: 2) {
-                                Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
+                                Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text?.isEmpty == false ? block.text! : "\(Int(value))"))
                                     .font(.system(size: labelFontSz, weight: .bold))
                                     .foregroundColor(labelCol)
-                                if let sub = block.sublabel {
+                                if let sub = block.sublabel, !sub.isEmpty {
                                     Text(sub).font(.caption).foregroundColor(labelCol.opacity(0.7))
                                 }
                             }
@@ -860,12 +871,12 @@ struct CircularGaugeBlockView: View {
                                 .stroke(fillCol, style: StrokeStyle(lineWidth: strokeW, lineCap: .round))
                                 .rotationEffect(.degrees(-90))
                         }
-                        if pctLocation == "center" {
+                        if pctLocation == "center" || (block.text?.isEmpty == false) || (showPct && pctLocation != "above" && pctLocation != "below") {
                             VStack(spacing: 2) {
-                                Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text ?? "\(Int(value))"))
+                                Text(showPct ? "\(Int(animatedProgress * 100))%" : (block.text?.isEmpty == false ? block.text! : "\(Int(value))"))
                                     .font(.system(size: labelFontSz, weight: .bold))
                                     .foregroundColor(labelCol)
-                                if let sub = block.sublabel {
+                                if let sub = block.sublabel, !sub.isEmpty {
                                     Text(sub).font(.caption).foregroundColor(labelCol.opacity(0.7))
                                 }
                             }
