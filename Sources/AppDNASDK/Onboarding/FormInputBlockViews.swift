@@ -230,19 +230,55 @@ struct FormInputDateBlock: View {
             }
         }()
 
+        // Picker variant (UI: "Picker Variant" select on input_date/datetime).
+        // Falls back to .compact when unset so existing flows don't change.
+        let variant = (block.field_config?["picker_variant"]?.value as? String) ?? "compact"
+        // Per-variant bg — both controls already exist in the console editor.
+        let wheelBgHex = block.field_config?["wheel_bg_color"]?.value as? String
+        let calendarBgHex = block.field_config?["calendar_bg_color"]?.value as? String
+        // Fall through to the shared field_style.background_color (the
+        // "Background" picker every input_* block shares) so the compact pill
+        // can finally be styled like every other input field.
+        let fieldBgHex = block.field_style?.background_color
+        let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
+        // Opacity control for the per-variant surface, mirrors wheel_opacity
+        // on the standalone date_wheel_picker block.
+        let wheelOpacity = CGFloat((cfgDouble(block.field_config?["wheel_opacity"])) ?? 1.0)
+        let calendarOpacity = CGFloat((cfgDouble(block.field_config?["calendar_opacity"])) ?? 1.0)
+
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
 
-            DatePicker(
-                "",
-                selection: $selectedDate,
-                displayedComponents: components
-            )
-            .datePickerStyle(.compact)
-            .labelsHidden()
-            .tint(accentColor)
+            Group {
+                switch variant {
+                case "wheel":
+                    DatePicker("", selection: $selectedDate, displayedComponents: components)
+                        .datePickerStyle(.wheel)
+                        .labelsHidden()
+                        .tint(accentColor)
+                        .frame(maxWidth: .infinity)
+                        .background(Color(hex: wheelBgHex ?? fieldBgHex ?? "transparent").opacity(wheelOpacity))
+                        .cornerRadius(cornerRadius)
+                case "graphical":
+                    DatePicker("", selection: $selectedDate, displayedComponents: components)
+                        .datePickerStyle(.graphical)
+                        .labelsHidden()
+                        .tint(accentColor)
+                        .background(Color(hex: calendarBgHex ?? fieldBgHex ?? "transparent").opacity(calendarOpacity))
+                        .cornerRadius(cornerRadius)
+                default: // compact
+                    DatePicker("", selection: $selectedDate, displayedComponents: components)
+                        .datePickerStyle(.compact)
+                        .labelsHidden()
+                        .tint(accentColor)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color(hex: fieldBgHex ?? "transparent"))
+                        .cornerRadius(cornerRadius)
+                }
+            }
             .environment(\.colorScheme, resolvedScheme ?? .light)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .onChange(of: selectedDate) { newValue in
                 let formatter = ISO8601DateFormatter()
                 inputValues[fieldId] = formatter.string(from: newValue)
