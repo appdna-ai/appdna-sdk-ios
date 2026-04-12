@@ -1213,12 +1213,22 @@ struct DateWheelPickerBlockView: View {
     ) -> some View {
         let bg = Color(hex: bgHex)
         let isTime = components == [.hourAndMinute]
+        // Force the native picker into dark mode whenever the configured wheel
+        // or text color is clearly a light value (white labels on a dark card
+        // means the spinning wheel popover must match, otherwise it renders
+        // white-on-white and is unreadable).
+        let resolvedScheme: ColorScheme = {
+            if let hex = wheelTextColorHex, Color.isLightHex(hex) { return .dark }
+            if Color.isLightHex(bgHex) == false, bgHex.lowercased() != "transparent", bgHex != "" { return .dark }
+            return .light
+        }()
         let picker: AnyView = {
             if useWheel || isTime {
                 let base = DatePicker("", selection: $selectedDate, in: dateRange, displayedComponents: components)
                     .datePickerStyle(.wheel)
                     .labelsHidden()
                     .tint(highlightCol)
+                    .environment(\.colorScheme, resolvedScheme)
                     .frame(maxWidth: .infinity)
                 if let hex = wheelTextColorHex {
                     return AnyView(base.colorMultiply(Color(hex: hex)))
@@ -1230,6 +1240,7 @@ struct DateWheelPickerBlockView: View {
                         .datePickerStyle(.compact)
                         .labelsHidden()
                         .tint(highlightCol)
+                        .environment(\.colorScheme, resolvedScheme)
                         .frame(maxWidth: .infinity)
                 )
             } else {
@@ -1239,6 +1250,7 @@ struct DateWheelPickerBlockView: View {
                         .datePickerStyle(.graphical)
                         .labelsHidden()
                         .tint(highlightCol)
+                        .environment(\.colorScheme, resolvedScheme)
                 )
             }
         }()

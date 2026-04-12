@@ -215,6 +215,20 @@ struct FormInputDateBlock: View {
     var body: some View {
         let fieldId = block.field_id ?? block.id
         let accentColor = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
+        // Dark theme detection: explicit color_scheme override, else auto-detect
+        // from text_color being a light color (onboarding flows with dark
+        // backgrounds set white text, and the native date wheel popover must
+        // match, otherwise it renders white-on-white and is unreadable).
+        let schemeOverride = block.field_config?["color_scheme"]?.value as? String
+        let resolvedScheme: ColorScheme? = {
+            switch schemeOverride?.lowercased() {
+            case "dark": return .dark
+            case "light": return .light
+            default:
+                if let hex = block.field_style?.text_color, Color.isLightHex(hex) { return .dark }
+                return nil
+            }
+        }()
 
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
@@ -227,6 +241,7 @@ struct FormInputDateBlock: View {
             .datePickerStyle(.compact)
             .labelsHidden()
             .tint(accentColor)
+            .environment(\.colorScheme, resolvedScheme ?? .light)
             .frame(maxWidth: .infinity, alignment: .leading)
             .onChange(of: selectedDate) { newValue in
                 let formatter = ISO8601DateFormatter()

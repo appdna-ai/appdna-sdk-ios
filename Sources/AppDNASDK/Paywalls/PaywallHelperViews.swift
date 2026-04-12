@@ -94,6 +94,32 @@ extension Color {
             opacity: Double(a) / 255
         )
     }
+
+    /// Returns true when the given hex string represents a light color
+    /// (perceived luminance ≥ 0.6). Used to auto-detect dark-theme UI
+    /// contexts (e.g. force `.colorScheme(.dark)` on native pickers).
+    static func isLightHex(_ hex: String) -> Bool {
+        let lowered = hex.lowercased().trimmingCharacters(in: .whitespaces)
+        if lowered == "transparent" || lowered == "clear" { return false }
+        let clean = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: clean).scanHexInt64(&int)
+        let r, g, b: Double
+        switch clean.count {
+        case 6:
+            r = Double(int >> 16) / 255
+            g = Double((int >> 8) & 0xFF) / 255
+            b = Double(int & 0xFF) / 255
+        case 8:
+            r = Double((int >> 16) & 0xFF) / 255
+            g = Double((int >> 8) & 0xFF) / 255
+            b = Double(int & 0xFF) / 255
+        default:
+            return false
+        }
+        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return luminance >= 0.6
+    }
 }
 
 // MARK: - SPEC-085: Video background view
