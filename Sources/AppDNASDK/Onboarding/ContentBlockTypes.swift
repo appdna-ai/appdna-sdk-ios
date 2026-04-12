@@ -445,6 +445,14 @@ struct BlockPositionModifier: ViewModifier {
             || verticalOffset != nil || horizontalOffset != nil
 
         if hasPositioning {
+            let yOffset = CGFloat(verticalOffset ?? 0)
+            // Positive vertical_offset participates in layout (top padding) so
+            // scrollable zones can still scroll the full content. Negative
+            // offsets stay as `.offset` since there's no negative padding —
+            // users rely on negative offsets to pull elements upward without
+            // reserving space.
+            let topPadding = max(yOffset, 0)
+            let residualYOffset = yOffset < 0 ? yOffset : 0
             content
                 .frame(
                     maxWidth: .infinity,
@@ -453,9 +461,10 @@ struct BlockPositionModifier: ViewModifier {
                         vertical: isZoneManaged ? nil : verticalAlign
                     )
                 )
+                .padding(.top, topPadding)
                 .offset(
                     x: CGFloat(horizontalOffset ?? 0),
-                    y: CGFloat(verticalOffset ?? 0)
+                    y: residualYOffset
                 )
         } else {
             content
