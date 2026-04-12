@@ -101,6 +101,19 @@ struct OnboardingFlowHost: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
         )
+        // Universal tap-to-dismiss keyboard. Taps are bubble-up in SwiftUI:
+        // buttons, text fields, and list rows consume their own taps, so this
+        // root-level handler only fires for taps on empty areas (progress bar
+        // gutter, space between blocks, pinned CTA gutter, nav bar empty
+        // space). Prevents users from getting stuck with a keyboard open
+        // after tapping somewhere that wasn't another input.
+        .contentShape(Rectangle())
+        .onTapGesture {
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder),
+                to: nil, from: nil, for: nil
+            )
+        }
         .task {
             guard isInitialLoading else { return }
             if currentIndex < flow.steps.count {

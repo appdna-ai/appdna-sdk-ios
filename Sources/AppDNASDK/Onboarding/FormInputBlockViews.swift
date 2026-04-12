@@ -102,7 +102,7 @@ struct FormInputTextBlock: View {
             .cornerRadius(cornerRadius)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(borderColor, lineWidth: CGFloat(block.field_style?.border_width ?? 1))
+                    .strokeBorder(borderColor, lineWidth: CGFloat(block.field_style?.border_width ?? 1))
             )
             .onChange(of: text) { newValue in
                 inputValues[fieldId] = newValue
@@ -136,7 +136,7 @@ struct FormInputTextAreaBlock: View {
                 .cornerRadius(cornerRadius)
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(borderColor, lineWidth: CGFloat(block.field_style?.border_width ?? 1))
+                        .strokeBorder(borderColor, lineWidth: CGFloat(block.field_style?.border_width ?? 1))
                 )
                 .onChange(of: text) { newValue in
                     inputValues[fieldId] = newValue
@@ -193,7 +193,7 @@ struct FormInputPasswordBlock: View {
             .cornerRadius(cornerRadius)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(borderColor, lineWidth: CGFloat(block.field_style?.border_width ?? 1))
+                    .strokeBorder(borderColor, lineWidth: CGFloat(block.field_style?.border_width ?? 1))
             )
             .onChange(of: text) { newValue in
                 inputValues[fieldId] = newValue
@@ -1209,7 +1209,7 @@ struct FormInputLocationPlaceholderBlock: View {
             .cornerRadius(cornerRadius)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(borderColor, lineWidth: borderWidth)
+                    .strokeBorder(borderColor, lineWidth: borderWidth)
             )
 
             if showResults && !searchCompleter.results.isEmpty {
@@ -1288,7 +1288,7 @@ struct FormInputLocationPlaceholderBlock: View {
                 .cornerRadius(cornerRadius)
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(borderColor, lineWidth: borderWidth)
+                        .strokeBorder(borderColor, lineWidth: borderWidth)
                 )
                 .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
             }
@@ -1467,7 +1467,7 @@ struct FormInputImagePickerPlaceholderBlock: View {
                         .cornerRadius(cornerRadius)
                         .overlay(
                             RoundedRectangle(cornerRadius: cornerRadius)
-                                .stroke(borderColor, lineWidth: borderWidth)
+                                .strokeBorder(borderColor, lineWidth: borderWidth)
                         )
                         .overlay(alignment: .topTrailing) {
                             Image(systemName: "pencil.circle.fill")
