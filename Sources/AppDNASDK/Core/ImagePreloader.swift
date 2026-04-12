@@ -9,7 +9,10 @@ import UIKit
 /// rendering a new step. URLs already in the URLCache are skipped. Bundled
 /// assets ("appdna-assets/...") are skipped since they're already on disk.
 enum ImagePreloader {
-    /// Shared in-memory image cache, also used as the backing store for URLSession.
+    /// Shared in-memory image cache. Installed as `URLCache.shared` on first
+    /// access so that prefetches AND SwiftUI `AsyncImage` reads (which go
+    /// through `URLSession.shared`) hit the same cache — otherwise prefetching
+    /// here wouldn't speed up AsyncImage at all.
     private static let cache: URLCache = {
         // 20 MB in-memory, 100 MB on-disk — same sizing as SDWebImage defaults
         let cache = URLCache(
@@ -17,9 +20,17 @@ enum ImagePreloader {
             diskCapacity: 100 * 1024 * 1024,
             diskPath: "appdna_image_cache"
         )
+        // Promote to shared so URLSession.shared (used by AsyncImage) benefits.
+        // Safe: URLCache.shared default is only 4 MB memory / 20 MB disk —
+        // ours is strictly larger, and the host app can still override if it
+        // installs its own cache after SDK init.
+        URLCache.shared = cache
         return cache
     }()
 
+    /// Session used by the preloader itself. We still configure the cache
+    /// explicitly (in addition to promoting URLCache.shared) so prefetching
+    /// works even if the host app resets `URLCache.shared` later.
     private static let session: URLSession = {
         let config = URLSessionConfiguration.default
         config.urlCache = ImagePreloader.cache

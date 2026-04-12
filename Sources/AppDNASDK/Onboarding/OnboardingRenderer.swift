@@ -27,6 +27,11 @@ struct OnboardingFlowHost: View {
     /// with unloaded image placeholders).
     @State private var isPreloadingNextStep = false
 
+    /// True on the very first render until the first step's remote images are
+    /// in the URL cache. Prevents the "one-frame flash with no background"
+    /// effect when the onboarding is first presented.
+    @State private var isInitialLoading = true
+
     var body: some View {
         VStack(spacing: 0) {
             // Progress bar (hidden per-step via hide_progress while still counting in total)
@@ -84,6 +89,10 @@ struct OnboardingFlowHost: View {
                 .onAppear {
                     handleStepAppear(step: step)
                 }
+                // Hide step content on the very first render until the initial
+                // image prefetch completes, so users never see an unstyled
+                // frame before the background image arrives.
+                .opacity(isInitialLoading ? 0 : 1)
             }
         }
         // Step background renders full-screen behind progress bar + nav bar + content
@@ -92,6 +101,16 @@ struct OnboardingFlowHost: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
         )
+        .task {
+            guard isInitialLoading else { return }
+            if currentIndex < flow.steps.count {
+                let urls = collectImageURLs(from: flow.steps[currentIndex])
+                if !urls.isEmpty {
+                    await ImagePreloader.prefetch(urls: urls, timeout: 3.0)
+                }
+            }
+            isInitialLoading = false
+        }
     }
 
     // MARK: - Full-screen step background
@@ -786,8 +805,9 @@ struct OnboardingFlowHost: View {
     }
 
     /// Walk a step's content to collect every remote image URL that will be
-    /// rendered when the step displays.
-    private func collectImageURLs(from step: OnboardingStep) -> [URL] {
+    /// rendered when the step displays. Static so the flow manager can call
+    /// it to kick off prefetching before the host view is even created.
+    static func collectImageURLs(from step: OnboardingStep) -> [URL] {
         var urls: [URL] = []
 
         // Step-level image (welcome/value_prop/custom layouts)
@@ -810,9 +830,13 @@ struct OnboardingFlowHost: View {
         return urls
     }
 
+    private func collectImageURLs(from step: OnboardingStep) -> [URL] {
+        Self.collectImageURLs(from: step)
+    }
+
     /// Recursive helper to walk nested content blocks (stack/row containers) and
     /// collect their image URLs.
-    private func collectImageURLs(from block: ContentBlock) -> [URL] {
+    static func collectImageURLs(from block: ContentBlock) -> [URL] {
         var urls: [URL] = []
         if let s = block.image_url, let u = URL(string: s) {
             urls.append(u)

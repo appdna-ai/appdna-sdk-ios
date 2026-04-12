@@ -31,6 +31,17 @@ final class OnboardingFlowManager {
             "flow_version": flow.version,
         ])
 
+        // Kick off image prefetch for the first step immediately — by the time
+        // the hosting controller's view appears a few hundred ms later, the
+        // URL cache is warm and the background image renders synchronously
+        // with no placeholder flash.
+        if let firstStep = flow.steps.first {
+            let urls = OnboardingFlowHost.collectImageURLs(from: firstStep)
+            if !urls.isEmpty {
+                ImagePreloader.prefetch(urls: urls, timeout: 3.0) { }
+            }
+        }
+
         let startTime = Date()
 
         // Build the SwiftUI view with state
