@@ -81,33 +81,101 @@ final class PaywallManager {
             "placement": context?.placement ?? "unknown",
         ])
 
-        let paywallView = PaywallRenderer(
-            config: config,
-            onPlanSelected: { [weak self] plan, metadata in
-                self?.handlePurchase(paywallId: id, plan: plan, config: config, metadata: metadata, delegate: delegate, viewController: viewController)
-            },
-            onRestore: { [weak self] in
-                self?.handleRestore(paywallId: id, delegate: delegate)
-            },
-            onDismiss: { [weak self] reason in
-                self?.eventTracker.track(event: "paywall_close", properties: [
-                    "paywall_id": id,
-                    "dismiss_reason": reason.rawValue,
-                ])
-                viewController.dismiss(animated: true) {
-                    delegate?.onPaywallDismissed(paywallId: id)
+        // SPEC-203 follow-up — prefetch remote images before presenting so
+        // the paywall renders fully loaded, no AsyncImage placeholder flash
+        // on background / hero / plan icons / testimonial avatars / feature
+        // images / CTA icons. Bounded by a short timeout so a slow CDN
+        // never delays the paywall by more than a blink; anything not
+        // fetched in time falls back to AsyncImage's regular load path
+        // (which populates from the now-warm URLCache, so second-paint
+        // fills in instantly).
+        let imageURLs = Self.collectImageURLs(from: config)
+        let buildAndPresent: () -> Void = { [weak self] in
+            guard let self else { return }
+            let paywallView = PaywallRenderer(
+                config: config,
+                onPlanSelected: { [weak self] plan, metadata in
+                    self?.handlePurchase(paywallId: id, plan: plan, config: config, metadata: metadata, delegate: delegate, viewController: viewController)
+                },
+                onRestore: { [weak self] in
+                    self?.handleRestore(paywallId: id, delegate: delegate)
+                },
+                onDismiss: { [weak self] reason in
+                    self?.eventTracker.track(event: "paywall_close", properties: [
+                        "paywall_id": id,
+                        "dismiss_reason": reason.rawValue,
+                    ])
+                    viewController.dismiss(animated: true) {
+                        delegate?.onPaywallDismissed(paywallId: id)
+                    }
+                },
+                onPromoCodeSubmit: delegate == nil ? nil : { code, completion in
+                    delegate?.onPromoCodeSubmit(paywallId: id, code: code, completion: completion)
                 }
-            },
-            onPromoCodeSubmit: delegate == nil ? nil : { code, completion in
-                delegate?.onPromoCodeSubmit(paywallId: id, code: code, completion: completion)
+            )
+            let hostingController = UIHostingController(rootView: paywallView)
+            hostingController.modalPresentationStyle = UIModalPresentationStyle.fullScreen
+            viewController.present(hostingController, animated: true) {
+                delegate?.onPaywallPresented(paywallId: id)
             }
-        )
-
-        let hostingController = UIHostingController(rootView: paywallView)
-        hostingController.modalPresentationStyle = UIModalPresentationStyle.fullScreen
-        viewController.present(hostingController, animated: true) {
-            delegate?.onPaywallPresented(paywallId: id)
         }
+
+        if imageURLs.isEmpty {
+            buildAndPresent()
+        } else {
+            ImagePreloader.prefetch(urls: imageURLs, timeout: 1.5) {
+                DispatchQueue.main.async { buildAndPresent() }
+            }
+        }
+    }
+
+    /// Walks the paywall config and extracts every raster image URL
+    /// that should be prefetched. Skips Lottie / Rive / video URLs —
+    /// those have their own loaders and progress indicators.
+    static func collectImageURLs(from config: PaywallConfig) -> [URL] {
+        var urls: [URL] = []
+
+        func add(_ raw: String?) {
+            guard let raw, !raw.isEmpty, let url = URL(string: raw),
+                  let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
+            urls.append(url)
+        }
+
+        // Background (top-level + inside layout)
+        add(config.background?.image_url)
+        add(config.layout?.background?.image_url)
+
+        func walk(_ section: PaywallSection) {
+            let d = section.data
+            add(d?.imageUrl)
+            add(d?.avatarUrl)
+            // Plans inside a section
+            for plan in d?.plans ?? [] {
+                add(plan.image_url)
+            }
+            // Generic items (timeline / icon_grid / features) — only the
+            // ones that carry a real URL (icons may be SF Symbol names).
+            for item in d?.items ?? [] {
+                add(item.image_url)
+                if let icon = item.icon, icon.hasPrefix("http") { add(icon) }
+            }
+            // Carousel pages recurse into nested sections.
+            for page in d?.pages ?? [] {
+                for child in page.children ?? [] {
+                    walk(child)
+                }
+            }
+        }
+
+        for section in config.sections {
+            walk(section)
+        }
+
+        for plan in config.plans ?? [] {
+            add(plan.image_url)
+        }
+
+        return urls
     }
 
     // MARK: - Purchase flow

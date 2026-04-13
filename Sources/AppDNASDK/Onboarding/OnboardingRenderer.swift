@@ -723,11 +723,69 @@ struct OnboardingFlowHost: View {
                 if target.hasPrefix("paywall_trigger_") {
                     if let paywallId = resolvePaywallFromTrigger(target) {
                         let triggerData = resolvePaywallTriggerData(target)
-                        let onDismissBehavior = triggerData?["on_dismiss"] as? String ?? "continue"
+                        // SPEC-203 follow-up — per-outcome routing. Each
+                        // of the three target fields may be a step id,
+                        // "continue" (follow downstream edge),
+                        // "complete_flow", or (for fail) "stay" = noop.
+                        let onSuccessTarget = (triggerData?["on_success_target"] as? String)?.isEmpty == false
+                            ? triggerData?["on_success_target"] as? String : nil
+                        let onFailTarget = (triggerData?["on_fail_target"] as? String)?.isEmpty == false
+                            ? triggerData?["on_fail_target"] as? String : nil
+                        let onDismissTarget = (triggerData?["on_dismiss_target"] as? String)?.isEmpty == false
+                            ? triggerData?["on_dismiss_target"] as? String : nil
+                        // Legacy fallback: on_dismiss enum + next_target edge.
+                        let legacyDismiss = triggerData?["on_dismiss"] as? String ?? "continue"
+                        let edgeTarget = triggerData?["next_target"] as? String
                         let flowCompleted = onFlowCompleted
                         let currentResponses = responses
                         let tracker = eventTracker
                         let flowId = flow.id
+                        let renderer = self
+
+                        // Resolve each outcome's intent into a closure
+                        // that either navigates to a step (via skipToStep
+                        // which handles existence checks) or completes
+                        // the flow. "stay" for fail → noop (paywall
+                        // stays presented, user can retry or dismiss).
+                        let routeOutcome: (String?, String, String) -> Void = { configured, defaultBehavior, reason in
+                            let chosen = configured ?? defaultBehavior
+                            switch chosen {
+                            case "stay":
+                                // No-op; paywall remains visible. Only
+                                // valid for fail / legacy-block.
+                                tracker?.track(event: "onboarding_paywall_stay", properties: [
+                                    "flow_id": flowId, "paywall_id": paywallId, "reason": reason,
+                                ])
+                            case "complete_flow", "":
+                                tracker?.track(event: "onboarding_completed", properties: [
+                                    "flow_id": flowId, "paywall_id": paywallId, "completed_via": reason,
+                                ])
+                                flowCompleted(currentResponses)
+                            case "continue":
+                                if let edge = edgeTarget, !edge.isEmpty {
+                                    renderer.skipToStep(edge)
+                                } else {
+                                    tracker?.track(event: "onboarding_completed", properties: [
+                                        "flow_id": flowId, "paywall_id": paywallId, "completed_via": reason,
+                                    ])
+                                    flowCompleted(currentResponses)
+                                }
+                            default:
+                                // Assume it's an explicit step id.
+                                renderer.skipToStep(chosen)
+                            }
+                        }
+
+                        // Translate the legacy on_dismiss enum into the
+                        // new vocabulary for the dismiss fallback.
+                        let legacyDismissDefault: String = {
+                            switch legacyDismiss {
+                            case "block": return "complete_flow"          // no target → respect user's X tap
+                            case "skip_to_end": return "complete_flow"
+                            case "continue": return "continue"
+                            default: return "continue"
+                            }
+                        }()
 
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             guard let onboardingVC = AppDNA.topViewController() else {
@@ -740,22 +798,18 @@ struct OnboardingFlowHost: View {
                                     return
                                 }
 
-                                // Present paywall once. On dismiss (regardless of
-                                // on_dismiss config), complete the flow. Never re-present.
                                 let bridge = OnboardingPaywallBridge(
                                     onPurchased: {
-                                        tracker?.track(event: "onboarding_completed", properties: [
-                                            "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_purchased",
-                                        ])
-                                        flowCompleted(currentResponses)
+                                        // Success default: continue (follow downstream edge).
+                                        routeOutcome(onSuccessTarget, "continue", "paywall_purchased")
+                                    },
+                                    onFailed: {
+                                        // Fail default: stay on paywall so the user can retry.
+                                        routeOutcome(onFailTarget, "stay", "paywall_payment_failed")
                                     },
                                     onDismissedWithoutPurchase: {
-                                        // Always complete flow on dismiss — no re-presentation.
-                                        // The user pressed X, respect that decision.
-                                        tracker?.track(event: "onboarding_completed", properties: [
-                                            "flow_id": flowId, "paywall_id": paywallId, "completed_via": "paywall_dismissed",
-                                        ])
-                                        flowCompleted(currentResponses)
+                                        // Dismiss default: legacy on_dismiss enum → mapped above.
+                                        routeOutcome(onDismissTarget, legacyDismissDefault, "paywall_dismissed")
                                     }
                                 )
                                 AppDNA.presentPaywall(id: paywallId, from: rootVC, delegate: bridge)
@@ -1294,15 +1348,31 @@ struct OnboardingStepRouter: View {
 
 // MARK: - Paywall Bridge for Onboarding Flow Continuation
 
-/// Bridges paywall events back to onboarding flow.
-/// Handles both purchase and dismiss-without-purchase separately.
+/// SPEC-203 follow-up — bridges three distinct paywall outcomes back
+/// into the onboarding flow:
+///   - purchase completed (→ `onPurchased`, routed via on_success_target)
+///   - purchase attempted but failed / declined (→ `onFailed`, routed
+///     via on_fail_target; default = do nothing, paywall stays visible)
+///   - user tapped X without a purchase attempt (→ `onDismissed`,
+///     routed via on_dismiss_target / legacy on_dismiss enum)
+///
+/// Paywall SDK already emits `onPaywallPurchaseFailed` — previous
+/// onboarding bridge simply didn't wire it. Onboarding used to collapse
+/// all three into "complete flow" which swallowed real user intent.
 private class OnboardingPaywallBridge: AppDNAPaywallDelegate {
     private let onPurchased: () -> Void
+    private let onFailed: () -> Void
     private let onDismissedWithoutPurchase: () -> Void
     private var didPurchase = false
+    private var didFail = false
 
-    init(onPurchased: @escaping () -> Void, onDismissedWithoutPurchase: @escaping () -> Void) {
+    init(
+        onPurchased: @escaping () -> Void,
+        onFailed: @escaping () -> Void,
+        onDismissedWithoutPurchase: @escaping () -> Void
+    ) {
         self.onPurchased = onPurchased
+        self.onFailed = onFailed
         self.onDismissedWithoutPurchase = onDismissedWithoutPurchase
     }
 
@@ -1310,10 +1380,21 @@ private class OnboardingPaywallBridge: AppDNAPaywallDelegate {
         didPurchase = true
     }
 
+    func onPaywallPurchaseFailed(paywallId: String, error: Error) {
+        // Paywall stays on screen (iOS convention — error toast, retry
+        // allowed). Mark the intent; the onboarding router decides what
+        // to do if `on_fail_target` requests navigating away.
+        didFail = true
+        onFailed()
+    }
+
     func onPaywallDismissed(paywallId: String) {
         if didPurchase {
             onPurchased()
         } else {
+            // A failed purchase is NOT the same as a dismiss. If the
+            // paywall stays visible after a failure and the user later
+            // taps X, they've now dismissed — route the dismiss branch.
             onDismissedWithoutPurchase()
         }
     }
