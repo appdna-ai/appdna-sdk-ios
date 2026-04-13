@@ -11,7 +11,7 @@ import FirebaseFirestore
 public final class AppDNA: @unchecked Sendable {
 
     /// SDK version string.
-    public static let sdkVersion = "1.0.44"
+    public static let sdkVersion = "1.0.45"
 
     /// Firestore instance used by the SDK.
     /// Uses a secondary Firebase app ("appdna") if GoogleService-Info-AppDNA.plist is found,
@@ -108,6 +108,7 @@ public final class AppDNA: @unchecked Sendable {
     private var billingBridge: BillingBridgeProtocol?
     private var onboardingFlowManager: OnboardingFlowManager?
     private var messageManager: MessageManager?
+    private var pendingMessageListener: PendingMessageListener?
     private var pushTokenManager: PushTokenManager?
     private var surveyManager: SurveyManager?
     private var webEntitlementManager: WebEntitlementManager?
@@ -221,6 +222,12 @@ public final class AppDNA: @unchecked Sendable {
                     appId: bootstrapData.appId,
                     userId: userId
                 )
+                // SPEC-203: start journey-triggered pending-messages listener.
+                shared.pendingMessageListener?.startObserving(
+                    orgId: bootstrapData.orgId,
+                    appId: bootstrapData.appId,
+                    userId: userId
+                )
             }
         }
     }
@@ -233,6 +240,7 @@ public final class AppDNA: @unchecked Sendable {
             shared.messageManager?.resetSession()
             shared.surveyManager?.resetSession()
             shared.webEntitlementManager?.stopObserving()
+            shared.pendingMessageListener?.stopObserving()
             Log.info("Identity reset")
         }
     }
@@ -1024,6 +1032,14 @@ public final class AppDNA: @unchecked Sendable {
 
         self.webEntitlementManager = WebEntitlementManager(eventTracker: tracker)
 
+        // SPEC-203: per-user journey-triggered message listener. Renders
+        // delivered messages via the same MessageRenderer used for
+        // remote-config-driven messages (modal/fullscreen/banner/tooltip
+        // with full styling + rich media).
+        self.pendingMessageListener = PendingMessageListener(
+            eventTracker: tracker
+        )
+
         if let bootstrapData = self.bootstrapData {
             self.deferredDeepLinkManager = DeferredDeepLinkManager(
                 orgId: bootstrapData.orgId,
@@ -1039,6 +1055,12 @@ public final class AppDNA: @unchecked Sendable {
         if let userId = self.identityManager?.currentIdentity.userId,
            let bootstrapData = self.bootstrapData {
             self.webEntitlementManager?.startObserving(
+                orgId: bootstrapData.orgId,
+                appId: bootstrapData.appId,
+                userId: userId
+            )
+            // SPEC-203: also start pending-messages listener if already identified.
+            self.pendingMessageListener?.startObserving(
                 orgId: bootstrapData.orgId,
                 appId: bootstrapData.appId,
                 userId: userId
