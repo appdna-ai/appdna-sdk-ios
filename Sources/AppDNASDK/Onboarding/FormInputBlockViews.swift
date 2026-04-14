@@ -212,6 +212,9 @@ struct FormInputDateBlock: View {
 
     @State private var selectedDate = Date()
     @State private var showCompactPopover = false
+    // Pre-warm state: an offscreen hidden wheel forces UIKit's UIPickerView
+    // subsystem to init eagerly so the first tap → sheet open isn't laggy.
+    @State private var prewarmDate = Date()
 
     var body: some View {
         let fieldId = block.field_id ?? block.id
@@ -264,6 +267,18 @@ struct FormInputDateBlock: View {
         let compactHeight: CGFloat? = (numericHeight ?? semanticHeight).map { CGFloat($0) }
 
         VStack(alignment: .leading, spacing: 6) {
+            // Pre-warm the iOS wheel / keyboard subsystems so the first
+            // interaction isn't laggy. Offscreen with real layout size
+            // (zero frames get skipped by SwiftUI).
+            DatePicker("", selection: $prewarmDate, displayedComponents: components)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .frame(width: 200, height: 150)
+                .offset(x: -10_000, y: -10_000)
+                .opacity(0.01)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
             formFieldLabel(block)
 
             Group {
@@ -291,8 +306,15 @@ struct FormInputDateBlock: View {
                     // outer border's corners look bolder than the straight
                     // edges. A plain Text + icon button sidesteps the pill
                     // entirely so our border is the only rounded shape drawn.
-                    let borderColorHex = block.field_style?.border_color ?? "#D1D5DB"
-                    let borderWidth = CGFloat(block.field_style?.border_width ?? 0)
+                    // Default border to 1pt when a color is authored but the
+                    // width is left unset — prevents the border from vanishing
+                    // when the author clicks a color picker without touching
+                    // the width slider.
+                    let authoredBorderColor = block.field_style?.border_color
+                    let borderColorHex = authoredBorderColor ?? "#D1D5DB"
+                    let borderWidth = block.field_style?.border_width
+                        .map { CGFloat($0) }
+                        ?? (authoredBorderColor != nil ? 1 : 0)
                     let bg = Color(hex: fieldBgHex ?? "transparent")
                     let fgColor: Color = {
                         if let hex = block.field_style?.text_color { return Color(hex: hex) }

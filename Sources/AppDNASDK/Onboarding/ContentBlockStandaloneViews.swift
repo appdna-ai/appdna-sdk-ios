@@ -920,6 +920,9 @@ struct DateWheelPickerBlockView: View {
     }()
     @State private var showPicker = false
     @State private var showDateToast = false
+    // Pre-warm state: a zero-sized hidden DatePicker forces UIKit to init
+    // its UIPickerView subsystem eagerly so the first user drag isn't laggy.
+    @State private var prewarmDate = Date()
 
     /// Parse relative date strings like "today", "-18y", "-100y", "+1y", "-30d", or ISO date "2000-01-01"
     private static func parseDate(_ str: String?) -> Date? {
@@ -996,17 +999,84 @@ struct DateWheelPickerBlockView: View {
             ?? (block.field_config?["date_picker_variant"]?.value as? String)
         let isDatetimeMode = components.contains(.date) && components.contains(.hourAndMinute)
         let variant = explicitVariant ?? (isDatetimeMode ? "wheel" : "graphical")
-        // Read additional styling options from field_config
+        // The console writes bg/border to the shared `block_style` struct on
+        // `date_wheel_picker` (not `field_style` like text inputs). Also the
+        // wheel/calendar bg are top-level props, not nested in field_config.
+        // Fall through both sources → legacy field_style → "transparent".
+        let sharedBg = block.block_style?.background_color
+            ?? block.field_style?.background_color
         let calendarBg = (block.field_config?["calendar_bg_color"]?.value as? String)
-            ?? block.calendar_bg_color ?? "#FFFFFF"
-        let wheelBg = (block.field_config?["wheel_bg_color"]?.value as? String) ?? calendarBg
-        let pickerCornerRadius = CGFloat((cfgDouble(block.field_config?["picker_corner_radius"])) ?? 12)
+            ?? block.calendar_bg_color
+            ?? sharedBg
+            ?? "transparent"
+        let wheelBg = block.wheel_bg_color
+            ?? (block.field_config?["wheel_bg_color"]?.value as? String)
+            ?? sharedBg
+            ?? calendarBg
+        // Picker chrome — `field_config.picker_corner_radius` is the picker-
+        // specific control; the old `block_style.border_radius` fallback is
+        // intentionally dropped because console sections often set tiny
+        // (1-2pt) block-level radii that look wrong on a large picker card.
+        let pickerCornerRadius = CGFloat(
+            (cfgDouble(block.field_config?["picker_corner_radius"])) ?? 12
+        )
+        // Wheel text — picker-specific key wins; then fall through to the
+        // block's top-level text_color (console writes it here) and finally
+        // to field_style.text_color for form variants.
         let wheelTextColorHex = (block.field_config?["wheel_text_color"]?.value as? String)
+            ?? block.text_color
+            ?? block.field_style?.text_color
+        // Picker border is OPT-IN via picker-specific keys only — the
+        // block_style.border_color is meant for the trigger pill (field mode)
+        // and bleeds visually into the wheel when inherited. Kept strictly
+        // picker-specific so an authored block_style.border doesn't surround
+        // the wheel unless the author asks for it explicitly.
         let pickerBorderColor = (block.field_config?["picker_border_color"]?.value as? String)
-        let pickerBorderWidth = CGFloat((cfgDouble(block.field_config?["picker_border_width"])) ?? 0)
+        let pickerBorderWidth = CGFloat(
+            (cfgDouble(block.field_config?["picker_border_width"]))
+            ?? (pickerBorderColor != nil ? 1 : 0)
+        )
         let pickerPadding = CGFloat((cfgDouble(block.field_config?["picker_padding"])) ?? 0)
 
+        // Field-mode trigger visuals — honor whichever style struct the
+        // console wrote to (`block_style` for standalone blocks,
+        // `field_style` for form-input variants). Either path needs to
+        // resolve bg / corner / border so authored "transparent" actually
+        // renders transparent.
+        let triggerBg = Color(hex: sharedBg ?? "transparent")
+        // Corner radius: prefer picker-specific overrides over a generic
+        // block_style.border_radius (section-level values are often 1-2pt
+        // and look wrong on the picker pill).
+        let fsCorner = block.field_style?.corner_radius.map { CGFloat($0) }
+        let triggerCorner: CGFloat = fsCorner ?? pickerCornerRadius
+        let triggerBorderHex = block.block_style?.border_color ?? block.field_style?.border_color
+        let triggerBorderColor: Color = triggerBorderHex.map { Color(hex: $0) } ?? Color.gray.opacity(0.3)
+        let bsBorderW = block.block_style?.border_width.map { CGFloat($0) }
+        let fsBorderW = block.field_style?.border_width.map { CGFloat($0) }
+        // If the author provided a border color but forgot the width, default
+        // to 1pt so the border is actually visible. Console UX lets people
+        // pick a border color without setting width; without this fallback
+        // the border silently disappears (observed on the Form 4 date picker).
+        let hasAuthoredBorderColor = triggerBorderHex != nil
+        let triggerBorderWidth: CGFloat = bsBorderW ?? fsBorderW ?? (hasAuthoredBorderColor ? 1 : 0)
+        let triggerTextHex = block.text_color ?? block.field_style?.text_color
+        let triggerTextColor: Color = triggerTextHex.map { Color(hex: $0) } ?? .primary
+
         VStack(spacing: 8) {
+            // Pre-warm: a hidden wheel DatePicker sized large enough for
+            // UIKit to actually lay out its UIPickerView (zero frames get
+            // skipped), pushed offscreen so it's never visible but still
+            // initializes the picker subsystem before the user's first
+            // drag. Fixes the 200-300ms first-tap lag customers reported.
+            DatePicker("", selection: $prewarmDate, displayedComponents: components)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .frame(width: 200, height: 150)
+                .offset(x: -10_000, y: -10_000)
+                .opacity(0.01) // UIKit sometimes skips layout on alpha = 0
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
             if isFieldMode {
                 // Field mode: tap to open
                 Button {
@@ -1014,17 +1084,25 @@ struct DateWheelPickerBlockView: View {
                 } label: {
                     HStack {
                         Text(formatDate(selectedDate, components: components))
-                            .foregroundColor(.primary)
+                            .foregroundColor(triggerTextColor)
                         Spacer()
                         Image(systemName: components == [.hourAndMinute] ? "clock" : "calendar")
                             .foregroundColor(highlightCol)
                     }
                     .padding(12)
-                    .background(Color(.secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.3), lineWidth: 1))
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // Single-path background — fill + stroke on the same rounded
+                // rectangle so the corner thickness matches the straight edges.
+                .background(
+                    ZStack {
+                        RoundedRectangle(cornerRadius: triggerCorner).fill(triggerBg)
+                        RoundedRectangle(cornerRadius: triggerCorner)
+                            .strokeBorder(triggerBorderColor, lineWidth: triggerBorderWidth)
+                    }
+                )
+                .clipShape(RoundedRectangle(cornerRadius: triggerCorner))
 
                 if showPicker {
                     datePickerContent(
@@ -1268,15 +1346,23 @@ struct DateWheelPickerBlockView: View {
 
         picker
             .padding(pickerPadding)
-            .background(bg)
-            .cornerRadius(cornerRadius)
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(
-                        Color(hex: pickerBorderColor ?? "#00000000"),
-                        lineWidth: pickerBorderWidth
-                    )
+            // Single-path fill + strokeBorder on the same RoundedRectangle so
+            // the corner and edge antialiasing match — same pattern as the
+            // input_date and paywall PlanCard fixes. Previous layered
+            // .background + .cornerRadius + .overlay(...stroke) produced
+            // bolder-looking corners because the stroke centerline sat on
+            // the path edge and drew partially outside the fill.
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: cornerRadius).fill(bg)
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .strokeBorder(
+                            Color(hex: pickerBorderColor ?? "#00000000"),
+                            lineWidth: pickerBorderWidth
+                        )
+                }
             )
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     }
 }
 

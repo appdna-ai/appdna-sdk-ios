@@ -1023,6 +1023,8 @@ public struct ContentBlock: Codable, Identifiable {
     public let picker_mode: String?              // "date" | "datetime" | "time" for date picker
     public let picker_spacing: Double?           // spacing between time wheel and date graphical in datetime mode
     public let calendar_bg_color: String?        // explicit background color for graphical date picker
+    public let wheel_bg_color: String?           // explicit background color for wheel date picker (top-level, not field_config)
+    public let wheel_height: Double?             // wheel picker height in pt (top-level)
 
     // SPEC-089d Phase F: stack / row fields (container blocks)
     public let children: [ContentBlock]?
@@ -1143,7 +1145,7 @@ public struct ContentBlock: Codable, Identifiable {
         case label_color, label_font_size, animate, animation_duration_ms
         case columns, default_date_value, min_date, max_date, allow_future, allow_past, date_validation_message
         case highlight_color, haptic_on_scroll, orientation, wheel_orientation, picker_presentation, picker_mode
-        case picker_spacing, calendar_bg_color
+        case picker_spacing, calendar_bg_color, wheel_bg_color, wheel_height
         case children, stack_children, z_index, gap, wrap, justify, align_items
         case row_direction, row_distribution, row_child_fill, column_ratios
         case view_key, custom_config, placeholder_image_url, placeholder_text
@@ -1312,6 +1314,8 @@ public struct ContentBlock: Codable, Identifiable {
         self.picker_mode = try c.decodeIfPresent(String.self, forKey: .picker_mode)
         self.picker_spacing = try c.decodeIfPresent(Double.self, forKey: .picker_spacing)
         self.calendar_bg_color = try c.decodeIfPresent(String.self, forKey: .calendar_bg_color)
+        self.wheel_bg_color = try c.decodeIfPresent(String.self, forKey: .wheel_bg_color)
+        self.wheel_height = try c.decodeIfPresent(Double.self, forKey: .wheel_height)
         self.haptic_on_scroll = try c.decodeIfPresent(Bool.self, forKey: .haptic_on_scroll)
         self.children = try c.decodeIfPresent([ContentBlock].self, forKey: .children)
         self.stack_children = try c.decodeIfPresent([ContentBlock].self, forKey: .stack_children)

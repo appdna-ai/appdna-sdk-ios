@@ -167,6 +167,13 @@ struct LocationFieldView: View {
                 }
                 print("[AppDNA] LocationField restored: \(dict)")
             }
+            // Pre-warm the iOS keyboard subsystem so the first keystroke
+            // doesn't show the 200-400ms lag customers see on empty-field
+            // first-focus. An invisible UITextField is briefly added to the
+            // key window, made firstResponder, then immediately resigned —
+            // enough to trigger keyboard extension / dictionary / haptic
+            // engine loading without any visible flash.
+            KeyboardPrewarmer.prewarmOnce()
         }
     }
 
