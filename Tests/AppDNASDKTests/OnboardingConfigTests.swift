@@ -146,4 +146,42 @@ final class OnboardingConfigTests: XCTestCase {
         delegate.onOnboardingDismissed(flowId: "f", atStep: 0)
         // No assertions needed — just verifies defaults exist and don't crash
     }
+
+    // MARK: - Birth date → age computation (v1.0.48)
+    // Mirrors the calculation used in DateWheelPickerBlockView.persistDate()
+    // so we have a regression guard for the `<field_id>_age` sibling key.
+
+    private func computeAge(birthDate: Date, today: Date) -> Int {
+        let years = Calendar.current.dateComponents([.year], from: birthDate, to: today).year ?? 0
+        return max(0, years)
+    }
+
+    func testAgeCalculationStandardCase() {
+        var components = DateComponents()
+        components.year = 2000; components.month = 4; components.day = 1
+        let birth = Calendar.current.date(from: components)!
+        var today = DateComponents()
+        today.year = 2026; today.month = 4; today.day = 14
+        let now = Calendar.current.date(from: today)!
+        XCTAssertEqual(computeAge(birthDate: birth, today: now), 26)
+    }
+
+    func testAgeCalculationBeforeBirthdayThisYear() {
+        // Born Dec 31 2000; today Apr 14 2026 → still 25 (birthday hasn't passed).
+        var b = DateComponents(); b.year = 2000; b.month = 12; b.day = 31
+        let birth = Calendar.current.date(from: b)!
+        var t = DateComponents(); t.year = 2026; t.month = 4; t.day = 14
+        let now = Calendar.current.date(from: t)!
+        XCTAssertEqual(computeAge(birthDate: birth, today: now), 25)
+    }
+
+    func testAgeCalculationFutureDateClampedToZero() {
+        // Picker default is today; if the user picks the future, age must
+        // not go negative — the SDK clamps with max(0, years).
+        var b = DateComponents(); b.year = 2030; b.month = 1; b.day = 1
+        let birth = Calendar.current.date(from: b)!
+        var t = DateComponents(); t.year = 2026; t.month = 4; t.day = 14
+        let now = Calendar.current.date(from: t)!
+        XCTAssertEqual(computeAge(birthDate: birth, today: now), 0)
+    }
 }

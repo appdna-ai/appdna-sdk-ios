@@ -1181,6 +1181,16 @@ struct DateWheelPickerBlockView: View {
         let fieldId = block.field_id ?? block.id
         let formatter = ISO8601DateFormatter()
         inputValues[fieldId] = formatter.string(from: selectedDate)
+        // Also expose a computed age (whole years) under `<field_id>_age`
+        // when the picker is in date-only mode (the common birth_date use
+        // case). Saves customers from re-parsing the ISO string client-side.
+        let isDateOnly = block.picker_mode == "date"
+            || block.picker_mode == nil  // legacy default for input_date / date_wheel_picker
+            || block.type == .input_date
+        if isDateOnly && block.picker_mode != "datetime" && block.picker_mode != "time" && block.picker_mode != "date_time" {
+            let years = Calendar.current.dateComponents([.year], from: selectedDate, to: Date()).year ?? 0
+            inputValues["\(fieldId)_age"] = max(0, years)
+        }
     }
 
     private func restoreDate() {
@@ -1371,6 +1381,10 @@ struct DateWheelPickerBlockView: View {
 /// Numeric wheel picker for single-value selection.
 struct WheelPickerBlockView: View {
     let block: ContentBlock
+    /// SPEC-082 follow-up: previously this view had no binding to the
+    /// onboarding response dict, so the user's spin was silently dropped.
+    /// Now the selected number is persisted under `block.field_id`.
+    @Binding var inputValues: [String: Any]
 
     @State private var selectedIndex: Int = 0
 
@@ -1449,7 +1463,41 @@ struct WheelPickerBlockView: View {
             }
         }
         .onAppear {
-            selectedIndex = initialIndex
+            // Restore prior selection on re-entry (back navigation), then
+            // fall back to the configured default. Either way persist
+            // immediately so reading `responses[fieldId]` returns the
+            // visible value even if the user never spins the wheel.
+            let fieldId = block.field_id ?? block.id
+            if let saved = inputValues[fieldId] as? Double,
+               let savedIdx = values.firstIndex(of: saved) {
+                selectedIndex = savedIdx
+            } else if let savedInt = inputValues[fieldId] as? Int,
+                      let savedIdx = values.firstIndex(of: Double(savedInt)) {
+                selectedIndex = savedIdx
+            } else {
+                selectedIndex = initialIndex
+            }
+            persistValue(values: values)
+        }
+        .onChange(of: selectedIndex) { _ in
+            persistValue(values: values)
+        }
+    }
+
+    /// Persist the currently-selected wheel value to inputValues. Stores
+    /// as Int when the value is whole (most numeric pickers — age, count,
+    /// quantity), Double otherwise. Without this the user's wheel selection
+    /// was silently dropped — `WheelPickerBlockView` had `@Binding var
+    /// inputValues` but no write site.
+    private func persistValue(values: [Double]) {
+        guard !values.isEmpty else { return }
+        let fieldId = block.field_id ?? block.id
+        let safeIdx = max(0, min(selectedIndex, values.count - 1))
+        let v = values[safeIdx]
+        if v == v.rounded() {
+            inputValues[fieldId] = Int(v)
+        } else {
+            inputValues[fieldId] = v
         }
     }
 }

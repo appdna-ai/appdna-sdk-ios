@@ -174,7 +174,7 @@ struct ContentBlockRendererView: View {
         case .lottie: return AnyView(lottieBlock(block))
         case .rive: return AnyView(riveBlock(block))
         case .page_indicator: return AnyView(pageIndicatorBlock(block))
-        case .wheel_picker: return AnyView(WheelPickerBlockView(block: block))
+        case .wheel_picker: return AnyView(WheelPickerBlockView(block: block, inputValues: $inputValues))
         case .pulsing_avatar: return AnyView(PulsingAvatarBlockView(block: block))
         case .social_login: return AnyView(socialLoginBlock(block))
         case .timeline: return AnyView(timelineBlock(block))

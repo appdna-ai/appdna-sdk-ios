@@ -30,6 +30,11 @@ final class OnboardingFlowManager {
             "flow_id": flow.id,
             "flow_version": flow.version,
         ])
+        // Notify the host app — the protocol declared this hook but no
+        // call site existed. Customers implementing the delegate would
+        // never see `onOnboardingStarted` fire even though the other
+        // three lifecycle methods worked.
+        delegate?.onOnboardingStarted(flowId: flow.id)
 
         // Kick off image prefetch for the first step immediately — by the time
         // the hosting controller's view appears a few hundred ms later, the
