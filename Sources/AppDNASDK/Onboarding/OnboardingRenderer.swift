@@ -788,32 +788,34 @@ struct OnboardingFlowHost: View {
                         }()
 
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            guard let onboardingVC = AppDNA.topViewController() else {
+                            // Present the paywall ON TOP of the onboarding host
+                            // (do NOT dismiss the host first). Previously we
+                            // dismissed onboarding before presenting the paywall —
+                            // which meant `renderer.skipToStep(...)` after the
+                            // paywall closed had no visible view to render to,
+                            // and the user landed back in the host app instead
+                            // of the configured `on_dismiss_target` step. Keeping
+                            // onboarding underneath lets the renderer continue
+                            // from wherever the routing decides.
+                            guard let presenter = AppDNA.topViewController() else {
                                 flowCompleted(currentResponses)
                                 return
                             }
-                            onboardingVC.dismiss(animated: true) {
-                                guard let rootVC = AppDNA.topViewController() else {
-                                    flowCompleted(currentResponses)
-                                    return
+                            let bridge = OnboardingPaywallBridge(
+                                onPurchased: {
+                                    // Success default: continue (follow downstream edge).
+                                    routeOutcome(onSuccessTarget, "continue", "paywall_purchased")
+                                },
+                                onFailed: {
+                                    // Fail default: stay on paywall so the user can retry.
+                                    routeOutcome(onFailTarget, "stay", "paywall_payment_failed")
+                                },
+                                onDismissedWithoutPurchase: {
+                                    // Dismiss default: legacy on_dismiss enum → mapped above.
+                                    routeOutcome(onDismissTarget, legacyDismissDefault, "paywall_dismissed")
                                 }
-
-                                let bridge = OnboardingPaywallBridge(
-                                    onPurchased: {
-                                        // Success default: continue (follow downstream edge).
-                                        routeOutcome(onSuccessTarget, "continue", "paywall_purchased")
-                                    },
-                                    onFailed: {
-                                        // Fail default: stay on paywall so the user can retry.
-                                        routeOutcome(onFailTarget, "stay", "paywall_payment_failed")
-                                    },
-                                    onDismissedWithoutPurchase: {
-                                        // Dismiss default: legacy on_dismiss enum → mapped above.
-                                        routeOutcome(onDismissTarget, legacyDismissDefault, "paywall_dismissed")
-                                    }
-                                )
-                                AppDNA.presentPaywall(id: paywallId, from: rootVC, delegate: bridge)
-                            }
+                            )
+                            AppDNA.presentPaywall(id: paywallId, from: presenter, delegate: bridge)
                         }
                     } else {
                         onFlowCompleted(responses)
