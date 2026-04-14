@@ -1063,19 +1063,25 @@ struct DateWheelPickerBlockView: View {
         let triggerTextColor: Color = triggerTextHex.map { Color(hex: $0) } ?? .primary
 
         VStack(spacing: 8) {
-            // Pre-warm: a hidden wheel DatePicker sized large enough for
-            // UIKit to actually lay out its UIPickerView (zero frames get
-            // skipped), pushed offscreen so it's never visible but still
-            // initializes the picker subsystem before the user's first
-            // drag. Fixes the 200-300ms first-tap lag customers reported.
-            DatePicker("", selection: $prewarmDate, displayedComponents: components)
-                .datePickerStyle(.wheel)
-                .labelsHidden()
-                .frame(width: 200, height: 150)
-                .offset(x: -10_000, y: -10_000)
-                .opacity(0.01) // UIKit sometimes skips layout on alpha = 0
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+            // Pre-warm: hidden wheel DatePicker mounted behind a zero-size
+            // anchor so UIKit instantiates UIPickerView eagerly (cuts the
+            // first-drag lag) without claiming any layout space inside the
+            // VStack. Earlier .frame(200,150).offset(-10000,-10000) was a
+            // bug — `.offset` moves visually but the 150pt frame still ate
+            // VStack space, which combined with `vertical_offset: -40`
+            // caused the whole picker block to visually overlay siblings
+            // below it (customer-reported on Form 9a).
+            Color.clear
+                .frame(width: 0, height: 0)
+                .background(
+                    DatePicker("", selection: $prewarmDate, displayedComponents: components)
+                        .datePickerStyle(.wheel)
+                        .labelsHidden()
+                        .frame(width: 200, height: 150)
+                        .opacity(0.01)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                )
 
             if isFieldMode {
                 // Field mode: tap to open

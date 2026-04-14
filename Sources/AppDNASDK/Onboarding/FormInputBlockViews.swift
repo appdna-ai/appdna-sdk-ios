@@ -267,17 +267,21 @@ struct FormInputDateBlock: View {
         let compactHeight: CGFloat? = (numericHeight ?? semanticHeight).map { CGFloat($0) }
 
         VStack(alignment: .leading, spacing: 6) {
-            // Pre-warm the iOS wheel / keyboard subsystems so the first
-            // interaction isn't laggy. Offscreen with real layout size
-            // (zero frames get skipped by SwiftUI).
-            DatePicker("", selection: $prewarmDate, displayedComponents: components)
-                .datePickerStyle(.wheel)
-                .labelsHidden()
-                .frame(width: 200, height: 150)
-                .offset(x: -10_000, y: -10_000)
-                .opacity(0.01)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+            // Pre-warm the iOS wheel subsystem behind a zero-size anchor.
+            // Earlier .frame(200,150).offset(-10000,-10000) was wrong — the
+            // 150pt frame still ate VStack space, breaking layout for any
+            // sibling block stacked below.
+            Color.clear
+                .frame(width: 0, height: 0)
+                .background(
+                    DatePicker("", selection: $prewarmDate, displayedComponents: components)
+                        .datePickerStyle(.wheel)
+                        .labelsHidden()
+                        .frame(width: 200, height: 150)
+                        .opacity(0.01)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                )
 
             formFieldLabel(block)
 
