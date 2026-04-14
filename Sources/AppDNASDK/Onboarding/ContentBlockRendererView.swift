@@ -260,10 +260,13 @@ struct ContentBlockRendererView: View {
             default: return .leading
             }
         }()
+        // Apply block.horizontal_align AFTER applyTextStyle so its internal
+        // multilineTextAlignment (which defaults to .leading when style.alignment
+        // is unset) doesn't wipe out the authored horizontal_align.
         return Text(loc?("block.\(block.id).text", text) ?? text)
             .font(.system(size: fontSize, weight: .bold))
-            .multilineTextAlignment(textAlignment)
             .applyTextStyle(block.style)
+            .multilineTextAlignment(textAlignment)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: frameAlignment)
     }
@@ -286,10 +289,13 @@ struct ContentBlockRendererView: View {
             default: return .leading
             }
         }()
+        // Same ordering as headingBlock — applyTextStyle first so horizontal_align
+        // wins when style.alignment isn't explicitly authored. Customers hit this
+        // in row children where the authored center/right was silently dropped.
         return Text(loc?("block.\(block.id).text", text) ?? text)
             .font(.body)
-            .multilineTextAlignment(textAlignment)
             .applyTextStyle(block.style)
+            .multilineTextAlignment(textAlignment)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: frameAlignment)
     }
@@ -851,23 +857,50 @@ struct ContentBlockRendererView: View {
         let isLegal = block.rich_text_variant == "legal"
         let linkCol = Color(hex: block.link_color ?? "#6366F1")
 
+        // SPEC-205 adjacent fix: honor `base_style.alignment` for rich_text.
+        // Previously both `.multilineTextAlignment` and the outer frame alignment
+        // were hardcoded based ONLY on `rich_text_variant == "legal"`, which
+        // meant authored center/right alignment was silently dropped — most
+        // visible inside `child_row` where the frame fills the cell and the
+        // left-alignment overrode the authored value. Now: authored alignment
+        // wins; legal keeps its center default when author didn't set one.
+        let authored = block.base_style?.alignment
+        let textAlign: TextAlignment = {
+            switch authored {
+            case "center": return .center
+            case "right": return .trailing
+            case "left": return .leading
+            default: return isLegal ? .center : .leading
+            }
+        }()
+        let frameAlign: Alignment = {
+            switch authored {
+            case "center": return .center
+            case "right": return .trailing
+            case "left": return .leading
+            default: return isLegal ? .center : .leading
+            }
+        }()
+
         return Group {
             if #available(iOS 15.0, *) {
                 let attributed = parseMarkdownToAttributedString(content, linkColor: linkCol)
                 Text(attributed)
                     .font(isLegal ? .caption : .body)
                     .foregroundColor(isLegal ? .secondary : .primary)
-                    .multilineTextAlignment(isLegal ? .center : .leading)
                     .applyTextStyle(block.base_style)
-                    .frame(maxWidth: .infinity, alignment: isLegal ? .center : .leading)
+                    // Apply AFTER applyTextStyle — its internal multilineTextAlignment
+                    // would otherwise override ours when base_style.alignment is unset.
+                    .multilineTextAlignment(textAlign)
+                    .frame(maxWidth: .infinity, alignment: frameAlign)
             } else {
                 // Fallback: render as plain text, stripping markdown tokens
                 Text(stripMarkdown(content))
                     .font(isLegal ? .caption : .body)
                     .foregroundColor(isLegal ? .secondary : .primary)
-                    .multilineTextAlignment(isLegal ? .center : .leading)
                     .applyTextStyle(block.base_style)
-                    .frame(maxWidth: .infinity, alignment: isLegal ? .center : .leading)
+                    .multilineTextAlignment(textAlign)
+                    .frame(maxWidth: .infinity, alignment: frameAlign)
             }
         }
     }

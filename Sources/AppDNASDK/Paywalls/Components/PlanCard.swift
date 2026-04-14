@@ -195,8 +195,12 @@ struct PlanCard: View {
                     }())
             )
             .overlay(
+                // .strokeBorder draws entirely INSIDE the path so the stroke
+                // aligns cleanly with the fill's rounded corners. Previous
+                // `.stroke` drew centered on the edge (half outside), which
+                // showed up as thicker-looking corners than straight sides.
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(isSelected ? selectedBorder : unselectedBorder, lineWidth: isSelected ? 2 : 1)
+                    .strokeBorder(isSelected ? selectedBorder : unselectedBorder, lineWidth: isSelected ? 2 : 1)
             )
             .shadow(
                 color: (cardStyle.cardShadow != nil && cardStyle.cardShadow != "none" && cardStyle.cardShadow != "false")
@@ -214,14 +218,25 @@ struct PlanCard: View {
                 if let badge = plan.badge, badgePositionValue != "inline" {
                     badgeView(badge)
                         .fixedSize()
-                        .offset(y: -10)
+                        // Keep the pill sitting ON the card's top edge — half
+                        // above, half inside — at any font size. The estimated
+                        // badge height is `font + vertical padding` (4 + 4);
+                        // offsetting by half of that gives the classic
+                        // straddle-the-edge look and scales with bigger fonts
+                        // instead of staying stuck at -10pt.
+                        .offset(y: -(((cardStyle.badgeFontSize ?? 11) + 8) / 2))
                         .allowsHitTesting(false)
                 }
             }
         }
         .contentShape(Rectangle())
         .buttonStyle(.plain)
-        .padding(.top, plan.badge != nil && badgePositionValue != "inline" ? 8 : 0) // room for overflowing badge
+        // Reserve vertical space for the badge's overhang so it doesn't get
+        // clipped by the parent cell / section. Matches the offset above +
+        // a small buffer for the border / shadow.
+        .padding(.top, plan.badge != nil && badgePositionValue != "inline"
+            ? max(12, ((cardStyle.badgeFontSize ?? 11) + 8) / 2 + 2)
+            : 0)
         // scaleEffect removed — it created a compositing layer that allowed
         // content to visually overflow cell bounds in grid layouts. Selection
         // emphasis comes from border width (2pt selected vs 1pt unselected),
@@ -271,6 +286,12 @@ struct PlanCard: View {
                 }
                 if let ts = badgeTextStyle {
                     Text(text).applyTextStyle(ts)
+                } else if let size = cardStyle.badgeFontSize {
+                    // Flat badge_font_size authored in the console. Falls back
+                    // to .caption2 (11pt) when unset.
+                    Text(text)
+                        .font(.system(size: size, weight: .bold))
+                        .foregroundColor(badgeFg)
                 } else {
                     Text(text)
                         .font(.caption2.bold())
@@ -322,6 +343,10 @@ struct PlanCardStyle {
     var badgeBorderColor: String? = nil
     var badgeBorderWidth: CGFloat? = nil
     var badgeIcon: String? = nil      // SF Symbol or emoji before badge text
+    // Badge font size (pt). Authored flat in the console; the SDK also
+    // honors `sectionStyle.elements.badge.textStyle.font_size` via
+    // `badgeTextStyle`, but this flat field is simpler for most customers.
+    var badgeFontSize: CGFloat? = nil
     // Plan card extras
     var subtitlePosition: String? = nil  // "below_name", "below_price" (default), "above_price"
     var showDivider: Bool = false        // Divider line between price and features
@@ -357,6 +382,7 @@ struct PlanCardStyle {
         self.badgeBorderColor = data?.badgeBorderColor
         self.badgeBorderWidth = data?.badgeBorderWidth
         self.badgeIcon = data?.badgeIcon
+        self.badgeFontSize = data?.badgeFontSize
         self.subtitlePosition = data?.subtitlePosition
         self.showDivider = data?.showDivider ?? false
         self.dividerColor = data?.dividerColor

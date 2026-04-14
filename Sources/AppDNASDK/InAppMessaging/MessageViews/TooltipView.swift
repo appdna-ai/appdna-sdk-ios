@@ -41,12 +41,12 @@ struct TooltipView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         if let title = content.title {
                             Text(title)
-                                .font(.subheadline.bold())
+                                .font(content.titleFont(default: .subheadline.bold(), defaultSize: 15))
                                 .foregroundColor(content.text_color.map { Color(hex: $0) } ?? .primary)
                         }
                         if let body = content.body {
                             Text(body)
-                                .font(.caption)
+                                .font(content.bodyFont(default: .caption, defaultSize: 12))
                                 .foregroundColor(content.text_color.map { Color(hex: $0).opacity(0.7) } ?? .secondary)
                         }
                     }

@@ -57,42 +57,97 @@ struct SurveyContainerView: View {
     @State private var answers: [String: SurveyAnswer] = [:] // keyed by question_id
     @State private var visibleQuestions: [SurveyQuestion] = []
     @SwiftUI.Environment(\.dismiss) private var dismiss
+    // SPEC-205: Adapt survey styling to system dark/light mode.
+    @SwiftUI.Environment(\.colorScheme) private var colorScheme
     // SPEC-085: Rich media state
     @State private var showIntro = true
     @State private var showThankYou = false
     @State private var showConfetti = false
 
+    /// SPEC-205: Resolved theme for the current color scheme. In dark
+    /// mode, any field set on theme.dark overrides theme.light;
+    /// unset dark fields fall back to light (sparse overrides).
+    private var theme: SurveyTheme? {
+        config.appearance?.theme?.resolved(for: colorScheme == .dark ? .dark : .light)
+    }
+
     private var backgroundColor: Color {
-        Color(hex: config.appearance?.theme?.background_color ?? "#FFFFFF")
+        Color(hex: theme?.background_color ?? (colorScheme == .dark ? "#1a1a1a" : "#FFFFFF"))
+    }
+
+    /// SPEC-205: Background view honors a theme-level gradient when supplied
+    /// (including when the dark variant provides one); otherwise falls back
+    /// to the solid color. Safe-area handling is deliberately symmetric —
+    /// both paths rely on the host container's padding so the gradient doesn't
+    /// bleed under the status bar while the solid fill stays contained.
+    @ViewBuilder
+    private var backgroundView: some View {
+        if let gradient = theme?.gradient {
+            StyleEngine.linearGradient(from: gradient)
+        } else {
+            backgroundColor
+        }
+    }
+
+    /// SPEC-205: Button background honors theme.button_gradient when set.
+    @ViewBuilder
+    private func buttonBackground(enabled: Bool) -> some View {
+        if enabled, let gradient = theme?.button_gradient {
+            StyleEngine.linearGradient(from: gradient)
+        } else {
+            enabled ? buttonColor : Color.gray.opacity(0.3)
+        }
     }
 
     private var textColor: Color {
-        Color(hex: config.appearance?.theme?.text_color ?? "#1a1a1a")
+        Color(hex: theme?.text_color ?? (colorScheme == .dark ? "#FFFFFF" : "#1a1a1a"))
     }
 
     private var accentColor: Color {
-        Color(hex: config.appearance?.theme?.accent_color ?? "#6366f1")
+        Color(hex: theme?.accent_color ?? "#6366f1")
     }
 
     private var buttonColor: Color {
-        Color(hex: config.appearance?.theme?.button_color ?? "#6366f1")
+        Color(hex: theme?.button_color ?? "#6366f1")
     }
 
     private var buttonTextColor: Color {
-        Color(hex: config.appearance?.theme?.button_text_color ?? "#FFFFFF")
+        Color(hex: theme?.button_text_color ?? "#FFFFFF")
     }
 
-    /// SPEC-084: Resolve font from theme
+    /// SPEC-084 + SPEC-205: Resolve font from theme. Honors question_font_size
+    /// and font_weight when the (possibly dark-merged) theme supplies them.
     private var themeFont: Font? {
-        guard let fontFamily = config.appearance?.theme?.font_family else { return nil }
-        return FontResolver.font(family: fontFamily, size: nil, weight: nil)
+        let fontFamily = theme?.font_family
+        let size = theme?.question_font_size
+        let weight: Int? = {
+            switch theme?.font_weight {
+            case "medium": return 500
+            case "semibold": return 600
+            case "bold": return 700
+            case "normal": return 400
+            default: return nil
+            }
+        }()
+        if fontFamily == nil && size == nil && weight == nil { return nil }
+        return FontResolver.font(family: fontFamily, size: size, weight: weight)
+    }
+
+    /// SPEC-205: text alignment honored when theme declares it.
+    private var themeTextAlignment: TextAlignment {
+        switch theme?.text_align {
+        case "left": return .leading
+        case "right": return .trailing
+        case "center": return .center
+        default: return .leading
+        }
     }
 
     var body: some View {
         ZStack {
             VStack(spacing: 16) {
                 // SPEC-085: Intro Lottie animation
-                if showIntro, let introUrl = config.appearance?.theme?.intro_lottie_url {
+                if showIntro, let introUrl = theme?.intro_lottie_url {
                     LottieBlockView(block: LottieBlock(
                         lottie_url: introUrl, lottie_json: nil,
                         autoplay: true, loop: false, speed: 1.0,
@@ -109,7 +164,7 @@ struct SurveyContainerView: View {
                 // SPEC-085: Thank-you screen with Lottie + confetti
                 if showThankYou {
                     VStack(spacing: 16) {
-                        if let thankUrl = config.appearance?.theme?.thankyou_lottie_url {
+                        if let thankUrl = theme?.thankyou_lottie_url {
                             LottieBlockView(block: LottieBlock(
                                 lottie_url: thankUrl, lottie_json: nil,
                                 autoplay: true, loop: false, speed: 1.0,
@@ -119,13 +174,13 @@ struct SurveyContainerView: View {
                         }
                         // SPEC-088: Interpolate thank-you text
                         Text(TemplateEngine.shared.interpolate(
-                            config.appearance?.theme?.thank_you_text ?? "Thank you!",
+                            theme?.thank_you_text ?? "Thank you!",
                             context: TemplateEngine.shared.buildContext()
                         ))
                             .font(.title2.bold())
                             .foregroundColor(textColor)
                     }
-                } else if !showIntro || config.appearance?.theme?.intro_lottie_url == nil {
+                } else if !showIntro || theme?.intro_lottie_url == nil {
                     // Progress indicator
                     if (config.appearance?.show_progress ?? false) && !visibleQuestions.isEmpty {
                         ProgressView(value: Double(currentQuestionIndex + 1), total: Double(visibleQuestions.count))
@@ -142,11 +197,13 @@ struct SurveyContainerView: View {
                     }
 
                     // Current question — SPEC-084: apply style engine + theme font
+                    // SPEC-205: honor theme.text_align.
                     if currentQuestionIndex < visibleQuestions.count {
                         questionView(for: visibleQuestions[currentQuestionIndex])
                             .applyTextStyle(config.appearance?.question_text_style)
                             .font(themeFont)
                             .foregroundColor(textColor)
+                            .multilineTextAlignment(themeTextAlignment)
                     }
 
                     Spacer()
@@ -167,13 +224,13 @@ struct SurveyContainerView: View {
                                 advanceQuestion()
                                 // SPEC-085: Haptic on step advance
                                 HapticEngine.triggerIfEnabled(
-                                    config.appearance?.theme?.haptic?.triggers?.on_step_advance,
-                                    config: config.appearance?.theme?.haptic
+                                    theme?.haptic?.triggers?.on_step_advance,
+                                    config: theme?.haptic
                                 )
                             }
                             .padding(.horizontal, 24)
                             .padding(.vertical, 10)
-                            .background(canAdvance ? buttonColor : Color.gray.opacity(0.3))
+                            .background(buttonBackground(enabled: canAdvance))
                             .foregroundColor(buttonTextColor)
                             .cornerRadius(8)
                             .disabled(!canAdvance)
@@ -183,7 +240,7 @@ struct SurveyContainerView: View {
                             }
                             .padding(.horizontal, 24)
                             .padding(.vertical, 10)
-                            .background(canAdvance ? buttonColor : Color.gray.opacity(0.3))
+                            .background(buttonBackground(enabled: canAdvance))
                             .foregroundColor(buttonTextColor)
                             .cornerRadius(8)
                             .disabled(!canAdvance)
@@ -203,19 +260,19 @@ struct SurveyContainerView: View {
                 }
             }
             .padding()
-            .background(backgroundColor)
-            .applyBlurBackdrop(config.appearance?.theme?.blur_backdrop)
+            .background(backgroundView)
+            .applyBlurBackdrop(theme?.blur_backdrop)
             .tint(accentColor)
             .onAppear {
                 computeVisibleQuestions()
                 // Skip intro if no lottie URL
-                if config.appearance?.theme?.intro_lottie_url == nil {
+                if theme?.intro_lottie_url == nil {
                     showIntro = false
                 }
             }
 
             // SPEC-085: Confetti overlay on completion
-            if showConfetti, let effect = config.appearance?.theme?.thankyou_particle_effect {
+            if showConfetti, let effect = theme?.thankyou_particle_effect {
                 ConfettiOverlay(effect: effect)
             }
         }
@@ -305,18 +362,18 @@ struct SurveyContainerView: View {
     private func submitSurvey() {
         // SPEC-085: Haptic on submit
         HapticEngine.triggerIfEnabled(
-            config.appearance?.theme?.haptic?.triggers?.on_form_submit,
-            config: config.appearance?.theme?.haptic
+            theme?.haptic?.triggers?.on_form_submit,
+            config: theme?.haptic
         )
 
         let allAnswers = visibleQuestions.compactMap { answers[$0.id ?? ""] }
 
         // SPEC-085: Show thank-you animation + confetti if configured
-        if config.appearance?.theme?.thankyou_lottie_url != nil || config.appearance?.theme?.thankyou_particle_effect != nil {
+        if theme?.thankyou_lottie_url != nil || theme?.thankyou_particle_effect != nil {
             withAnimation { showThankYou = true }
-            if config.appearance?.theme?.thankyou_particle_effect != nil {
+            if theme?.thankyou_particle_effect != nil {
                 showConfetti = true
-                HapticEngine.triggerIfEnabled(.success, config: config.appearance?.theme?.haptic)
+                HapticEngine.triggerIfEnabled(.success, config: theme?.haptic)
             }
             // Dismiss after thank-you animation
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {

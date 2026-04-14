@@ -280,6 +280,7 @@ struct PaywallSectionData: Codable {
     let badgeBorderColor: String?    // Border color for badge
     let badgeBorderWidth: CGFloat?   // Border width for badge
     let badgeIcon: String?           // SF Symbol or emoji before badge text
+    let badgeFontSize: CGFloat?      // Badge text size in pt (default 11 = .caption2)
     let subtitlePosition: String?    // "below_name", "below_price" (default), "above_price"
     let showDivider: Bool?           // Divider between price and features
     let dividerColor: String?        // Divider color
@@ -402,6 +403,7 @@ struct PaywallSectionData: Codable {
         case badgeBorderColor = "badge_border_color"
         case badgeBorderWidth = "badge_border_width"
         case badgeIcon = "badge_icon"
+        case badgeFontSize = "badge_font_size"
         case subtitlePosition = "subtitle_position"
         case showDivider = "show_divider"
         case dividerColor = "divider_color"

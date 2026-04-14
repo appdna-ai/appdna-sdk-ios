@@ -211,6 +211,7 @@ struct FormInputDateBlock: View {
     let components: DatePickerComponents
 
     @State private var selectedDate = Date()
+    @State private var showCompactPopover = false
 
     var body: some View {
         let fieldId = block.field_id ?? block.id
@@ -246,6 +247,22 @@ struct FormInputDateBlock: View {
         let wheelOpacity = CGFloat((cfgDouble(block.field_config?["wheel_opacity"])) ?? 1.0)
         let calendarOpacity = CGFloat((cfgDouble(block.field_config?["calendar_opacity"])) ?? 1.0)
 
+        // Height control for the compact pill (wheel/graphical have intrinsic
+        // heights set by the picker itself). Accepts a numeric `input_height`
+        // or `height` in field_config, or the semantic `sm | md | lg` shorthand
+        // on field_style.height.
+        let numericHeight: Double? = cfgDouble(block.field_config?["input_height"])
+            ?? cfgDouble(block.field_config?["height"])
+        let semanticHeight: Double? = {
+            switch block.field_style?.height?.lowercased() {
+            case "sm": return 36
+            case "md": return 44
+            case "lg": return 56
+            default: return nil
+            }
+        }()
+        let compactHeight: CGFloat? = (numericHeight ?? semanticHeight).map { CGFloat($0) }
+
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
 
@@ -267,15 +284,76 @@ struct FormInputDateBlock: View {
                         .background(Color(hex: calendarBgHex ?? fieldBgHex ?? "transparent").opacity(calendarOpacity))
                         .cornerRadius(cornerRadius)
                 default: // compact
-                    DatePicker("", selection: $selectedDate, displayedComponents: components)
-                        .datePickerStyle(.compact)
-                        .labelsHidden()
-                        .tint(accentColor)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // Fully custom tap-to-open pattern instead of SwiftUI's
+                    // `.datePickerStyle(.compact)`. The native compact style
+                    // draws its own rounded pill (system tertiary fill) which
+                    // layered underneath any chrome we added and made the
+                    // outer border's corners look bolder than the straight
+                    // edges. A plain Text + icon button sidesteps the pill
+                    // entirely so our border is the only rounded shape drawn.
+                    let borderColorHex = block.field_style?.border_color ?? "#D1D5DB"
+                    let borderWidth = CGFloat(block.field_style?.border_width ?? 0)
+                    let bg = Color(hex: fieldBgHex ?? "transparent")
+                    let fgColor: Color = {
+                        if let hex = block.field_style?.text_color { return Color(hex: hex) }
+                        return resolvedScheme == .dark ? .white : .primary
+                    }()
+                    let fmt: DateFormatter = {
+                        let f = DateFormatter()
+                        if components == .date { f.dateStyle = .medium; f.timeStyle = .none }
+                        else if components == .hourAndMinute { f.dateStyle = .none; f.timeStyle = .short }
+                        else { f.dateStyle = .medium; f.timeStyle = .short }
+                        return f
+                    }()
+                    let chevron = components == .hourAndMinute ? "clock" : "calendar"
+
+                    Button {
+                        showCompactPopover.toggle()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text(fmt.string(from: selectedDate))
+                                .foregroundColor(fgColor)
+                            Spacer()
+                            Image(systemName: chevron)
+                                .foregroundColor(accentColor)
+                        }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .background(Color(hex: fieldBgHex ?? "transparent"))
-                        .cornerRadius(cornerRadius)
+                        .frame(maxWidth: .infinity, minHeight: compactHeight ?? fieldHeight(block), alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    // Single-path background — fill + stroke on the SAME
+                    // RoundedRectangle so the corner antialiasing is identical
+                    // to the straight edges.
+                    .background(
+                        ZStack {
+                            RoundedRectangle(cornerRadius: cornerRadius).fill(bg)
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .strokeBorder(Color(hex: borderColorHex), lineWidth: borderWidth)
+                        }
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                    .sheet(isPresented: $showCompactPopover) {
+                        let sheetContent = VStack(spacing: 16) {
+                            DatePicker("", selection: $selectedDate, displayedComponents: components)
+                                .datePickerStyle(.wheel)
+                                .labelsHidden()
+                                .tint(accentColor)
+                                .environment(\.colorScheme, resolvedScheme ?? .light)
+                            Button("Done") { showCompactPopover = false }
+                                .buttonStyle(.borderedProminent)
+                                .tint(accentColor)
+                        }
+                        .padding()
+                        Group {
+                            if #available(iOS 16.0, *) {
+                                sheetContent.presentationDetents([.medium])
+                            } else {
+                                sheetContent
+                            }
+                        }
+                    }
                 }
             }
             .environment(\.colorScheme, resolvedScheme ?? .light)
@@ -414,7 +492,15 @@ struct FormInputSelectBlock: View {
         let defaultSubtitleColor = (cfg?["subtitle_color"]?.value as? String).map { Color(hex: $0) }
             ?? textCol.opacity(0.65)
 
-        VStack(spacing: 8) {
+        // Option layout: configurable spacing + optional height. Resolution
+        // order matches text/date inputs so the console "Height" control works
+        // uniformly: block.element_height (px) → field_config.option_height →
+        // field_config.size → field_config.field_height → nil (intrinsic).
+        let optionSpacing = CGFloat((cfgDouble(cfg?["option_spacing"])) ?? 8)
+        let optionHeight: CGFloat? = (cfgDouble(cfg?["option_height"]) ?? cfgDouble(cfg?["size"])).map { CGFloat($0) }
+            ?? fieldHeight(block)
+
+        VStack(spacing: optionSpacing) {
             ForEach(options) { option in
                 let isSelected = isMultiSelect
                     ? selectedValues.contains(option.resolvedValue)
@@ -472,7 +558,7 @@ struct FormInputSelectBlock: View {
                         }
                     }
                     .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, minHeight: optionHeight, alignment: .leading)
                     .background {
                         ZStack {
                             if useBlur {
@@ -490,6 +576,10 @@ struct FormInputSelectBlock: View {
                             }
                         }
                     }
+                    // Whole rectangle is tappable, not just the text + radio.
+                    // Without this, empty space between the radio and the
+                    // trailing edge falls through to the parent scroll view.
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -627,11 +717,18 @@ struct FormInputSelectBlock: View {
         let tooltipText = (cfg?["tooltip_text"]?.value as? String)
         let tooltipIcon = (cfg?["tooltip_icon"]?.value as? String) ?? "info.circle"
 
-        VStack(spacing: 8) {
+        // Grid layout: same configurable spacing + height as the stacked variant.
+        // `fieldHeight(block)` respects the console "Height" control the same
+        // way text/date inputs do.
+        let optionSpacing = CGFloat((cfgDouble(cfg?["option_spacing"])) ?? 8)
+        let optionHeight: CGFloat? = (cfgDouble(cfg?["option_height"]) ?? cfgDouble(cfg?["size"])).map { CGFloat($0) }
+            ?? fieldHeight(block)
+
+        VStack(spacing: optionSpacing) {
             // Manual grid — LazyVGrid clips wrapped text (ignores fixedSize for row height).
             let rowCount = (options.count + colCount - 1) / colCount
             ForEach(0..<rowCount, id: \.self) { rowIdx in
-                HStack(spacing: 8) {
+                HStack(spacing: optionSpacing) {
                     ForEach(0..<colCount, id: \.self) { colIdx in
                         let optIdx = rowIdx * colCount + colIdx
                         if optIdx < options.count {
@@ -681,7 +778,7 @@ struct FormInputSelectBlock: View {
                                                 .fixedSize(horizontal: false, vertical: true)
                                         }
                                     }
-                                    .frame(maxWidth: .infinity)
+                                    .frame(maxWidth: .infinity, minHeight: optionHeight)
                                     .padding(10)
 
                                     // Toggle icon badge (top-right)
@@ -718,6 +815,7 @@ struct FormInputSelectBlock: View {
                                             )
                                     }
                                 }
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         } else {

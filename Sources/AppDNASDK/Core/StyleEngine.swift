@@ -409,6 +409,21 @@ enum StyleEngine {
         return UnitPoint(x: 0.5 + dx / 2, y: 0.5 + dy / 2)
     }
 
+    /// SPEC-205: Public helper to render a `GradientConfig` as a SwiftUI
+    /// LinearGradient (radial treated as linear fallback — matches the
+    /// internal BackgroundConfig path). Exposed so per-feature renderers
+    /// (surveys, paywalls) can share the same conversion.
+    public static func linearGradient(from config: GradientConfig) -> LinearGradient {
+        let stops = config.stops ?? []
+        let colors = stops.map { Color(hex: $0.color ?? "#000000") }
+        let angle = config.angle ?? 180
+        return LinearGradient(
+            colors: colors,
+            startPoint: gradientPoint(angle: angle, start: true),
+            endPoint: gradientPoint(angle: angle, start: false)
+        )
+    }
+
     private static func imageFit(_ fit: String?) -> ContentMode {
         switch fit {
         case "contain": return .fit

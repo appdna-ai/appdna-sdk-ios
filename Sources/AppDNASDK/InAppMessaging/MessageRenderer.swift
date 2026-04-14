@@ -2,13 +2,19 @@ import SwiftUI
 
 /// Routes to the appropriate message view based on message_type.
 /// SPEC-088: Interpolates all text fields via TemplateEngine before rendering.
+/// SPEC-205: Resolves dark-mode overrides based on system color scheme
+/// before handing content to sub-views.
 struct MessageRenderer: View {
     let messageId: String
     let config: MessageConfig
     let onCTATap: () -> Void
     let onDismiss: () -> Void
 
+    @SwiftUI.Environment(\.colorScheme) private var colorScheme
+
     /// Interpolated content with template variables resolved (SPEC-088).
+    /// Preserves the `dark` override object so `resolved(for:)` can use
+    /// it downstream.
     private var interpolatedContent: MessageContent {
         let ctx = TemplateEngine.shared.buildContext()
         let e = TemplateEngine.shared
@@ -37,12 +43,15 @@ struct MessageRenderer: View {
             secondary_cta_icon: config.content?.secondary_cta_icon,
             haptic: config.content?.haptic,
             particle_effect: config.content?.particle_effect,
-            blur_backdrop: config.content?.blur_backdrop
+            blur_backdrop: config.content?.blur_backdrop,
+            dark: config.content?.dark
         )
     }
 
     var body: some View {
-        let content = interpolatedContent
+        // SPEC-205: apply dark overrides before rendering so sub-views
+        // see the final resolved colors/images for the current scheme.
+        let content = interpolatedContent.resolved(for: colorScheme)
         switch config.message_type {
         case .banner:
             BannerView(content: content, onCTATap: onCTATap, onDismiss: onDismiss)

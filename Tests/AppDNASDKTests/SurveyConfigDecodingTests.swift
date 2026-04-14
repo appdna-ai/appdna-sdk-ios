@@ -741,13 +741,15 @@ final class SurveyConfigDecodingTests: XCTestCase {
         XCTAssertEqual(appearance.show_progress, true)
         XCTAssertEqual(appearance.corner_radius, 20)
 
-        // Theme
+        // Theme — SPEC-205: legacy flat theme now decodes through `ThemeSet<SurveyTheme>`;
+        // the flat payload is stored as the `light` variant with no `dark`.
         XCTAssertNotNil(appearance.theme)
-        XCTAssertEqual(appearance.theme?.background_color, "#FAFAFA")
-        XCTAssertEqual(appearance.theme?.text_color, "#333333")
-        XCTAssertEqual(appearance.theme?.accent_color, "#FF6600")
-        XCTAssertEqual(appearance.theme?.button_color, "#FF6600")
-        XCTAssertEqual(appearance.theme?.font_family, "Helvetica Neue")
+        XCTAssertEqual(appearance.theme?.light.background_color, "#FAFAFA")
+        XCTAssertEqual(appearance.theme?.light.text_color, "#333333")
+        XCTAssertEqual(appearance.theme?.light.accent_color, "#FF6600")
+        XCTAssertEqual(appearance.theme?.light.button_color, "#FF6600")
+        XCTAssertEqual(appearance.theme?.light.font_family, "Helvetica Neue")
+        XCTAssertNil(appearance.theme?.dark)
 
         // SPEC-084: Style engine
         XCTAssertNotNil(appearance.question_text_style)

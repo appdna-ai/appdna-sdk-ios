@@ -13,8 +13,18 @@ final class RemoteConfigManager {
     /// Shared JSON decoder for all config parsing.
     private static let snakeCaseDecoder = JSONDecoder()
 
-    /// Recursively sanitize Firestore dictionaries: coerce string "true"/"false" → Bool,
-    /// string numbers → NSNumber so JSONDecoder doesn't fail on type mismatches.
+    /// Recursively sanitize Firestore dictionaries: coerce string "true"/"false"
+    /// → Bool so JSONDecoder doesn't fail on type mismatches for Bool fields.
+    ///
+    /// Numeric-string coercion was REMOVED — the old implementation
+    /// turned any numeric-looking String value into an Int/Double,
+    /// which broke user-authored text fields that happened to be
+    /// all-digit (e.g. a survey question text like "2222222" became
+    /// Int 2222222 and then failed to decode as `String?`). Firestore
+    /// already returns correctly-typed numbers for the fields that
+    /// need them (delay_seconds, max_displays, scale, etc.), so we
+    /// trust the source types and only fix the one known ambiguity
+    /// (stringified booleans).
     private static func sanitize(_ value: Any) -> Any {
         if let dict = value as? [String: Any] {
             return dict.mapValues { sanitize($0) }
@@ -26,12 +36,6 @@ final class RemoteConfigManager {
             let lower = str.lowercased()
             if lower == "true" { return true }
             if lower == "false" { return false }
-            // Coerce numeric strings (but not hex colors or UUIDs)
-            if !str.hasPrefix("#"), !str.contains("-"),
-               str.count < 20, let num = Double(str) {
-                if num == num.rounded() && !str.contains(".") { return Int(num) }
-                return num
-            }
         }
         return value
     }

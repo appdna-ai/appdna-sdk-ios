@@ -61,7 +61,7 @@ struct FullscreenView: View {
                 // Title — SPEC-084: apply text_color
                 if let title = content.title {
                     Text(title)
-                        .font(.largeTitle.bold())
+                        .font(content.titleFont(default: .largeTitle.bold(), defaultSize: 34))
                         .foregroundColor(content.text_color.map { Color(hex: $0) } ?? .primary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
@@ -70,7 +70,7 @@ struct FullscreenView: View {
                 // Body — SPEC-084: apply text_color
                 if let body = content.body {
                     Text(body)
-                        .font(.body)
+                        .font(content.bodyFont(default: .body, defaultSize: 17))
                         .foregroundColor(content.text_color.map { Color(hex: $0).opacity(0.7) } ?? .secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)

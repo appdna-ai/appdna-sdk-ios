@@ -73,7 +73,7 @@ struct ModalView: View {
                 // Title — SPEC-084: apply text_color
                 if let title = content.title {
                     Text(title)
-                        .font(.title3.bold())
+                        .font(content.titleFont(default: .title3.bold(), defaultSize: 20))
                         .foregroundColor(content.text_color.map { Color(hex: $0) } ?? .primary)
                         .multilineTextAlignment(.center)
                 }
@@ -81,7 +81,7 @@ struct ModalView: View {
                 // Body — SPEC-084: apply text_color
                 if let body = content.body {
                     Text(body)
-                        .font(.body)
+                        .font(content.bodyFont(default: .body, defaultSize: 17))
                         .foregroundColor(content.text_color.map { Color(hex: $0).opacity(0.7) } ?? .secondary)
                         .multilineTextAlignment(.center)
                 }

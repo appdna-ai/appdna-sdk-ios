@@ -5,6 +5,62 @@ public struct IconReference: Codable {
     public let name: String?
     public let color: String?
     public let size: Double?
+
+    public init(library: String? = nil, name: String? = nil, color: String? = nil, size: Double? = nil) {
+        self.library = library
+        self.name = name
+        self.color = color
+        self.size = size
+    }
+
+    // SPEC-205: Zod IconRefSchema accepts either a typed object OR a bare
+    // short-form string (SF Symbol name / emoji). Mirror that here so bare
+    // strings from the console editor decode cleanly. An emoji is detected
+    // by Unicode properties; anything else is treated as an SF Symbol.
+    private enum CodingKeys: String, CodingKey {
+        case library, name, color, size
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let single = try? decoder.singleValueContainer(),
+           let bare = try? single.decode(String.self) {
+            let first = bare.unicodeScalars.first
+            let isEmoji = first?.properties.isEmojiPresentation == true
+                || first?.properties.generalCategory == .otherSymbol
+            self.library = isEmoji ? "emoji" : "sf-symbols"
+            self.name = bare
+            self.color = nil
+            self.size = nil
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.library = try container.decodeIfPresent(String.self, forKey: .library)
+        self.name = try container.decodeIfPresent(String.self, forKey: .name)
+        self.color = try container.decodeIfPresent(String.self, forKey: .color)
+        self.size = try container.decodeIfPresent(Double.self, forKey: .size)
+    }
+
+    /// SPEC-205: Symmetric encode. Bare string is only emitted when we have
+    /// BOTH a recognised short-form library and a name — any other shape
+    /// (nil library, a custom library like "material", extra styling like
+    /// color/size) encodes as a full object so re-decode preserves the
+    /// original library value exactly.
+    public func encode(to encoder: Encoder) throws {
+        let isShortForm = color == nil
+            && size == nil
+            && (library == "sf-symbols" || library == "emoji")
+            && (name?.isEmpty == false)
+        if isShortForm, let name = name {
+            var single = encoder.singleValueContainer()
+            try single.encode(name)
+            return
+        }
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(library, forKey: .library)
+        try container.encodeIfPresent(name, forKey: .name)
+        try container.encodeIfPresent(color, forKey: .color)
+        try container.encodeIfPresent(size, forKey: .size)
+    }
 }
 
 /// 3-tier icon resolution: SF Symbols -> Lucide mapping -> emoji fallback
