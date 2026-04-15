@@ -2199,47 +2199,79 @@ struct GridPlansView: View {
     var planSelectionAnimation: String? = nil
 
     @State private var rowHeight: CGFloat = 0
+    @State private var availableWidth: CGFloat = 0
+
+    /// Below this width a card can't fit price + period + badge without
+    /// wrapping or truncating, so we fall back to a vertical stack instead
+    /// of rendering unreadable mini cards. Matches HorizontalPlansView.
+    private var minCardWidth: CGFloat { 140 }
 
     var body: some View {
-        GeometryReader { geo in
-            let count = CGFloat(max(plans.count, 1))
-            let totalGap = gap * max(count - 1, 0)
-            let cardWidth = max((geo.size.width - totalGap) / count, 0)
+        let count = CGFloat(max(plans.count, 1))
+        let totalGap = gap * max(count - 1, 0)
+        let cardWidth = max((availableWidth - totalGap) / count, 0)
+        let useHorizontal = availableWidth == 0 || cardWidth >= minCardWidth
 
-            HStack(alignment: .top, spacing: gap) {
-                ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                    PlanCard(
-                        plan: plan,
-                        isSelected: selectedPlanId == plan.id,
-                        onSelect: { selectPlan(plan.id) },
-                        planIndex: index,
-                        loc: loc,
-                        sectionStyle: sectionStyle,
-                        cardStyle: cardStyle
-                    )
-                    // Strip "scale" because it visually extends ~1.5% beyond
-                    // the cell bounds. glow/border_highlight are cell-safe.
-                    .planSelection(
-                        safeGridAnimation(planSelectionAnimation),
-                        isSelected: selectedPlanId == plan.id
-                    )
-                    .frame(width: cardWidth, alignment: .topLeading)
-                    .background(
-                        GeometryReader { innerGeo in
-                            Color.clear
-                                .preference(key: PlanRowHeightPref.self, value: innerGeo.size.height)
-                        }
-                    )
+        Group {
+            if useHorizontal {
+                HStack(alignment: .top, spacing: gap) {
+                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                        PlanCard(
+                            plan: plan,
+                            isSelected: selectedPlanId == plan.id,
+                            onSelect: { selectPlan(plan.id) },
+                            planIndex: index,
+                            loc: loc,
+                            sectionStyle: sectionStyle,
+                            cardStyle: cardStyle
+                        )
+                        // Strip "scale" because it visually extends ~1.5% beyond
+                        // the cell bounds. glow/border_highlight are cell-safe.
+                        .planSelection(
+                            safeGridAnimation(planSelectionAnimation),
+                            isSelected: selectedPlanId == plan.id
+                        )
+                        .frame(width: cardWidth, alignment: .topLeading)
+                        .background(
+                            GeometryReader { innerGeo in
+                                Color.clear
+                                    .preference(key: PlanRowHeightPref.self, value: innerGeo.size.height)
+                            }
+                        )
+                    }
+                }
+                .frame(height: rowHeight > 0 ? rowHeight : 180)
+                .onPreferenceChange(PlanRowHeightPref.self) { height in
+                    if abs(height - rowHeight) > 0.5 {
+                        rowHeight = height
+                    }
+                }
+            } else {
+                // Screen too narrow for side-by-side — stack vertically so
+                // every plan is fully visible instead of squished.
+                VStack(spacing: gap) {
+                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                        PlanCard(
+                            plan: plan,
+                            isSelected: selectedPlanId == plan.id,
+                            onSelect: { selectPlan(plan.id) },
+                            planIndex: index,
+                            loc: loc,
+                            sectionStyle: sectionStyle,
+                            cardStyle: cardStyle
+                        )
+                        .planSelection(planSelectionAnimation, isSelected: selectedPlanId == plan.id)
+                    }
                 }
             }
-            .frame(width: geo.size.width, alignment: .leading)
         }
-        .frame(height: rowHeight > 0 ? rowHeight : 180)
-        .onPreferenceChange(PlanRowHeightPref.self) { height in
-            if abs(height - rowHeight) > 0.5 {
-                rowHeight = height
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { availableWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { availableWidth = $0 }
             }
-        }
+        )
     }
 }
 
@@ -2253,26 +2285,21 @@ private func safeGridAnimation(_ animation: String?) -> String? {
 
 // MARK: - HorizontalPlansView
 
-/// Side-by-side / carousel plan layout used by the `horizontal_scroll` and
-/// `carousel` display styles.
+/// Side-by-side plan layout used by the `horizontal_scroll` and `carousel`
+/// display styles.
 ///
 /// Dynamically picks between two modes based on how much each card would
 /// have to shrink to fit the available width:
 ///
-///   1. **Grid mode** (compressed width ≥ minCardWidth): equal-width cards
-///      filling the full available width. Used when the compressed width is
-///      still readable (≥ 140pt). Works for 2–3 plan Monthly/Annual layouts
-///      on any device, and for any number of plans on iPad where there's
-///      plenty of room.
+///   1. **Side-by-side** (compressed width ≥ minCardWidth): equal-width
+///      cards filling the full available width. Used when the compressed
+///      width is still readable (≥ 140pt). Works for 2–3 plan Monthly/
+///      Annual layouts on any device, and for any number of plans on iPad.
 ///
-///   2. **Carousel mode** (compressed width < minCardWidth): horizontally-
-///      scrollable row with each card at natural width (200pt). Used when
-///      there are so many plans that shrinking them all to fit would make
-///      them unreadable (typically 4+ plans on iPhone).
-///
-/// Height is measured from the tallest card via PreferenceKey so the
-/// GeometryReader container gets an intrinsic height instead of the previous
-/// hardcoded `.frame(height: 140)` which clipped taller cards.
+///   2. **Stacked fallback** (compressed width < minCardWidth): plans stack
+///      vertically so every option is fully visible. Replaces the previous
+///      horizontal-scroll behavior which hid plans behind a swipe gesture
+///      on small screens (iPhone mini / SE) — users never discovered them.
 struct HorizontalPlansView: View {
     let plans: [PaywallPlan]
     let gap: CGFloat
@@ -2284,22 +2311,21 @@ struct HorizontalPlansView: View {
     let planSelectionAnimation: String?
 
     @State private var rowHeight: CGFloat = 0
+    @State private var availableWidth: CGFloat = 0
 
-    /// Minimum readable card width. Below this, we fall back to carousel
-    /// mode so plans aren't squished into an unreadable grid.
+    /// Minimum readable card width. Below this we fall back to a vertical
+    /// stack instead of a horizontal scroll — hidden content is a worse
+    /// failure mode than losing the side-by-side affordance.
     private var minCardWidth: CGFloat { 140 }
-    /// Natural card width used in carousel mode.
-    private var naturalCardWidth: CGFloat { 200 }
 
     var body: some View {
-        GeometryReader { geo in
-            let count = CGFloat(max(plans.count, 1))
-            let totalGap = gap * max(count - 1, 0)
-            let compressedWidth = max((geo.size.width - totalGap) / count, 0)
-            let useGrid = compressedWidth >= minCardWidth
+        let count = CGFloat(max(plans.count, 1))
+        let totalGap = gap * max(count - 1, 0)
+        let compressedWidth = max((availableWidth - totalGap) / count, 0)
+        let useHorizontal = availableWidth == 0 || compressedWidth >= minCardWidth
 
-            if useGrid {
-                // Grid mode — equal-width cards filling available space.
+        Group {
+            if useHorizontal {
                 HStack(alignment: .top, spacing: gap) {
                     ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
                         PlanCard(
@@ -2311,9 +2337,6 @@ struct HorizontalPlansView: View {
                             sectionStyle: sectionStyle,
                             cardStyle: cardStyle
                         )
-                        // Strip `scale` animation — it compositing-overflows
-                        // cell bounds in a tightly-packed grid. glow and
-                        // border_highlight are cell-safe and preserved.
                         .planSelection(
                             safeGridAnimation(planSelectionAnimation),
                             isSelected: selectedPlanId == plan.id
@@ -2327,41 +2350,36 @@ struct HorizontalPlansView: View {
                         )
                     }
                 }
-                .frame(width: geo.size.width, alignment: .leading)
-            } else {
-                // Carousel mode — scrollable row at natural card width.
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: gap) {
-                        ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                            PlanCard(
-                                plan: plan,
-                                isSelected: selectedPlanId == plan.id,
-                                onSelect: { selectPlan(plan.id) },
-                                planIndex: index,
-                                loc: loc,
-                                sectionStyle: sectionStyle,
-                                cardStyle: cardStyle
-                            )
-                            .planSelection(planSelectionAnimation, isSelected: selectedPlanId == plan.id)
-                            .frame(width: naturalCardWidth, alignment: .topLeading)
-                            .background(
-                                GeometryReader { innerGeo in
-                                    Color.clear
-                                        .preference(key: PlanRowHeightPref.self, value: innerGeo.size.height)
-                                }
-                            )
-                        }
+                .frame(height: rowHeight > 0 ? rowHeight : 180)
+                .onPreferenceChange(PlanRowHeightPref.self) { height in
+                    if abs(height - rowHeight) > 0.5 {
+                        rowHeight = height
                     }
-                    .padding(.horizontal, 4)
+                }
+            } else {
+                VStack(spacing: gap) {
+                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                        PlanCard(
+                            plan: plan,
+                            isSelected: selectedPlanId == plan.id,
+                            onSelect: { selectPlan(plan.id) },
+                            planIndex: index,
+                            loc: loc,
+                            sectionStyle: sectionStyle,
+                            cardStyle: cardStyle
+                        )
+                        .planSelection(planSelectionAnimation, isSelected: selectedPlanId == plan.id)
+                    }
                 }
             }
         }
-        .frame(height: rowHeight > 0 ? rowHeight : 180)
-        .onPreferenceChange(PlanRowHeightPref.self) { height in
-            if abs(height - rowHeight) > 0.5 {
-                rowHeight = height
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { availableWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { availableWidth = $0 }
             }
-        }
+        )
     }
 }
 
