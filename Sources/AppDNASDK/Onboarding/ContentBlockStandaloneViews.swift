@@ -1384,32 +1384,9 @@ struct DateWheelPickerBlockView: View {
 
 // MARK: - Wheel Picker Block View (SPEC-089d AC-013)
 
-/// Conditional wheel-picker snap modifiers. `.scrollTargetLayout()` +
-/// `.scrollTargetBehavior(.viewAligned)` are iOS 17+ only; on iOS 16 we
-/// silently no-op (the live-highlight-during-drag still works there via
-/// the preference-key offset tracking).
-private extension View {
-    @ViewBuilder
-    func wheelSnapTargetLayoutIfAvailable() -> some View {
-        if #available(iOS 17.0, *) {
-            self.scrollTargetLayout()
-        } else {
-            self
-        }
-    }
-    @ViewBuilder
-    func wheelSnapBehaviorIfAvailable() -> some View {
-        if #available(iOS 17.0, *) {
-            self.scrollTargetBehavior(.viewAligned)
-        } else {
-            self
-        }
-    }
-}
-
 /// Numeric wheel picker for single-value selection.
 /// Preference key that reports scroll offset of the horizontal wheel
-/// picker so selectedIndex can track the centered item live.
+/// picker so selectedIndex can track the centered item live (iOS 16 path).
 private struct WheelScrollOffsetKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -1429,6 +1406,10 @@ struct WheelPickerBlockView: View {
     /// Required-field validation keys off this so a pristine default value
     /// can't be silently submitted without the user confirming a choice.
     @State private var hasUserInteracted: Bool = false
+    /// iOS 17+ scroll-position binding. `.scrollPosition(id:)` drives
+    /// center-snap + selection tracking in one step, so we don't need
+    /// PreferenceKey/ScrollViewReader plumbing on modern OS.
+    @State private var scrollPosIndex: Int? = nil
 
     /// Fixed width of each horizontal item — drives the scroll-offset-to-
     /// index math so the centered item stays highlighted during drag.
@@ -1466,7 +1447,11 @@ struct WheelPickerBlockView: View {
             }
 
             if isHorizontal {
-                horizontalWheel(values: values, initialIndex: initialIndex, unitStr: unitStr, unitPos: unitPos, highlightCol: highlightCol)
+                if #available(iOS 17.0, *) {
+                    modernHorizontalWheel(values: values, initialIndex: initialIndex, unitStr: unitStr, unitPos: unitPos, highlightCol: highlightCol)
+                } else {
+                    legacyHorizontalWheel(values: values, initialIndex: initialIndex, unitStr: unitStr, unitPos: unitPos, highlightCol: highlightCol)
+                }
             } else {
                 // Vertical wheel picker (default)
                 Picker("", selection: $selectedIndex) {
@@ -1510,35 +1495,82 @@ struct WheelPickerBlockView: View {
         }
     }
 
-    /// Horizontal picker with live selection tracking during scroll. The
-    /// ScrollView reports its content offset via a preference key; we
-    /// translate offset → centered index so the highlighted item follows
-    /// the user's drag in real time (previously only a tap could change
-    /// the selection, which broke the native wheel-picker feel).
+    /// iOS 17+ horizontal wheel — uses `.scrollPosition(id:)` +
+    /// `.scrollTargetBehavior(.viewAligned)` + `.contentMargins(.scrollContent)`
+    /// for native carousel-style behavior: center snap on release,
+    /// continuous live highlight as the wheel rolls, no PreferenceKey
+    /// plumbing. Uses `LazyHStack` so only the visible window renders
+    /// (94 items for age 6-99 would otherwise all re-layout on every
+    /// selection change, which caused visible jitter on older code).
+    @available(iOS 17.0, *)
     @ViewBuilder
-    private func horizontalWheel(values: [Double], initialIndex: Int, unitStr: String, unitPos: String, highlightCol: Color) -> some View {
+    private func modernHorizontalWheel(values: [Double], initialIndex: Int, unitStr: String, unitPos: String, highlightCol: Color) -> some View {
+        let itemWidth = horizontalItemWidth
+        let sidePad = UIScreen.main.bounds.width / 2 - itemWidth / 2
+
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 0) {
+                ForEach(0..<values.count, id: \.self) { idx in
+                    let val = values[idx]
+                    let formatted = val == val.rounded() ? String(Int(val)) : String(format: "%.1f", val)
+                    let display = unitPos == "before" ? "\(unitStr)\(formatted)" : "\(formatted)\(unitStr)"
+                    Text(display)
+                        .font(.system(size: selectedIndex == idx ? 28 : 18, weight: selectedIndex == idx ? .bold : .regular))
+                        .foregroundColor(selectedIndex == idx ? highlightCol : .gray)
+                        .frame(width: itemWidth, height: 50)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            hasUserInteracted = true
+                            withAnimation(.easeOut(duration: 0.18)) { scrollPosIndex = idx }
+                        }
+                        .id(idx)
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .contentMargins(.horizontal, sidePad, for: .scrollContent)
+        .scrollTargetBehavior(.viewAligned)
+        .scrollPosition(id: $scrollPosIndex, anchor: .center)
+        .frame(height: 60)
+        .onAppear {
+            if scrollPosIndex == nil {
+                scrollPosIndex = initialIndex
+            }
+        }
+        .onChange(of: scrollPosIndex) { _, new in
+            guard let new = new, new != selectedIndex else { return }
+            hasUserInteracted = true
+            selectedIndex = new
+        }
+    }
+
+    /// iOS 16 fallback horizontal wheel — PreferenceKey-based offset
+    /// tracking. Less smooth than iOS 17 (no native snap), but still
+    /// tracks the centered item live during drag so the highlight
+    /// doesn't go blank mid-scroll.
+    @ViewBuilder
+    private func legacyHorizontalWheel(values: [Double], initialIndex: Int, unitStr: String, unitPos: String, highlightCol: Color) -> some View {
         let itemWidth = horizontalItemWidth
         let sidePad = UIScreen.main.bounds.width / 2 - itemWidth / 2
 
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
+                LazyHStack(spacing: 0) {
                     ForEach(0..<values.count, id: \.self) { idx in
                         let val = values[idx]
                         let formatted = val == val.rounded() ? String(Int(val)) : String(format: "%.1f", val)
                         let display = unitPos == "before" ? "\(unitStr)\(formatted)" : "\(formatted)\(unitStr)"
-                        Button {
-                            hasUserInteracted = true
-                            withAnimation { selectedIndex = idx }
-                            withAnimation { proxy.scrollTo(idx, anchor: .center) }
-                        } label: {
-                            Text(display)
-                                .font(.system(size: selectedIndex == idx ? 28 : 18, weight: selectedIndex == idx ? .bold : .regular))
-                                .foregroundColor(selectedIndex == idx ? highlightCol : .gray)
-                                .frame(width: itemWidth, height: 50)
-                        }
-                        .buttonStyle(.plain)
-                        .id(idx)
+                        Text(display)
+                            .font(.system(size: selectedIndex == idx ? 28 : 18, weight: selectedIndex == idx ? .bold : .regular))
+                            .foregroundColor(selectedIndex == idx ? highlightCol : .gray)
+                            .frame(width: itemWidth, height: 50)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                hasUserInteracted = true
+                                withAnimation { selectedIndex = idx }
+                                withAnimation { proxy.scrollTo(idx, anchor: .center) }
+                            }
+                            .id(idx)
                     }
                 }
                 .padding(.horizontal, sidePad)
@@ -1550,17 +1582,9 @@ struct WheelPickerBlockView: View {
                         )
                     }
                 )
-                // iOS 17+: mark HStack children as snap targets so the wheel
-                // locks onto the nearest number when the user lifts their finger,
-                // matching native UIPickerView feel. No-op on iOS 16 (highlight
-                // still tracks scroll via the preference key above).
-                .wheelSnapTargetLayoutIfAvailable()
             }
             .coordinateSpace(name: "appdnaWheelScroll")
-            .wheelSnapBehaviorIfAvailable()
             .onPreferenceChange(WheelScrollOffsetKey.self) { offset in
-                // Centered index = round(scrollOffset / itemWidth). Negative
-                // offsets (rubber-band at the left edge) clamp to 0.
                 let raw = Int((offset / itemWidth).rounded())
                 let centered = max(0, min(values.count - 1, raw))
                 if centered != selectedIndex {
