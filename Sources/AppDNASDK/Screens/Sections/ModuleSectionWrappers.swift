@@ -1,76 +1,41 @@
 import SwiftUI
 
-// MARK: - Paywall Section Wrappers (24 types)
-// These wrap existing PaywallRenderer section views as SDUI section registry entries.
+// MARK: - Module section wrappers
+//
+// Registers renderers for section types that belong to specific product
+// modules (paywalls, surveys, in-app messages, onboarding). Each wrapper
+// delegates to a *Impl file with the real rendering logic — kept separate
+// so the 24 paywall / 6 survey / 3 message / 3 onboarding branches don't
+// live in a single mega-switch.
+//
+// Sprint C6 (iOS SDK v1.0.52): The paywall, survey, and message wrappers
+// used to render a single `Text(section.type)` placeholder. They now
+// delegate to real content renderers that reuse the existing module
+// components (HeaderSection, BannerView, NPSQuestionView, etc.).
 
 internal enum PaywallSectionWrapper: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
-        // Paywall sections delegate to the existing paywall section renderer
-        // The section.data contains PaywallSectionData-compatible JSON
-        return AnyView(
-            VStack(spacing: 8) {
-                Text("[\(section.type ?? "unknown")]")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                // In production, this would call the actual PaywallRenderer section view
-                // For now, render a placeholder that shows the section type
-                if let title = section.data?["title"]?.value as? String {
-                    Text(title).font(.headline)
-                }
-                if let subtitle = section.data?["subtitle"]?.value as? String {
-                    Text(subtitle).font(.subheadline).foregroundColor(.secondary)
-                }
-            }
-            .padding()
-        )
+        AnyView(PaywallSectionWrapperImpl.render(section: section, context: context))
     }
 }
-
-// MARK: - Survey Section Wrappers (6 types)
 
 internal enum SurveySectionWrapper: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
-        return AnyView(
-            VStack(spacing: 8) {
-                if let questionText = section.data?["text"]?.value as? String {
-                    Text(questionText).font(.body)
-                }
-                // Survey sections capture responses into context.responses
-                // In production, this would render the actual survey question UI
-                Text("[\(section.type ?? "unknown") section]")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding()
-        )
+        AnyView(SurveySectionWrapperImpl.render(section: section, context: context))
     }
 }
-
-// MARK: - Message Section Wrappers (3 types)
 
 internal enum MessageSectionWrapper: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
-        return AnyView(
-            VStack(spacing: 8) {
-                if let title = section.data?["title"]?.value as? String {
-                    Text(title).font(.headline)
-                }
-                if let body = section.data?["body"]?.value as? String {
-                    Text(body).font(.body)
-                }
-            }
-            .padding()
-        )
+        AnyView(MessageSectionWrapperImpl.render(section: section, context: context))
     }
 }
 
-// MARK: - Onboarding Section Wrappers (3 types)
-
+// Onboarding section wrapper — unchanged.
 internal enum OnboardingSectionWrapper: SectionRenderer {
     static func render(section: ScreenSection, context: SectionContext) -> AnyView {
         switch section.type ?? "unknown" {
         case "onboarding_step":
-            // Render content blocks from step config
             let blocks = section.data?["content_blocks"]?.value
             if blocks != nil {
                 return ContentBlocksSectionRenderer.render(
@@ -131,11 +96,8 @@ internal enum OnboardingSectionWrapper: SectionRenderer {
     }
 }
 
-// MARK: - Registration Extension
-
 extension SectionRegistry {
     func registerModuleSections() {
-        // Paywall sections (24 types)
         let paywallTypes = [
             "paywall_header", "paywall_features", "paywall_plans", "paywall_cta",
             "paywall_social_proof", "paywall_guarantee", "paywall_testimonial",
@@ -150,7 +112,6 @@ extension SectionRegistry {
             register(type, renderer: PaywallSectionWrapper.self)
         }
 
-        // Survey sections (6 types)
         let surveyTypes = [
             "survey_question", "survey_nps", "survey_csat",
             "survey_rating", "survey_free_text", "survey_thank_you",
@@ -159,13 +120,11 @@ extension SectionRegistry {
             register(type, renderer: SurveySectionWrapper.self)
         }
 
-        // Message sections (3 types)
         let messageTypes = ["message_banner", "message_modal", "message_content"]
         for type in messageTypes {
             register(type, renderer: MessageSectionWrapper.self)
         }
 
-        // Onboarding sections (3 types)
         let onboardingTypes = ["onboarding_step", "progress_indicator", "navigation_controls"]
         for type in onboardingTypes {
             register(type, renderer: OnboardingSectionWrapper.self)
