@@ -1384,6 +1384,29 @@ struct DateWheelPickerBlockView: View {
 
 // MARK: - Wheel Picker Block View (SPEC-089d AC-013)
 
+/// Conditional wheel-picker snap modifiers. `.scrollTargetLayout()` +
+/// `.scrollTargetBehavior(.viewAligned)` are iOS 17+ only; on iOS 16 we
+/// silently no-op (the live-highlight-during-drag still works there via
+/// the preference-key offset tracking).
+private extension View {
+    @ViewBuilder
+    func wheelSnapTargetLayoutIfAvailable() -> some View {
+        if #available(iOS 17.0, *) {
+            self.scrollTargetLayout()
+        } else {
+            self
+        }
+    }
+    @ViewBuilder
+    func wheelSnapBehaviorIfAvailable() -> some View {
+        if #available(iOS 17.0, *) {
+            self.scrollTargetBehavior(.viewAligned)
+        } else {
+            self
+        }
+    }
+}
+
 /// Numeric wheel picker for single-value selection.
 /// Preference key that reports scroll offset of the horizontal wheel
 /// picker so selectedIndex can track the centered item live.
@@ -1527,8 +1550,14 @@ struct WheelPickerBlockView: View {
                         )
                     }
                 )
+                // iOS 17+: mark HStack children as snap targets so the wheel
+                // locks onto the nearest number when the user lifts their finger,
+                // matching native UIPickerView feel. No-op on iOS 16 (highlight
+                // still tracks scroll via the preference key above).
+                .wheelSnapTargetLayoutIfAvailable()
             }
             .coordinateSpace(name: "appdnaWheelScroll")
+            .wheelSnapBehaviorIfAvailable()
             .onPreferenceChange(WheelScrollOffsetKey.self) { offset in
                 // Centered index = round(scrollOffset / itemWidth). Negative
                 // offsets (rubber-band at the left edge) clamp to 0.
