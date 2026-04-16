@@ -755,6 +755,33 @@ struct FormInputSelectBlock: View {
         let optionHeight: CGFloat? = (cfgDouble(cfg?["option_height"]) ?? cfgDouble(cfg?["size"])).map { CGFloat($0) }
             ?? fieldHeight(block)
 
+        // Universal cell content alignment — icon + title can be laid out
+        // leading (Figma roadmap card pattern), trailing, or centered (default).
+        // Writes through field_config.grid_cell_alignment so it's editable
+        // from the console without touching per-option fields.
+        let cellAlignmentKey = (cfg?["grid_cell_alignment"]?.value as? String) ?? "center"
+        let cellHAlign: HorizontalAlignment = {
+            switch cellAlignmentKey {
+            case "leading", "left": return .leading
+            case "trailing", "right": return .trailing
+            default: return .center
+            }
+        }()
+        let cellFrameAlign: Alignment = {
+            switch cellAlignmentKey {
+            case "leading", "left": return .leading
+            case "trailing", "right": return .trailing
+            default: return .center
+            }
+        }()
+        let cellTextAlign: TextAlignment = {
+            switch cellAlignmentKey {
+            case "leading", "left": return .leading
+            case "trailing", "right": return .trailing
+            default: return .center
+            }
+        }()
+
         VStack(spacing: optionSpacing) {
             // Manual grid — LazyVGrid clips wrapped text (ignores fixedSize for row height).
             let rowCount = (options.count + colCount - 1) / colCount
@@ -777,7 +804,7 @@ struct FormInputSelectBlock: View {
                                 toggleSelection(option: option, fieldId: fieldId)
                             } label: {
                                 ZStack(alignment: .topTrailing) {
-                                    VStack(spacing: 6) {
+                                    VStack(alignment: cellHAlign, spacing: 6) {
                                         // Image with optional overlay
                                         if let imgUrl = option.image_url, let url = URL(string: imgUrl) {
                                             imageWithOverlay(url: url, option: option, isSelected: isSelected, size: 40)
@@ -799,17 +826,17 @@ struct FormInputSelectBlock: View {
                                         Text(option.label ?? "")
                                             .font(.subheadline)
                                             .foregroundColor(isSelected ? optSelectedText : textCol)
-                                            .multilineTextAlignment(.center)
+                                            .multilineTextAlignment(cellTextAlign)
                                             .fixedSize(horizontal: false, vertical: true)
                                         if let sub = option.subtitle, !sub.isEmpty {
                                             Text(sub)
                                                 .font(.caption)
                                                 .foregroundColor(textCol.opacity(0.65))
-                                                .multilineTextAlignment(.center)
+                                                .multilineTextAlignment(cellTextAlign)
                                                 .fixedSize(horizontal: false, vertical: true)
                                         }
                                     }
-                                    .frame(maxWidth: .infinity, minHeight: optionHeight)
+                                    .frame(maxWidth: .infinity, minHeight: optionHeight, alignment: cellFrameAlign)
                                     .padding(10)
 
                                     // Toggle icon badge (top-right)
