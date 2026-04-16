@@ -1410,6 +1410,11 @@ struct WheelPickerBlockView: View {
     /// center-snap + selection tracking in one step, so we don't need
     /// PreferenceKey/ScrollViewReader plumbing on modern OS.
     @State private var scrollPosIndex: Int? = nil
+    /// Haptic generator for horizontal-mode selection ticks — matches the
+    /// native UIPickerView feel. Vertical mode uses SwiftUI's Picker(.wheel)
+    /// which already emits selection haptics automatically, so we skip it
+    /// there to avoid double-firing.
+    @State private var selectionHaptic = UISelectionFeedbackGenerator()
 
     /// Fixed width of each horizontal item — drives the scroll-offset-to-
     /// index math so the centered item stays highlighted during drag.
@@ -1468,6 +1473,10 @@ struct WheelPickerBlockView: View {
             }
         }
         .onAppear {
+            // Pre-warm the haptic engine so the first tick isn't delayed.
+            // UISelectionFeedbackGenerator caches its internal state between
+            // fires; .prepare() keeps it warm for low-latency ticks.
+            selectionHaptic.prepare()
             // Restore prior selection on re-entry; fall back to the default
             // visually but **only auto-persist for non-required fields** so
             // required-field validation can force the user to actually spin
@@ -1491,6 +1500,13 @@ struct WheelPickerBlockView: View {
         .onChange(of: selectedIndex) { _ in
             if hasUserInteracted {
                 persistValue(values: values)
+                // Horizontal-only haptic tick. Vertical Picker(.wheel) emits
+                // its own haptic natively; doubling would feel off.
+                let isHorizontal = block.wheel_orientation == "horizontal" || block.orientation == "horizontal"
+                if isHorizontal {
+                    selectionHaptic.selectionChanged()
+                    selectionHaptic.prepare()
+                }
             }
         }
     }
