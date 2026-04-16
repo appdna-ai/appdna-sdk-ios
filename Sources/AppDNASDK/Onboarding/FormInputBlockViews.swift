@@ -536,8 +536,13 @@ struct FormInputSelectBlock: View {
                 let optUnselectedBg = option.bg_color.map { Color(hex: $0) } ?? optionBg
                 let optSelectedBg = option.selected_bg_color.map { Color(hex: $0) } ?? selectedBgCol
                 let optSelectedText = option.selected_text_color.map { Color(hex: $0) } ?? selectedTextCol
-                let optTitleColor: Color = option.title_color.map { Color(hex: $0) }
-                    ?? (isSelected ? optSelectedText : textCol)
+                // Selected state always wins so `selected_text_color` applies
+                // even when `title_color` is also set. Previously `title_color`
+                // was resolved statically, which silently swallowed the selected
+                // color and left white-on-white / black-on-black after tap.
+                let optTitleColor: Color = isSelected
+                    ? optSelectedText
+                    : (option.title_color.map { Color(hex: $0) } ?? textCol)
                 let optSubtitleColor: Color = option.subtitle_color.map { Color(hex: $0) }
                     ?? defaultSubtitleColor
                 let optTitleSize: CGFloat = CGFloat(option.title_font_size ?? defaultTitleSize)

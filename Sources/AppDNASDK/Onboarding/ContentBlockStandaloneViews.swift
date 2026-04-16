@@ -1385,6 +1385,15 @@ struct DateWheelPickerBlockView: View {
 // MARK: - Wheel Picker Block View (SPEC-089d AC-013)
 
 /// Numeric wheel picker for single-value selection.
+/// Preference key that reports scroll offset of the horizontal wheel
+/// picker so selectedIndex can track the centered item live.
+private struct WheelScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct WheelPickerBlockView: View {
     let block: ContentBlock
     /// SPEC-082 follow-up: previously this view had no binding to the
@@ -1393,6 +1402,14 @@ struct WheelPickerBlockView: View {
     @Binding var inputValues: [String: Any]
 
     @State private var selectedIndex: Int = 0
+    /// True once the user has either tapped an item or scrolled the wheel.
+    /// Required-field validation keys off this so a pristine default value
+    /// can't be silently submitted without the user confirming a choice.
+    @State private var hasUserInteracted: Bool = false
+
+    /// Fixed width of each horizontal item — drives the scroll-offset-to-
+    /// index math so the centered item stays highlighted during drag.
+    private let horizontalItemWidth: CGFloat = 60
 
     var body: some View {
         let minVal = block.min_value ?? 0
@@ -1426,33 +1443,7 @@ struct WheelPickerBlockView: View {
             }
 
             if isHorizontal {
-                // Horizontal snap scroll picker
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 0) {
-                            ForEach(0..<values.count, id: \.self) { idx in
-                                let val = values[idx]
-                                let formatted = val == val.rounded() ? String(Int(val)) : String(format: "%.1f", val)
-                                let display = unitPos == "before" ? "\(unitStr)\(formatted)" : "\(formatted)\(unitStr)"
-                                Button {
-                                    withAnimation { selectedIndex = idx }
-                                } label: {
-                                    Text(display)
-                                        .font(.system(size: selectedIndex == idx ? 28 : 18, weight: selectedIndex == idx ? .bold : .regular))
-                                        .foregroundColor(selectedIndex == idx ? highlightCol : .gray)
-                                        .frame(width: 60, height: 50)
-                                }
-                                .id(idx)
-                            }
-                        }
-                        .padding(.horizontal, UIScreen.main.bounds.width / 2 - 30)
-                    }
-                    .onAppear { proxy.scrollTo(initialIndex, anchor: .center) }
-                    .onChange(of: selectedIndex) { idx in
-                        withAnimation { proxy.scrollTo(idx, anchor: .center) }
-                    }
-                }
-                .frame(height: 60)
+                horizontalWheel(values: values, initialIndex: initialIndex, unitStr: unitStr, unitPos: unitPos, highlightCol: highlightCol)
             } else {
                 // Vertical wheel picker (default)
                 Picker("", selection: $selectedIndex) {
@@ -1469,32 +1460,94 @@ struct WheelPickerBlockView: View {
             }
         }
         .onAppear {
-            // Restore prior selection on re-entry (back navigation), then
-            // fall back to the configured default. Either way persist
-            // immediately so reading `responses[fieldId]` returns the
-            // visible value even if the user never spins the wheel.
+            // Restore prior selection on re-entry; fall back to the default
+            // visually but **only auto-persist for non-required fields** so
+            // required-field validation can force the user to actually spin
+            // or tap before Continue unlocks.
             let fieldId = block.field_id ?? block.id
             if let saved = inputValues[fieldId] as? Double,
                let savedIdx = values.firstIndex(of: saved) {
                 selectedIndex = savedIdx
+                hasUserInteracted = true
             } else if let savedInt = inputValues[fieldId] as? Int,
                       let savedIdx = values.firstIndex(of: Double(savedInt)) {
                 selectedIndex = savedIdx
+                hasUserInteracted = true
             } else {
                 selectedIndex = initialIndex
+                if block.field_required != true {
+                    persistValue(values: values)
+                }
             }
-            persistValue(values: values)
         }
         .onChange(of: selectedIndex) { _ in
-            persistValue(values: values)
+            if hasUserInteracted {
+                persistValue(values: values)
+            }
         }
     }
 
+    /// Horizontal picker with live selection tracking during scroll. The
+    /// ScrollView reports its content offset via a preference key; we
+    /// translate offset → centered index so the highlighted item follows
+    /// the user's drag in real time (previously only a tap could change
+    /// the selection, which broke the native wheel-picker feel).
+    @ViewBuilder
+    private func horizontalWheel(values: [Double], initialIndex: Int, unitStr: String, unitPos: String, highlightCol: Color) -> some View {
+        let itemWidth = horizontalItemWidth
+        let sidePad = UIScreen.main.bounds.width / 2 - itemWidth / 2
+
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    ForEach(0..<values.count, id: \.self) { idx in
+                        let val = values[idx]
+                        let formatted = val == val.rounded() ? String(Int(val)) : String(format: "%.1f", val)
+                        let display = unitPos == "before" ? "\(unitStr)\(formatted)" : "\(formatted)\(unitStr)"
+                        Button {
+                            hasUserInteracted = true
+                            withAnimation { selectedIndex = idx }
+                            withAnimation { proxy.scrollTo(idx, anchor: .center) }
+                        } label: {
+                            Text(display)
+                                .font(.system(size: selectedIndex == idx ? 28 : 18, weight: selectedIndex == idx ? .bold : .regular))
+                                .foregroundColor(selectedIndex == idx ? highlightCol : .gray)
+                                .frame(width: itemWidth, height: 50)
+                        }
+                        .buttonStyle(.plain)
+                        .id(idx)
+                    }
+                }
+                .padding(.horizontal, sidePad)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: WheelScrollOffsetKey.self,
+                            value: -geo.frame(in: .named("appdnaWheelScroll")).minX
+                        )
+                    }
+                )
+            }
+            .coordinateSpace(name: "appdnaWheelScroll")
+            .onPreferenceChange(WheelScrollOffsetKey.self) { offset in
+                // Centered index = round(scrollOffset / itemWidth). Negative
+                // offsets (rubber-band at the left edge) clamp to 0.
+                let raw = Int((offset / itemWidth).rounded())
+                let centered = max(0, min(values.count - 1, raw))
+                if centered != selectedIndex {
+                    hasUserInteracted = true
+                    selectedIndex = centered
+                }
+            }
+            .onAppear { proxy.scrollTo(initialIndex, anchor: .center) }
+        }
+        .frame(height: 60)
+    }
+
     /// Persist the currently-selected wheel value to inputValues. Stores
-    /// as Int when the value is whole (most numeric pickers — age, count,
-    /// quantity), Double otherwise. Without this the user's wheel selection
-    /// was silently dropped — `WheelPickerBlockView` had `@Binding var
-    /// inputValues` but no write site.
+    /// as Int when the value is whole (age, count, quantity), Double
+    /// otherwise. Gated by `hasUserInteracted` for required fields so a
+    /// pristine default can't silently satisfy validation.
     private func persistValue(values: [Double]) {
         guard !values.isEmpty else { return }
         let fieldId = block.field_id ?? block.id
