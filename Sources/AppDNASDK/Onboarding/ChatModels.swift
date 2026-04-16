@@ -115,6 +115,9 @@ struct ChatWebhookRequest: Codable {
     let conversation: ChatConversationContext
     let responses: [String: AnyCodable]?
     let rating: Int?
+    // SPEC-301: opaque session state round-tripped from prior responses' `data` field.
+    // Accumulated across turns; omitted from the wire payload when empty.
+    let context: [String: AnyCodable]?
 }
 
 struct ChatConversationContext: Codable {

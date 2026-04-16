@@ -412,7 +412,8 @@ struct ChatStepView: View {
                 remaining_turns: turnsRemaining
             ),
             responses: nil,
-            rating: currentRating
+            rating: currentRating,
+            context: webhookData.isEmpty ? nil : webhookData
         )
 
         do {
@@ -435,7 +436,24 @@ struct ChatStepView: View {
                 }
             }
 
-            let (data, _) = try await URLSession.shared.data(for: urlRequest)
+            let (data, urlResponse) = try await URLSession.shared.data(for: urlRequest)
+
+            // SPEC-301: surface 4xx/5xx as chat_webhook_error instead of silently
+                            // decoding the error body as an empty ChatWebhookResponse.
+            if let http = urlResponse as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                let bodyPreview = String(data: data, encoding: .utf8)?.prefix(500).description ?? ""
+                await MainActor.run {
+                    isTyping = false
+                    let errorMsg = chatConfig?.webhook?.error_text ?? "Sorry, something went wrong. Please try again."
+                    messages.append(ChatMessage(id: "err_\(userTurnCount)", role: .system, content: errorMsg, media: nil, timestamp: Date()))
+                    AppDNA.track(event: "chat_webhook_error", properties: [
+                        "flow_id": flowId, "step_id": step.id, "turn": userTurnCount,
+                        "http_status": http.statusCode, "response_body": bodyPreview,
+                    ])
+                }
+                return
+            }
+
             let response = try JSONDecoder().decode(ChatWebhookResponse.self, from: data)
 
             await MainActor.run {
