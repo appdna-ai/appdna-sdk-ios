@@ -319,6 +319,11 @@ public struct InputOption: Codable, Identifiable {
     public let value: String?
     public let icon: String?
     public let image_url: String?
+    // State-variant image urls — when set, the grid/stacked renderer
+    // swaps the option's image between selected and unselected states.
+    // Falls back to `image_url` when either side is nil.
+    public let selected_image_url: String?
+    public let unselected_image_url: String?
     // Per-option subtitle (shown below label in a smaller font)
     public let subtitle: String?
     // Per-option text styling — overrides field_config defaults when set
@@ -352,6 +357,8 @@ public struct InputOption: Codable, Identifiable {
         self.label = try container.decodeIfPresent(String.self, forKey: .label)
         self.icon = try container.decodeIfPresent(String.self, forKey: .icon)
         self.image_url = try container.decodeIfPresent(String.self, forKey: .image_url)
+        self.selected_image_url = try container.decodeIfPresent(String.self, forKey: .selected_image_url)
+        self.unselected_image_url = try container.decodeIfPresent(String.self, forKey: .unselected_image_url)
         self.subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
         self.title_color = try container.decodeIfPresent(String.self, forKey: .title_color)
         self.subtitle_color = try container.decodeIfPresent(String.self, forKey: .subtitle_color)
@@ -374,12 +381,21 @@ public struct InputOption: Codable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id, label, value, icon, image_url
+        case selected_image_url, unselected_image_url
         case subtitle, title_color, subtitle_color
         case title_font_size, subtitle_font_size, title_font_weight
         case selected_icon, unselected_icon
         case image_overlay_color, image_overlay_opacity
         case border_color, selected_border_color
         case bg_color, selected_bg_color, selected_text_color
+    }
+
+    /// Resolve which image URL to show for the given selection state.
+    /// Precedence: selected/unselected variant → default image_url → nil.
+    public func resolvedImageURL(isSelected: Bool) -> String? {
+        let variant = isSelected ? selected_image_url : unselected_image_url
+        if let v = variant, !v.isEmpty { return v }
+        return image_url
     }
 }
 

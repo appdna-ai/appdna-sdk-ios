@@ -561,8 +561,10 @@ struct FormInputSelectBlock: View {
                         if showRadio && radioOnLeft {
                             radioIndicator(isSelected: isSelected, fillCol: fillCol, radioFill: radioFill)
                         }
-                        // Image with optional overlay circle
-                        if let imgUrl = option.image_url, let url = URL(string: imgUrl) {
+                        // Image with optional overlay circle — swaps between
+                        // selected/unselected variants when the option defines
+                        // them, otherwise falls back to the default image_url.
+                        if let imgUrl = option.resolvedImageURL(isSelected: isSelected), let url = URL(string: imgUrl) {
                             imageWithOverlay(url: url, option: option, isSelected: isSelected, size: 32)
                         }
                         if let icon = option.icon, !icon.isEmpty {
@@ -805,8 +807,10 @@ struct FormInputSelectBlock: View {
                             } label: {
                                 ZStack(alignment: .topTrailing) {
                                     VStack(alignment: cellHAlign, spacing: 6) {
-                                        // Image with optional overlay
-                                        if let imgUrl = option.image_url, let url = URL(string: imgUrl) {
+                                        // Image with optional overlay — respects
+                                        // selected_image_url / unselected_image_url
+                                        // when the option defines state variants.
+                                        if let imgUrl = option.resolvedImageURL(isSelected: isSelected), let url = URL(string: imgUrl) {
                                             imageWithOverlay(url: url, option: option, isSelected: isSelected, size: 40)
                                         }
                                         // Icon with state change (selected/unselected variants)
