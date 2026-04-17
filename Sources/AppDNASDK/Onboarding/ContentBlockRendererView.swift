@@ -905,7 +905,10 @@ struct ContentBlockRendererView: View {
         }
     }
 
-    /// Parse subset of markdown (**bold**, *italic*, [link](url)) to AttributedString.
+    /// Parse subset of markdown (**bold**, *italic*, [link](url), ++underline++)
+    /// to AttributedString. `++text++` is a custom extension — native
+    /// CommonMark has no underline syntax, but the parser leaves `++`
+    /// pairs verbatim so we can post-process them here.
     @available(iOS 15.0, *)
     private func parseMarkdownToAttributedString(_ markdown: String, linkColor: Color) -> AttributedString {
         // Try native markdown parsing first (iOS 15+)
@@ -917,10 +920,36 @@ struct ContentBlockRendererView: View {
                     result[range].foregroundColor = UIColor(linkColor)
                 }
             }
+            // Apply AppDNA-specific `++underline++` after native parsing.
+            applyUnderlineMarkers(&result)
             return result
         }
         // Fallback: plain text
         return AttributedString(markdown)
+    }
+
+    /// Post-process `++text++` markers in the parsed AttributedString:
+    /// apply `.underlineStyle = .single` to the inner range and remove
+    /// the `++` marker characters. Collects ranges forward, then mutates
+    /// back-to-front so prior deletions don't invalidate later indices.
+    @available(iOS 15.0, *)
+    private func applyUnderlineMarkers(_ attr: inout AttributedString) {
+        var marks: [(Range<AttributedString.Index>, Range<AttributedString.Index>)] = []
+        var cursor = attr.startIndex
+        while cursor < attr.endIndex {
+            guard let openRange = attr[cursor...].range(of: "++") else { break }
+            let afterOpen = openRange.upperBound
+            guard afterOpen < attr.endIndex,
+                  let closeRange = attr[afterOpen...].range(of: "++") else { break }
+            marks.append((openRange, closeRange))
+            cursor = closeRange.upperBound
+        }
+        for (openRange, closeRange) in marks.reversed() {
+            let innerRange = openRange.upperBound..<closeRange.lowerBound
+            attr[innerRange].underlineStyle = .single
+            attr.removeSubrange(closeRange)
+            attr.removeSubrange(openRange)
+        }
     }
 
     /// Strip markdown tokens for pre-iOS 15 fallback.

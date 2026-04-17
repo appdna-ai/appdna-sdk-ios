@@ -1699,16 +1699,37 @@ struct PulsingAvatarBlockView: View {
                     : nil
             )
 
-            // Badge
+            // Badge — position, size, and corner radius are all config-
+            // driven. Previously hardcoded to top-right, caption2 font,
+            // and capsule shape. Any unset field falls back to those
+            // defaults so existing flows render identically.
             if let badgeText = block.badge_text, !badgeText.isEmpty {
+                let badgeScale = CGFloat(block.badge_size ?? 1.0)
+                let badgeFontSize: CGFloat = 11 * badgeScale           // caption2 ≈ 11pt
+                let badgeHPadding: CGFloat = 6 * badgeScale
+                let badgeVPadding: CGFloat = 2 * badgeScale
+                // `badge_corner_radius` was already in the Codable struct but
+                // the renderer ignored it — we now honor it. 999 mimics
+                // the previous Capsule default.
+                let badgeRadius = CGFloat(block.badge_corner_radius ?? 999)
+                let badgeOffset: CGSize = {
+                    let x = avatarSize * 0.35
+                    let y = avatarSize * 0.35
+                    switch block.badge_position ?? "top_trailing" {
+                    case "top_leading": return CGSize(width: -x, height: -y)
+                    case "bottom_trailing": return CGSize(width: x, height: y)
+                    case "bottom_leading": return CGSize(width: -x, height: y)
+                    default: return CGSize(width: x, height: -y)  // top_trailing
+                    }
+                }()
                 Text(badgeText)
-                    .font(.caption2.weight(.semibold))
+                    .font(.system(size: badgeFontSize, weight: .semibold))
                     .foregroundColor(Color(hex: block.badge_text_color ?? "#FFFFFF"))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, badgeHPadding)
+                    .padding(.vertical, badgeVPadding)
                     .background(Color(hex: block.badge_bg_color ?? "#EF4444"))
-                    .clipShape(Capsule())
-                    .offset(x: avatarSize * 0.35, y: -avatarSize * 0.35)
+                    .clipShape(RoundedRectangle(cornerRadius: badgeRadius))
+                    .offset(x: badgeOffset.width, y: badgeOffset.height)
             }
         }
         // Ensure enough space for the outermost pulsing ring at max scale

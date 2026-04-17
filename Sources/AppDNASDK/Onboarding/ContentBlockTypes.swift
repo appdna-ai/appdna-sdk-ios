@@ -883,11 +883,13 @@ public struct ContentBlock: Codable, Identifiable {
     public let divider_color: String?
     public let divider_thickness: Double?
     public let divider_margin_y: Double?
-    // Badge
+    // Badge — used by pulsing_avatar (and any future block with a badge overlay).
     public let badge_text: String?
     public let badge_bg_color: String?
     public let badge_text_color: String?
     public let badge_corner_radius: Double?
+    public let badge_position: String?  // "top_trailing" (default) | "top_leading" | "bottom_trailing" | "bottom_leading"
+    public let badge_size: Double?      // Scale factor (default 1.0 — native caption2 + 6/2 padding)
     // Icon
     public let icon_emoji: String?
     public let icon_size: Double?
@@ -1134,6 +1136,7 @@ public struct ContentBlock: Codable, Identifiable {
         case spacer_height, items, list_style
         case divider_color, divider_thickness, divider_margin_y
         case badge_text, badge_bg_color, badge_text_color, badge_corner_radius
+        case badge_position, badge_size
         case icon_emoji, icon_size, icon_alignment
         case toggle_label, toggle_description, toggle_default
         case video_url, video_thumbnail_url, video_height, video_corner_radius
@@ -1213,6 +1216,8 @@ public struct ContentBlock: Codable, Identifiable {
         self.badge_bg_color = try c.decodeIfPresent(String.self, forKey: .badge_bg_color)
         self.badge_text_color = try c.decodeIfPresent(String.self, forKey: .badge_text_color)
         self.badge_corner_radius = try c.decodeIfPresent(Double.self, forKey: .badge_corner_radius)
+        self.badge_position = try c.decodeIfPresent(String.self, forKey: .badge_position)
+        self.badge_size = try c.decodeIfPresent(Double.self, forKey: .badge_size)
         self.icon_emoji = try c.decodeIfPresent(String.self, forKey: .icon_emoji)
         self.icon_size = try c.decodeIfPresent(Double.self, forKey: .icon_size)
         self.icon_alignment = try c.decodeIfPresent(String.self, forKey: .icon_alignment)
