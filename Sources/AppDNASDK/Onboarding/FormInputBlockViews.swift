@@ -744,8 +744,24 @@ struct FormInputSelectBlock: View {
         // Default toggle icons for grid (per-option overrides take priority)
         let defaultSelectedIcon = (cfg?["selected_icon"]?.value as? String)
         let defaultUnselectedIcon = (cfg?["unselected_icon"]?.value as? String)
-        // Show toggle icon overlay (top-right badge showing +/check)
+        // Show toggle icon overlay (+/check badge). Position, size, and
+        // colors are all configurable — previously hardcoded to top-right,
+        // 20×20, accent fill.
         let showToggleIcon = (cfg?["show_toggle_icon"]?.value as? Bool) ?? (defaultSelectedIcon != nil)
+        let toggleIconPositionKey = (cfg?["toggle_icon_position"]?.value as? String) ?? "top_trailing"
+        let toggleBadgeAlignment: Alignment = {
+            switch toggleIconPositionKey {
+            case "top_leading": return .topLeading
+            case "bottom_trailing": return .bottomTrailing
+            case "bottom_leading": return .bottomLeading
+            default: return .topTrailing
+            }
+        }()
+        let toggleIconSize = CGFloat((cfgDouble(cfg?["toggle_icon_size"])) ?? 20)
+        let toggleIconSelectedBg = (cfg?["toggle_icon_selected_bg_color"]?.value as? String).map { Color(hex: $0) }
+        let toggleIconUnselectedBg = (cfg?["toggle_icon_unselected_bg_color"]?.value as? String).map { Color(hex: $0) }
+        let toggleIconSelectedFg = (cfg?["toggle_icon_selected_fg_color"]?.value as? String).map { Color(hex: $0) }
+        let toggleIconUnselectedFg = (cfg?["toggle_icon_unselected_fg_color"]?.value as? String).map { Color(hex: $0) }
         // Tooltip below grid
         let tooltipText = (cfg?["tooltip_text"]?.value as? String)
         let tooltipIcon = (cfg?["tooltip_icon"]?.value as? String) ?? "info.circle"
@@ -757,32 +773,9 @@ struct FormInputSelectBlock: View {
         let optionHeight: CGFloat? = (cfgDouble(cfg?["option_height"]) ?? cfgDouble(cfg?["size"])).map { CGFloat($0) }
             ?? fieldHeight(block)
 
-        // Universal cell content alignment — icon + title can be laid out
-        // leading (Figma roadmap card pattern), trailing, or centered (default).
-        // Writes through field_config.grid_cell_alignment so it's editable
-        // from the console without touching per-option fields.
-        let cellAlignmentKey = (cfg?["grid_cell_alignment"]?.value as? String) ?? "center"
-        let cellHAlign: HorizontalAlignment = {
-            switch cellAlignmentKey {
-            case "leading", "left": return .leading
-            case "trailing", "right": return .trailing
-            default: return .center
-            }
-        }()
-        let cellFrameAlign: Alignment = {
-            switch cellAlignmentKey {
-            case "leading", "left": return .leading
-            case "trailing", "right": return .trailing
-            default: return .center
-            }
-        }()
-        let cellTextAlign: TextAlignment = {
-            switch cellAlignmentKey {
-            case "leading", "left": return .leading
-            case "trailing", "right": return .trailing
-            default: return .center
-            }
-        }()
+        // Block-level cell content alignment (default for every cell).
+        // Individual options may override via option.cell_alignment.
+        let blockCellAlignmentKey = (cfg?["grid_cell_alignment"]?.value as? String) ?? "center"
 
         VStack(spacing: optionSpacing) {
             // Manual grid — LazyVGrid clips wrapped text (ignores fixedSize for row height).
@@ -802,10 +795,34 @@ struct FormInputSelectBlock: View {
                             let optSelectedBg = option.selected_bg_color.map { Color(hex: $0) } ?? selectedBgCol
                             let optSelectedText = option.selected_text_color.map { Color(hex: $0) } ?? selectedTextCol
 
+                            // Resolve cell alignment: per-option override → block default → center.
+                            let cellAlignmentKey = option.cell_alignment ?? blockCellAlignmentKey
+                            let cellHAlign: HorizontalAlignment = {
+                                switch cellAlignmentKey {
+                                case "leading", "left": return .leading
+                                case "trailing", "right": return .trailing
+                                default: return .center
+                                }
+                            }()
+                            let cellFrameAlign: Alignment = {
+                                switch cellAlignmentKey {
+                                case "leading", "left": return .leading
+                                case "trailing", "right": return .trailing
+                                default: return .center
+                                }
+                            }()
+                            let cellTextAlign: TextAlignment = {
+                                switch cellAlignmentKey {
+                                case "leading", "left": return .leading
+                                case "trailing", "right": return .trailing
+                                default: return .center
+                                }
+                            }()
+
                             Button {
                                 toggleSelection(option: option, fieldId: fieldId)
                             } label: {
-                                ZStack(alignment: .topTrailing) {
+                                ZStack(alignment: toggleBadgeAlignment) {
                                     VStack(alignment: cellHAlign, spacing: 6) {
                                         // Image with optional overlay — respects
                                         // selected_image_url / unselected_image_url
@@ -843,22 +860,34 @@ struct FormInputSelectBlock: View {
                                     .frame(maxWidth: .infinity, minHeight: optionHeight, alignment: cellFrameAlign)
                                     .padding(10)
 
-                                    // Toggle icon badge (top-right)
+                                    // Toggle icon badge. Position, size, and
+                                    // colors driven by field_config so the
+                                    // same grid can show a top-left "+" or a
+                                    // bottom-right filled check on selected,
+                                    // custom palette — not just the accent
+                                    // color fallback.
                                     if showToggleIcon {
                                         let selIcon = option.selected_icon ?? defaultSelectedIcon ?? "checkmark"
                                         let unselIcon = option.unselected_icon ?? defaultUnselectedIcon ?? "plus"
                                         let badgeIcon = isSelected ? selIcon : unselIcon
+                                        let badgeFg = isSelected
+                                            ? (toggleIconSelectedFg ?? optSelectedText)
+                                            : (toggleIconUnselectedFg ?? textCol.opacity(0.5))
+                                        let badgeBg = isSelected
+                                            ? (toggleIconSelectedBg ?? fillCol.opacity(0.2))
+                                            : (toggleIconUnselectedBg ?? Color.clear)
+                                        let glyphSize = toggleIconSize * 0.5
                                         Group {
                                             if UIImage(systemName: badgeIcon) != nil {
                                                 Image(systemName: badgeIcon)
-                                                    .font(.system(size: 10, weight: .bold))
+                                                    .font(.system(size: glyphSize, weight: .bold))
                                             } else {
-                                                Text(badgeIcon).font(.system(size: 10))
+                                                Text(badgeIcon).font(.system(size: glyphSize))
                                             }
                                         }
-                                        .foregroundColor(isSelected ? optSelectedText : textCol.opacity(0.5))
-                                        .frame(width: 20, height: 20)
-                                        .background(Circle().fill(isSelected ? fillCol.opacity(0.2) : Color.clear))
+                                        .foregroundColor(badgeFg)
+                                        .frame(width: toggleIconSize, height: toggleIconSize)
+                                        .background(Circle().fill(badgeBg))
                                         .padding(6)
                                     }
                                 }

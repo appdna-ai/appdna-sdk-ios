@@ -347,6 +347,10 @@ public struct InputOption: Codable, Identifiable {
     // Per-option selected state overrides (each option can have its own highlight color)
     public let selected_bg_color: String?
     public let selected_text_color: String?
+    // Per-option override for grid cell content alignment. Falls back to
+    // the block-level `grid_cell_alignment` when nil so existing flows
+    // inherit the overall layout.
+    public let cell_alignment: String?  // "leading" | "center" | "trailing"
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -374,6 +378,7 @@ public struct InputOption: Codable, Identifiable {
         self.bg_color = try container.decodeIfPresent(String.self, forKey: .bg_color)
         self.selected_bg_color = try container.decodeIfPresent(String.self, forKey: .selected_bg_color)
         self.selected_text_color = try container.decodeIfPresent(String.self, forKey: .selected_text_color)
+        self.cell_alignment = try container.decodeIfPresent(String.self, forKey: .cell_alignment)
     }
 
     /// Non-optional value — falls back to id if value is nil.
@@ -388,6 +393,7 @@ public struct InputOption: Codable, Identifiable {
         case image_overlay_color, image_overlay_opacity
         case border_color, selected_border_color
         case bg_color, selected_bg_color, selected_text_color
+        case cell_alignment
     }
 
     /// Resolve which image URL to show for the given selection state.
