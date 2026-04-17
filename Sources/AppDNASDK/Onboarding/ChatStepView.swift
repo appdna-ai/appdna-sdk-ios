@@ -330,12 +330,24 @@ struct ChatStepView: View {
         // keeps the previous default so existing flows look identical.
         let btn = chatConfig?.completion_button
         let variant = btn?.variant ?? "primary"
+        let hasCustomBg = !(btn?.bg_color?.isEmpty ?? true)
         let resolvedBg: Color = {
             if let hex = btn?.bg_color, !hex.isEmpty { return Color(hex: hex) }
             return userBubbleBg
         }()
+        // Text color fallback chain:
+        //   1. Explicit `text_color` — use it.
+        //   2. Else if user overrode `bg_color` (but left text_color empty):
+        //      pick black or white for contrast against the new bg. Without this,
+        //      setting bg_color to white leaves text_color at the chat theme's
+        //      userBubbleText default (often white) → white-on-white invisible text.
+        //   3. Else (neither set): fall back to userBubbleText — original behavior
+        //      that pairs the CTA with the chat theme.
         let resolvedText: Color = {
             if let hex = btn?.text_color, !hex.isEmpty { return Color(hex: hex) }
+            if hasCustomBg, let bgHex = btn?.bg_color {
+                return Color.isLightHex(bgHex) ? Color.black : Color.white
+            }
             return userBubbleText
         }()
         let radius: CGFloat = CGFloat(btn?.button_corner_radius ?? 14)
