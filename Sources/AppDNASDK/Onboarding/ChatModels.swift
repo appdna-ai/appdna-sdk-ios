@@ -12,6 +12,7 @@ public struct ChatConfig: Codable {
     public let auto_messages: [ChatAutoMessage]?
     public let completion_message: ChatCompletionMessage?
     public let completion_cta_text: String?
+    public let completion_button: ChatCompletionButton?
     public let quick_replies: [ChatQuickReply]?
     public let turn_actions: [ChatTurnAction]?
     public let input_placeholder: String?
@@ -22,6 +23,25 @@ public struct ChatConfig: Codable {
     var resolvedMaxTurns: Int { max_user_turns ?? 5 }
     var resolvedMinTurns: Int { min_user_turns ?? 1 }
     var isHardLimit: Bool { turn_limit_behavior != "soft" }
+}
+
+/// Completion CTA button styling overrides. Mirrors the regular `button`
+/// content block shape so product users get the same controls on the
+/// chat's end-of-conversation button as they do elsewhere. Any field
+/// left nil falls back to the chat theme (user bubble colors) or
+/// sensible defaults.
+public struct ChatCompletionButton: Codable {
+    public let variant: String?          // "primary" | "secondary" | "outline" | "text"
+    public let bg_color: String?
+    public let text_color: String?
+    public let button_corner_radius: Double?
+    public let button_height: Double?
+    public let style: ChatCompletionButtonStyle?
+}
+
+public struct ChatCompletionButtonStyle: Codable {
+    public let font_size: Double?
+    public let font_weight: Double?
 }
 
 /// AI persona configuration.

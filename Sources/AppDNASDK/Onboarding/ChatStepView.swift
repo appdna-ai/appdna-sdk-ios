@@ -325,18 +325,59 @@ struct ChatStepView: View {
     // MARK: - Completion CTA
 
     private var completionCTA: some View {
-        VStack(spacing: 12) {
+        // Resolve styling from completion_button (new, matches normal CTA block)
+        // falling back to the chat theme's user bubble colors. Any unset field
+        // keeps the previous default so existing flows look identical.
+        let btn = chatConfig?.completion_button
+        let variant = btn?.variant ?? "primary"
+        let resolvedBg: Color = {
+            if let hex = btn?.bg_color, !hex.isEmpty { return Color(hex: hex) }
+            return userBubbleBg
+        }()
+        let resolvedText: Color = {
+            if let hex = btn?.text_color, !hex.isEmpty { return Color(hex: hex) }
+            return userBubbleText
+        }()
+        let radius: CGFloat = CGFloat(btn?.button_corner_radius ?? 14)
+        let height: CGFloat? = btn?.button_height.map { CGFloat($0) }
+        let fontSize: CGFloat = CGFloat(btn?.style?.font_size ?? 17)
+        let fontWeight: Font.Weight = {
+            switch Int(btn?.style?.font_weight ?? 600) {
+            case 400: return .regular
+            case 500: return .medium
+            case 700: return .bold
+            default: return .semibold
+            }
+        }()
+
+        return VStack(spacing: 12) {
             Button {
                 let transcript = buildTranscript(reason: isCompleted ? "max_turns" : "user_completed")
                 onNext(transcript)
             } label: {
                 Text(chatConfig?.completion_cta_text ?? step.config.cta_text ?? "Continue")
-                    .font(.headline)
-                    .foregroundColor(userBubbleText)
+                    .font(.system(size: fontSize, weight: fontWeight))
+                    .foregroundColor(variant == "outline" || variant == "text" ? resolvedBg : resolvedText)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(userBubbleBg)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .frame(height: height)
+                    .padding(.vertical, height == nil ? 14 : 0)
+                    .background(
+                        Group {
+                            switch variant {
+                            case "text":
+                                Color.clear
+                            case "outline":
+                                RoundedRectangle(cornerRadius: radius)
+                                    .stroke(resolvedBg, lineWidth: 2)
+                            case "secondary":
+                                RoundedRectangle(cornerRadius: radius)
+                                    .fill(resolvedBg.opacity(0.15))
+                            default: // primary
+                                RoundedRectangle(cornerRadius: radius)
+                                    .fill(resolvedBg)
+                            }
+                        }
+                    )
             }
             .padding(.horizontal, 20)
 
