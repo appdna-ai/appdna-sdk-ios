@@ -1671,7 +1671,12 @@ struct PulsingAvatarBlockView: View {
                     )
             }
 
-            // Avatar image
+            // Avatar image — shape honors block.image_shape ("circle" default |
+            // "square" | "rounded"). When "rounded", block.image_corner_radius
+            // (default 16) controls the corner radius. Missing field preserves
+            // previous circle-crop behavior so existing flows look identical.
+            let imageShape = block.image_shape ?? "circle"
+            let imageCornerRadius = CGFloat(block.image_corner_radius ?? 16)
             Group {
                 if let urlString = block.image_url, let url = URL(string: urlString) {
                     BundledAsyncPhaseImage(url: url) { phase in
@@ -1679,11 +1684,11 @@ struct PulsingAvatarBlockView: View {
                         case .success(let image):
                             image.resizable().aspectRatio(contentMode: .fill)
                         default:
-                            Circle().fill(Color.gray.opacity(0.2))
+                            Color.gray.opacity(0.2)
                         }
                     }
                 } else {
-                    Circle().fill(Color.gray.opacity(0.2))
+                    Color.gray.opacity(0.2)
                         .overlay(
                             Image(systemName: "person.fill")
                                 .font(.system(size: avatarSize * 0.4))
@@ -1692,12 +1697,8 @@ struct PulsingAvatarBlockView: View {
                 }
             }
             .frame(width: avatarSize, height: avatarSize)
-            .clipShape(Circle())
-            .overlay(
-                borderW > 0
-                    ? Circle().stroke(borderCol, lineWidth: borderW)
-                    : nil
-            )
+            .modifier(AvatarShapeClip(shape: imageShape, cornerRadius: imageCornerRadius))
+            .modifier(AvatarShapeBorder(shape: imageShape, cornerRadius: imageCornerRadius, borderWidth: borderW, borderColor: borderCol))
 
             // Badge — position, size, and corner radius are all config-
             // driven. Previously hardcoded to top-right, caption2 font,
@@ -1908,6 +1909,51 @@ struct PricingCardBlockView: View {
                     )
             )
             .shadow(color: isHighlighted ? accent.opacity(0.15) : .clear, radius: 4, y: 2)
+        }
+    }
+}
+
+// MARK: - Pulsing Avatar shape helpers (SPEC-085 image_shape)
+
+/// Clip the avatar image per the configured shape. Circle is the legacy
+/// default; "square" skips clipping; "rounded" uses cornerRadius.
+private struct AvatarShapeClip: ViewModifier {
+    let shape: String
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        switch shape {
+        case "square":
+            content  // no clipping — full rectangle
+        case "rounded":
+            content.clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        default:
+            content.clipShape(Circle())
+        }
+    }
+}
+
+/// Draw the border in the matching shape so stroke lines don't diverge from
+/// the clip mask.
+private struct AvatarShapeBorder: ViewModifier {
+    let shape: String
+    let cornerRadius: CGFloat
+    let borderWidth: CGFloat
+    let borderColor: Color
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if borderWidth > 0 {
+            switch shape {
+            case "square":
+                content.overlay(Rectangle().stroke(borderColor, lineWidth: borderWidth))
+            case "rounded":
+                content.overlay(RoundedRectangle(cornerRadius: cornerRadius).stroke(borderColor, lineWidth: borderWidth))
+            default:
+                content.overlay(Circle().stroke(borderColor, lineWidth: borderWidth))
+            }
+        } else {
+            content
         }
     }
 }
