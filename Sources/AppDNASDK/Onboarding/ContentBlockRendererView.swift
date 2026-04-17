@@ -1074,16 +1074,31 @@ struct ContentBlockRendererView: View {
                             .zIndex(child.overflow == "visible" ? 1 : 0)
                     }
                 }
+            } else if !ratios.isEmpty {
+                // Ratio-driven horizontal row — explicit proportional
+                // widths. Leading icon (if present) sits outside the
+                // proportional block since it has its own intrinsic
+                // size; the ratio applies only to the actual children.
+                HStack(alignment: vAlign, spacing: rowGap) {
+                    if let icon = leadingIcon {
+                        rowLeadingIconView(icon: icon, size: leadingIconSize, color: leadingIconColor, bgColor: leadingIconBgColor, bgSize: leadingIconBgSize)
+                    }
+                    ProportionalHStack(ratios: ratios, spacing: rowGap, alignment: vAlign) {
+                        ForEach(childBlocks) { child in
+                            renderBlock(child)
+                                .zIndex(child.overflow == "visible" ? 1 : 0)
+                        }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                }
             } else {
                 HStack(alignment: vAlign, spacing: rowGap) {
                     if let icon = leadingIcon {
                         rowLeadingIconView(icon: icon, size: leadingIconSize, color: leadingIconColor, bgColor: leadingIconBgColor, bgSize: leadingIconBgSize)
                     }
-                    ForEach(Array(childBlocks.enumerated()), id: \.element.id) { idx, child in
-                        let weight = idx < ratios.count ? ratios[idx] : (ratios.isEmpty ? 1 : ratios.last!)
+                    ForEach(childBlocks) { child in
                         renderBlock(child)
                             .frame(maxWidth: childFill ? .infinity : nil)
-                            .layoutPriority(Double(weight))
                             .zIndex(child.overflow == "visible" ? 1 : 0)
                     }
                 }
@@ -1132,6 +1147,76 @@ struct ContentBlockRendererView: View {
     private func parseColumnRatios(_ str: String?) -> [CGFloat] {
         guard let str, !str.isEmpty else { return [] }
         return str.split(separator: ":").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }.map { CGFloat($0) }
+    }
+
+    /// Proportional horizontal layout for row children. Previously the
+    /// renderer used `.layoutPriority(weight)` which SwiftUI interprets
+    /// as "first in line for ideal size when space is tight" — it is NOT
+    /// a proportional width ratio. On a row like [image, text] with
+    /// ratios "1:2" that meant the text's higher priority squeezed the
+    /// image down to near-zero width → the image silently disappeared
+    /// from the render.
+    ///
+    /// This Layout assigns each child an explicit fraction of the
+    /// available width via the real weights, so "1:2" produces a true
+    /// 1/3 and 2/3 split regardless of the child's intrinsic size.
+    private struct ProportionalHStack: Layout {
+        let ratios: [CGFloat]
+        let spacing: CGFloat
+        let alignment: VerticalAlignment
+
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            let proposedWidth = proposal.width ?? 0
+            // Propose each child its fractional width and take the tallest.
+            let widths = allocate(width: proposedWidth, count: subviews.count)
+            var maxH: CGFloat = 0
+            for (idx, sv) in subviews.enumerated() {
+                let w = idx < widths.count ? widths[idx] : 0
+                let h = sv.sizeThatFits(ProposedViewSize(width: w, height: proposal.height)).height
+                if h > maxH { maxH = h }
+            }
+            return CGSize(width: proposedWidth, height: maxH)
+        }
+
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            let widths = allocate(width: bounds.width, count: subviews.count)
+            var x = bounds.minX
+            for (idx, sv) in subviews.enumerated() {
+                let w = idx < widths.count ? widths[idx] : 0
+                let anchorY: CGFloat
+                switch alignment {
+                case .top: anchorY = bounds.minY
+                case .bottom: anchorY = bounds.maxY
+                default: anchorY = bounds.midY
+                }
+                sv.place(
+                    at: CGPoint(x: x, y: anchorY),
+                    anchor: (alignment == .top) ? .topLeading : ((alignment == .bottom) ? .bottomLeading : .leading),
+                    proposal: ProposedViewSize(width: w, height: bounds.height)
+                )
+                x += w + spacing
+            }
+        }
+
+        private func allocate(width: CGFloat, count: Int) -> [CGFloat] {
+            guard count > 0 else { return [] }
+            let gapTotal = spacing * CGFloat(max(count - 1, 0))
+            let avail = max(width - gapTotal, 0)
+            // Extend/truncate ratios to match child count. If fewer ratios
+            // than children, extra children each get the last ratio's
+            // weight (matches existing behavior at the HStack call site).
+            var weights: [CGFloat] = []
+            for i in 0..<count {
+                if i < ratios.count {
+                    weights.append(ratios[i])
+                } else {
+                    weights.append(ratios.last ?? 1)
+                }
+            }
+            let total = weights.reduce(0, +)
+            guard total > 0 else { return Array(repeating: avail / CGFloat(count), count: count) }
+            return weights.map { avail * ($0 / total) }
+        }
     }
 
     // MARK: - Custom View (SPEC-089d AC-026)
