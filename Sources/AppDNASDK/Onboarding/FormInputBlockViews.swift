@@ -525,6 +525,9 @@ struct FormInputSelectBlock: View {
         let optionSpacing = CGFloat((cfgDouble(cfg?["option_spacing"])) ?? 8)
         let optionHeight: CGFloat? = (cfgDouble(cfg?["option_height"]) ?? cfgDouble(cfg?["size"])).map { CGFloat($0) }
             ?? fieldHeight(block)
+        // Stacked-list image size default (32). Shares the `option_image_size`
+        // config with the grid path so one console slider governs both.
+        let stackedImageSize = CGFloat((cfgDouble(cfg?["option_image_size"])) ?? 32)
 
         VStack(spacing: optionSpacing) {
             ForEach(options) { option in
@@ -565,7 +568,7 @@ struct FormInputSelectBlock: View {
                         // selected/unselected variants when the option defines
                         // them, otherwise falls back to the default image_url.
                         if let imgUrl = option.resolvedImageURL(isSelected: isSelected), let url = URL(string: imgUrl) {
-                            imageWithOverlay(url: url, option: option, isSelected: isSelected, size: 32)
+                            imageWithOverlay(url: url, option: option, isSelected: isSelected, size: stackedImageSize)
                         }
                         if let icon = option.icon, !icon.isEmpty {
                             Text(icon)
@@ -777,6 +780,10 @@ struct FormInputSelectBlock: View {
         // Individual options may override via option.cell_alignment.
         let blockCellAlignmentKey = (cfg?["grid_cell_alignment"]?.value as? String) ?? "center"
 
+        // Per-option image size for grid cells (previously hardcoded 40).
+        // Falls through to 40 so existing flows look unchanged.
+        let gridImageSize = CGFloat((cfgDouble(cfg?["option_image_size"])) ?? 40)
+
         VStack(spacing: optionSpacing) {
             // Manual grid — LazyVGrid clips wrapped text (ignores fixedSize for row height).
             let rowCount = (options.count + colCount - 1) / colCount
@@ -828,7 +835,7 @@ struct FormInputSelectBlock: View {
                                         // selected_image_url / unselected_image_url
                                         // when the option defines state variants.
                                         if let imgUrl = option.resolvedImageURL(isSelected: isSelected), let url = URL(string: imgUrl) {
-                                            imageWithOverlay(url: url, option: option, isSelected: isSelected, size: 40)
+                                            imageWithOverlay(url: url, option: option, isSelected: isSelected, size: gridImageSize)
                                         }
                                         // Icon with state change (selected/unselected variants)
                                         if let icon = option.icon, !icon.isEmpty {
