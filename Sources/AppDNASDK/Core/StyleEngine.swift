@@ -169,6 +169,35 @@ extension View {
         }
     }
 
+    /// Apply only the NON-FONT parts of a TextStyleConfig.
+    ///
+    /// `applyTextStyle` is `extension View` so its inner `.font(font)` uses
+    /// the View-env overload of `.font`. When called on a chain that already
+    /// has a direct `.font()` applied to a `Text`, the direct Text-font wins
+    /// and the author's `font_size`/`font_weight` are silently ignored.
+    ///
+    /// Callers (text/heading blocks) therefore resolve the font themselves
+    /// and apply it directly on the `Text(...)` — then call this helper for
+    /// line spacing, kerning, opacity, and text-transform so those still
+    /// come from the authored style.
+    func applyTextStyleDecorations(_ style: TextStyleConfig?) -> some View {
+        guard let s = style else { return AnyView(self) }
+        let base = self
+            .lineSpacing(lineSpacing(s.line_height, s.font_size))
+            .opacity(s.opacity ?? 1.0)
+        let kerned: AnyView = {
+            if #available(iOS 16.0, *), let spacing = s.letter_spacing, spacing != 0 {
+                return AnyView(base.kerning(CGFloat(spacing)))
+            }
+            return AnyView(base)
+        }()
+        switch s.text_transform {
+        case "uppercase": return AnyView(kerned.textCase(.uppercase))
+        case "lowercase": return AnyView(kerned.textCase(.lowercase))
+        default: return kerned
+        }
+    }
+
     /// Apply ElementStyleConfig to a container view.
     func applyContainerStyle(_ style: ElementStyleConfig?) -> some View {
         guard let s = style else { return AnyView(self) }

@@ -236,7 +236,7 @@ struct ContentBlockRendererView: View {
     // MARK: - Heading
 
     private func headingBlock(_ block: ContentBlock) -> some View {
-        let fontSize: CGFloat = {
+        let fallbackSize: CGFloat = {
             switch block.level ?? 1 {
             case 1: return 28
             case 2: return 22
@@ -260,12 +260,25 @@ struct ContentBlockRendererView: View {
             default: return .leading
             }
         }()
-        // Apply block.horizontal_align AFTER applyTextStyle so its internal
-        // multilineTextAlignment (which defaults to .leading when style.alignment
-        // is unset) doesn't wipe out the authored horizontal_align.
+        // IMPORTANT: apply the resolved font DIRECTLY on `Text(...)` so SwiftUI
+        // treats it as the Text-specific .font() overload (which wins over any
+        // ambient .font() env modifier from parent containers and over the
+        // env .font() applied later by `.applyTextStyle`). Previously we
+        // chained `.font(.system(...)).applyTextStyle(block.style)` — but
+        // applyTextStyle is `extension View` so its inner `.font(font)` uses
+        // the View env-modifier overload, which does NOT override the direct
+        // `.font()` already baked into the Text. Result: author-set font_size
+        // and font_weight were silently ignored in nested rows (q4.png).
+        let styleFont = FontResolver.font(
+            family: block.style?.font_family,
+            size: block.style?.font_size ?? Double(fallbackSize),
+            weight: block.style?.font_weight ?? 700
+        )
+        let styleColor: Color = (block.style?.color).map { Color(hex: $0) } ?? .primary
         return Text(loc?("block.\(block.id).text", text) ?? text)
-            .font(.system(size: fontSize, weight: .bold))
-            .applyTextStyle(block.style)
+            .font(styleFont)
+            .foregroundColor(styleColor)
+            .applyTextStyleDecorations(block.style)
             .multilineTextAlignment(textAlignment)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: frameAlignment)
@@ -289,12 +302,18 @@ struct ContentBlockRendererView: View {
             default: return .leading
             }
         }()
-        // Same ordering as headingBlock — applyTextStyle first so horizontal_align
-        // wins when style.alignment isn't explicitly authored. Customers hit this
-        // in row children where the authored center/right was silently dropped.
+        // See headingBlock for the SwiftUI font-precedence rationale — we
+        // resolve the font here and apply it directly on Text(...).
+        let styleFont = FontResolver.font(
+            family: block.style?.font_family,
+            size: block.style?.font_size ?? 16,
+            weight: block.style?.font_weight ?? 400
+        )
+        let styleColor: Color = (block.style?.color).map { Color(hex: $0) } ?? .primary
         return Text(loc?("block.\(block.id).text", text) ?? text)
-            .font(.body)
-            .applyTextStyle(block.style)
+            .font(styleFont)
+            .foregroundColor(styleColor)
+            .applyTextStyleDecorations(block.style)
             .multilineTextAlignment(textAlignment)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: frameAlignment)
@@ -1099,6 +1118,7 @@ struct ContentBlockRendererView: View {
                     }
                     ForEach(childBlocks) { child in
                         renderBlock(child)
+                            .applyRelativeSizing(width: child.element_width, height: child.element_height)
                             .frame(maxWidth: childFill ? .infinity : nil)
                             .zIndex(child.overflow == "visible" ? 1 : 0)
                     }
@@ -1115,6 +1135,7 @@ struct ContentBlockRendererView: View {
                     ProportionalHStack(ratios: ratios, spacing: rowGap, alignment: vAlign) {
                         ForEach(childBlocks) { child in
                             renderBlock(child)
+                                .applyRelativeSizing(width: child.element_width, height: child.element_height)
                                 .zIndex(child.overflow == "visible" ? 1 : 0)
                         }
                     }
@@ -1127,6 +1148,7 @@ struct ContentBlockRendererView: View {
                     }
                     ForEach(childBlocks) { child in
                         renderBlock(child)
+                            .applyRelativeSizing(width: child.element_width, height: child.element_height)
                             .frame(maxWidth: childFill ? .infinity : nil)
                             .zIndex(child.overflow == "visible" ? 1 : 0)
                     }

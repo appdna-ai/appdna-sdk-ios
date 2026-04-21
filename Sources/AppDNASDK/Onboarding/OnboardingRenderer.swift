@@ -847,13 +847,15 @@ struct OnboardingFlowHost: View {
 
         let logic = rule.logic ?? "and"
         let stepResponses = responses[stepId] as? [String: Any] ?? [:]
+        // Look up the step so id↔value aliasing for input_select options can resolve.
+        let step = flow.steps.first(where: { $0.id == stepId })
 
         for cond in conditionList {
             let matches: Bool
             if let condStr = cond as? String {
                 matches = condStr == "always"
             } else if let condDict = cond as? [String: Any] {
-                matches = evaluateCondition(condDict, responses: stepResponses)
+                matches = evaluateCondition(condDict, responses: stepResponses, step: step)
             } else {
                 matches = true
             }
@@ -865,6 +867,34 @@ struct OnboardingFlowHost: View {
         return logic == "and" // All passed for "and", none passed for "or"
     }
 
+    /// Look up the option id↔value aliases for a given field on a step. Returns
+    /// a tuple of (idToValue, valueToId) maps. Empty when the field isn't an
+    /// input_select block (so callers naturally no-op). This fixes the case
+    /// where console-authored rules match on `option.id` (e.g. "opt_1") but
+    /// the SDK stored `option.value` (e.g. "by_learning_...") as the response,
+    /// which caused all rules to miss and the SDK to fall through to the first
+    /// linear target (Dream Decode/Aria) regardless of the user's pick.
+    private func optionAliases(forField field: String, in step: OnboardingStep?) -> (idToValue: [String: String], valueToId: [String: String]) {
+        guard let step = step else { return ([:], [:]) }
+        // content_blocks can live under layout.content_blocks (canonical) or step.config.content_blocks
+        let blocks: [ContentBlock] = step.config.content_blocks ?? []
+        guard let block = blocks.first(where: { $0.field_id == field && $0.type.rawValue.hasPrefix("input_") }),
+              let options = block.field_options else {
+            return ([:], [:])
+        }
+        var idToVal: [String: String] = [:]
+        var valToId: [String: String] = [:]
+        for opt in options {
+            let id = opt.id ?? ""
+            let val = opt.value ?? id
+            if !id.isEmpty && !val.isEmpty {
+                idToVal[id] = val
+                valToId[val] = id
+            }
+        }
+        return (idToVal, valToId)
+    }
+
     /// The step ID the user navigated FROM to reach the current step, or nil
     /// if there is no previous step (i.e. this is the first step).
     private var previousStepId: String? {
@@ -874,10 +904,32 @@ struct OnboardingFlowHost: View {
     }
 
     /// Evaluate a single condition dict against step responses.
-    private func evaluateCondition(_ cond: [String: Any], responses: [String: Any]) -> Bool {
+    /// - Parameter step: The step owning `responses`; used to resolve id↔value
+    ///   aliases when the console built a rule on `option.id` but the SDK
+    ///   stored `option.value` as the response.
+    private func evaluateCondition(_ cond: [String: Any], responses: [String: Any], step: OnboardingStep? = nil) -> Bool {
         guard let type = cond["type"] as? String else { return true }
         // Console saves "answer_key", SDK also checks "field" for backward compat
         let field = cond["answer_key"] as? String ?? cond["field"] as? String ?? ""
+
+        // Helpers: lazily resolved aliases.  Only the cases that need them
+        // (answer_equals / answer_contains) touch the step's options.
+        func aliasesForField() -> (idToValue: [String: String], valueToId: [String: String]) {
+            optionAliases(forField: field, in: step)
+        }
+
+        /// True when `expectedIdOrValue` equals `actualValue` either directly
+        /// or via the id↔value alias table on the current step's options.
+        func aliasedEquals(expected: String, actual: String) -> Bool {
+            if expected == actual { return true }
+            let (idToVal, valToId) = aliasesForField()
+            // Rule said "opt_1" and we stored the prose value? Look up what
+            // opt_1 maps to, then compare.
+            if let expectedAsValue = idToVal[expected], expectedAsValue == actual { return true }
+            // Rule said the prose value and we stored the id? Reverse.
+            if let actualAsId = valToId[actual], actualAsId == expected { return true }
+            return false
+        }
 
         switch type {
         case "always":
@@ -887,13 +939,30 @@ struct OnboardingFlowHost: View {
             let actual = responses[field]
             // Handle array values (multiselect stores ["opt_2"] not "opt_2")
             if let actualArray = actual as? [String], let expectedStr = expected as? String {
-                return actualArray.contains(expectedStr)
+                if actualArray.contains(expectedStr) { return true }
+                // id↔value alias sweep for multi-select too
+                for item in actualArray where aliasedEquals(expected: expectedStr, actual: item) { return true }
+                return false
             }
-            return isEqual(actual, expected)
+            if isEqual(actual, expected) { return true }
+            // Single-select id↔value alias fallback
+            if let expectedStr = expected as? String, let actualStr = actual as? String {
+                return aliasedEquals(expected: expectedStr, actual: actualStr)
+            }
+            return false
         case "answer_contains":
             let expected = cond["value"] as? String ?? ""
             let actual = responses[field] as? String ?? ""
-            return actual.contains(expected)
+            if actual.contains(expected) { return true }
+            // Legacy flows that paired `answer_contains` with an option id
+            // (now auto-migrated to `answer_equals` in the console — see
+            // StepLogicEditor.renderValuePicker) still round-trip: aliases
+            // bridge rule.value (opt_1) to response (by_learning_...).
+            let (idToVal, _) = aliasesForField()
+            if let mapped = idToVal[expected], !mapped.isEmpty {
+                return actual.contains(mapped)
+            }
+            return false
         case "answer_not_equals":
             let expected = cond["value"]
             let actual = responses[field]
