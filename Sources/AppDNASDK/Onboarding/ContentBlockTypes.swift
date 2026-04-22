@@ -802,6 +802,13 @@ public struct SocialProviderConfig: Codable {
     public let label: String?
     public let enabled: Bool?
     public let icon_style: String?  // "default", "monochrome_light", "monochrome_dark", "filled", "outline"
+    // Per-button style overrides — nil → fall back to provider-type defaults
+    // (Apple=black, Google=#4285F4, email=#6366F1, etc.). SPEC-089e amendment.
+    public let bg_color: String?
+    public let text_color: String?
+    public let border_color: String?
+    public let border_width: Double?
+    public let corner_radius: Double?
 }
 
 /// A single item for the `animated_loading` checklist OR for the
@@ -953,6 +960,9 @@ public struct ContentBlock: Codable, Identifiable {
     public let spacing: Double?
     public let show_divider: Bool?
     public let divider_text: String?
+    // SPEC-089e amendment — email CTA placement + spacer
+    public let email_login_placement: String?   // "with_providers" | "below_inputs"
+    public let email_cta_spacing_below: Double? // px spacer after email button
 
     // SPEC-089d Phase A: countdown_timer fields
     public let timer_variant: String?      // digital, circular, flip, bar
@@ -1156,6 +1166,8 @@ public struct ContentBlock: Codable, Identifiable {
         case dot_size, dot_spacing, active_dot_width, alignment
         case providers, button_style, button_height, spacing
         case show_divider, divider_text
+        // SPEC-089e amendment — email button placement + spacer
+        case email_login_placement, email_cta_spacing_below
         case timer_variant, duration_seconds
         case show_days, show_hours, show_minutes, show_seconds
         case labels, on_expire_action, expired_text, accent_color, font_size
@@ -1269,6 +1281,8 @@ public struct ContentBlock: Codable, Identifiable {
         self.spacing = try c.decodeIfPresent(Double.self, forKey: .spacing)
         self.show_divider = try c.decodeIfPresent(Bool.self, forKey: .show_divider)
         self.divider_text = try c.decodeIfPresent(String.self, forKey: .divider_text)
+        self.email_login_placement = try c.decodeIfPresent(String.self, forKey: .email_login_placement)
+        self.email_cta_spacing_below = try c.decodeIfPresent(Double.self, forKey: .email_cta_spacing_below)
         self.timer_variant = try c.decodeIfPresent(String.self, forKey: .timer_variant)
         self.duration_seconds = try c.decodeIfPresent(Int.self, forKey: .duration_seconds)
         self.show_days = try c.decodeIfPresent(Bool.self, forKey: .show_days)

@@ -677,27 +677,32 @@ struct ContentBlockRendererView: View {
         let btnSpacing = CGFloat(block.spacing ?? 12)
         let btnRadius = CGFloat(block.button_corner_radius ?? 12)
 
+        // SPEC-089e amendment — when email_login_placement == "below_inputs"
+        // the email provider renders first, then a spacer, then the other
+        // providers. This is the expected layout when the social_login block
+        // sits directly under email+password input blocks.
+        let placement = block.email_login_placement ?? "with_providers"
+        let emailSpacer = CGFloat(block.email_cta_spacing_below ?? 16)
+        let (topGroup, bottomGroup): ([SocialProviderConfig], [SocialProviderConfig]) = {
+            if placement == "below_inputs", let emailIdx = providerList.firstIndex(where: { ($0.type ?? "") == "email" }) {
+                var rest = providerList
+                let email = rest.remove(at: emailIdx)
+                return ([email], rest)
+            }
+            return (providerList, [])
+        }()
+
         return VStack(spacing: btnSpacing) {
-            ForEach(Array(providerList.enumerated()), id: \.offset) { _, provider in
-                let providerType = provider.type ?? ""
-                Button {
-                    onAction("social_login", providerType)
-                } label: {
-                    HStack(spacing: 10) {
-                        socialLoginIcon(providerType, iconStyle: provider.icon_style)
-                        Text(provider.label ?? socialLoginDefaultLabel(providerType))
-                            .font(.body.weight(.semibold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: btnHeight)
-                    .foregroundColor(socialLoginTextColor(providerType, style: btnStyle))
-                    .background(socialLoginBgColor(providerType, style: btnStyle))
-                    .clipShape(RoundedRectangle(cornerRadius: btnRadius))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: btnRadius)
-                            .stroke(socialLoginBorderColor(providerType, style: btnStyle), lineWidth: btnStyle == "outlined" ? 1.5 : 0)
-                    )
-                }
+            ForEach(Array(topGroup.enumerated()), id: \.offset) { _, provider in
+                socialLoginButton(provider, btnStyle: btnStyle, btnHeight: btnHeight, blockRadius: btnRadius)
+            }
+            if placement == "below_inputs" && !topGroup.isEmpty && !bottomGroup.isEmpty {
+                // Subtract the VStack's own spacing so the visual gap between the
+                // email button and the first OAuth button equals emailSpacer.
+                Color.clear.frame(height: max(0, emailSpacer - btnSpacing))
+            }
+            ForEach(Array(bottomGroup.enumerated()), id: \.offset) { _, provider in
+                socialLoginButton(provider, btnStyle: btnStyle, btnHeight: btnHeight, blockRadius: btnRadius)
             }
 
             // Optional divider between social login and other options
@@ -710,6 +715,48 @@ struct ContentBlockRendererView: View {
                     Rectangle().fill(Color.gray.opacity(0.3)).frame(height: 1)
                 }
             }
+        }
+    }
+
+    /// One social-login button with per-provider color/radius overrides applied.
+    /// SPEC-089e amendment — any nil override falls back to the brand default
+    /// (Apple=black, Google=#4285F4, email=#6366F1, etc.).
+    private func socialLoginButton(_ provider: SocialProviderConfig, btnStyle: String, btnHeight: CGFloat, blockRadius: CGFloat) -> some View {
+        let providerType = provider.type ?? ""
+        let radius = CGFloat(provider.corner_radius ?? Double(blockRadius))
+        let bgColor: Color = {
+            if let hex = provider.bg_color, !hex.isEmpty { return Color(hex: hex) }
+            return socialLoginBgColor(providerType, style: btnStyle)
+        }()
+        let textColor: Color = {
+            if let hex = provider.text_color, !hex.isEmpty { return Color(hex: hex) }
+            return socialLoginTextColor(providerType, style: btnStyle)
+        }()
+        let borderColor: Color = {
+            if let hex = provider.border_color, !hex.isEmpty { return Color(hex: hex) }
+            return socialLoginBorderColor(providerType, style: btnStyle)
+        }()
+        let borderWidth: CGFloat = {
+            if let w = provider.border_width { return CGFloat(w) }
+            return btnStyle == "outlined" ? 1.5 : 0
+        }()
+        return Button {
+            onAction("social_login", providerType)
+        } label: {
+            HStack(spacing: 10) {
+                socialLoginIcon(providerType, iconStyle: provider.icon_style)
+                Text(provider.label ?? socialLoginDefaultLabel(providerType))
+                    .font(.body.weight(.semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: btnHeight)
+            .foregroundColor(textColor)
+            .background(bgColor)
+            .clipShape(RoundedRectangle(cornerRadius: radius))
+            .overlay(
+                RoundedRectangle(cornerRadius: radius)
+                    .stroke(borderColor, lineWidth: borderWidth)
+            )
         }
     }
 
