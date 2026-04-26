@@ -1427,9 +1427,116 @@ struct OnboardingStepRouter: View {
             // action_value will specify the permission type (e.g. "camera", "notifications").
             // For now, advance the step as a safe fallback.
             onNext(nil)
+
+        // MARK: Auth actions (entry)
+        case "login", "register", "reset_password", "magic_link",
+             "verify_email", "resend_verification", "enable_biometric":
+            emitAuthAction(action, actionValue: actionValue)
+        case "request_otp", "verify_otp":
+            emitAuthAction(action, actionValue: actionValue, includeChannel: true)
+
+        // MARK: Account lifecycle
+        case "logout", "change_password", "set_new_password",
+             "delete_account", "update_profile":
+            emitAuthAction(action, actionValue: actionValue)
+
         default:
             onNext(nil)
         }
+    }
+
+    /// Strict-typed auth/account action emitter. Validates required fields,
+    /// then emits `{action, [channel?], [recipient?], ...inputValues}` so the
+    /// host can route via `onBeforeStepAdvance`. Stays on the step (no auto-
+    /// advance) so the host can show a "Signing in..." spinner via `.block(...)`.
+    private func emitAuthAction(_ action: String, actionValue: String?, includeChannel: Bool = false) {
+        // Required-field validation runs first — same gate as `next`.
+        guard canAdvance else {
+            withAnimation { showValidationToast = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                withAnimation { showValidationToast = false }
+            }
+            return
+        }
+        var data: [String: Any] = ["action": action]
+        if includeChannel {
+            let resolved = resolveOtpChannel(actionValue: actionValue)
+            data["channel"] = resolved.channel as Any
+            if let recipient = resolved.recipient {
+                data["recipient"] = recipient
+            }
+        }
+        for (key, value) in inputValues {
+            data[key] = value
+        }
+        onNext(data)
+    }
+
+    /// Resolve the OTP delivery channel for `request_otp` / `verify_otp`.
+    /// Thin wrapper around the pure `OtpChannelResolver.resolve` so the view
+    /// can pass its own state in and the resolver stays unit-testable.
+    private func resolveOtpChannel(actionValue: String?) -> (channel: String?, recipient: String?) {
+        OtpChannelResolver.resolve(
+            actionValue: actionValue,
+            blocks: effectiveConfig.content_blocks ?? [],
+            inputValues: inputValues,
+        )
+    }
+}
+
+// MARK: - OTP Channel Resolver
+
+/// Pure resolver for the OTP delivery channel used by `request_otp` /
+/// `verify_otp` buttons. Extracted from the view so unit tests can verify
+/// the explicit-channel + auto-detect logic without instantiating SwiftUI.
+enum OtpChannelResolver {
+    /// Resolution order:
+    ///   1) Explicit `actionValue` from the button config
+    ///      (`"sms" | "email" | "whatsapp" | "voice"`, case-insensitive)
+    ///   2) Auto-detect: step has exactly one phone-typed input → `"sms"`;
+    ///      exactly one email-typed input → `"email"`
+    ///   3) `nil` — ambiguous (both or neither). Host must fail explicitly
+    ///      rather than guess.
+    /// Recipient is derived from the matching `inputValues` field when present.
+    static func resolve(
+        actionValue: String?,
+        blocks: [ContentBlock],
+        inputValues: [String: Any],
+    ) -> (channel: String?, recipient: String?) {
+        let supported: Set<String> = ["sms", "email", "whatsapp", "voice"]
+        let phoneBlocks = blocks.filter { $0.type == .input_phone }
+        let emailBlocks = blocks.filter { $0.type == .input_email }
+
+        if let raw = actionValue?.lowercased(), supported.contains(raw) {
+            let recipient: String?
+            switch raw {
+            case "sms", "whatsapp", "voice":
+                if let id = phoneBlocks.first?.field_id ?? phoneBlocks.first?.id {
+                    recipient = inputValues[id] as? String
+                } else {
+                    recipient = nil
+                }
+            case "email":
+                if let id = emailBlocks.first?.field_id ?? emailBlocks.first?.id {
+                    recipient = inputValues[id] as? String
+                } else {
+                    recipient = nil
+                }
+            default:
+                recipient = nil
+            }
+            return (raw, recipient)
+        }
+
+        if phoneBlocks.count == 1 && emailBlocks.isEmpty {
+            let id = phoneBlocks[0].field_id ?? phoneBlocks[0].id
+            return ("sms", inputValues[id] as? String)
+        }
+        if emailBlocks.count == 1 && phoneBlocks.isEmpty {
+            let id = emailBlocks[0].field_id ?? emailBlocks[0].id
+            return ("email", inputValues[id] as? String)
+        }
+        return (nil, nil)
     }
 }
 

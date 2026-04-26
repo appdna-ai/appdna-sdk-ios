@@ -319,7 +319,20 @@ final class PaywallManager {
     }
 
     private func handleRestore(paywallId: String, delegate: AppDNAPaywallDelegate?) {
-        guard let bridge = billingBridge else { return }
+        guard let bridge = billingBridge else {
+            // No billing bridge configured — surface the failure so hosts don't see silence.
+            DispatchQueue.main.async {
+                delegate?.onPaywallRestoreFailed(
+                    paywallId: paywallId,
+                    error: BillingError.providerNotAvailable("Billing bridge not configured"),
+                )
+            }
+            return
+        }
+
+        DispatchQueue.main.async {
+            delegate?.onPaywallRestoreStarted(paywallId: paywallId)
+        }
 
         Task {
             do {
@@ -329,11 +342,21 @@ final class PaywallManager {
                     "restored_count": restored.count,
                 ])
                 DispatchQueue.main.async {
-                    // Restore results are handled via the billing delegate
+                    delegate?.onPaywallRestoreCompleted(
+                        paywallId: paywallId,
+                        productIds: restored,
+                    )
                     Log.info("Restore completed for paywall \(paywallId) with \(restored.count) products")
                 }
             } catch {
-                Log.error("Restore failed: \(error.localizedDescription)")
+                eventTracker.track(event: "purchase_restore_failed", properties: [
+                    "paywall_id": paywallId,
+                    "error": error.localizedDescription,
+                ])
+                DispatchQueue.main.async {
+                    delegate?.onPaywallRestoreFailed(paywallId: paywallId, error: error)
+                    Log.error("Restore failed: \(error.localizedDescription)")
+                }
             }
         }
     }

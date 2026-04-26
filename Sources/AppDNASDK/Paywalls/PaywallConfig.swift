@@ -710,6 +710,17 @@ public protocol AppDNAPaywallDelegate: AnyObject {
     func onPostPurchaseDeepLink(paywallId: String, url: String)
     /// Post-purchase: SDK wants the host app to continue to the next onboarding step.
     func onPostPurchaseNextStep(paywallId: String)
+    /// Restore-purchase lifecycle: fired when the user taps the Restore button on the paywall
+    /// and the SDK begins restoring entitlements via StoreKit 2.
+    func onPaywallRestoreStarted(paywallId: String)
+    /// Restore-purchase lifecycle: fired after the SDK successfully restores. `productIds`
+    /// is the list of previously-purchased product identifiers returned by StoreKit. Hosts
+    /// that need full transaction details can call `AppDNA.billing.restorePurchases()` to
+    /// receive `[ServerEntitlement]` directly.
+    func onPaywallRestoreCompleted(paywallId: String, productIds: [String])
+    /// Restore-purchase lifecycle: fired when the restore call throws (network failure, no
+    /// previous purchases, StoreKit error, etc.). The paywall stays visible.
+    func onPaywallRestoreFailed(paywallId: String, error: Error)
 }
 
 /// Default empty implementations so delegates can opt into specific callbacks.
@@ -723,6 +734,9 @@ public extension AppDNAPaywallDelegate {
     func onPromoCodeSubmit(paywallId: String, code: String, completion: @escaping (Bool) -> Void) { completion(false) }
     func onPostPurchaseDeepLink(paywallId: String, url: String) {}
     func onPostPurchaseNextStep(paywallId: String) {}
+    func onPaywallRestoreStarted(paywallId: String) {}
+    func onPaywallRestoreCompleted(paywallId: String, productIds: [String]) {}
+    func onPaywallRestoreFailed(paywallId: String, error: Error) {}
 }
 
 // MARK: - Post-Purchase Config
