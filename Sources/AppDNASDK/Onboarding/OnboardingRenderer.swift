@@ -391,20 +391,27 @@ struct OnboardingFlowHost: View {
         SessionDataStore.shared.setOnboardingResponses(responses)
         onStepCompleted(step.id, currentIndex, data)
 
-        let isSocialLogin = (data?["action"] as? String) == "social_login"
+        // Auth-style actions require a delegate to perform the side effect
+        // (sign in, register, send OTP, etc.) before the user advances past
+        // the credential-collection step. Without a delegate the SDK has
+        // nowhere to route the credentials, so it stays on the step and
+        // logs a warning rather than silently advancing.
+        let actionString = (data?["action"] as? String) ?? ""
+        let requiresDelegate = AuthActionPolicy.delegateRequiredActions.contains(actionString)
 
         // SPEC-083: Determine hook type — client delegate takes priority over server hook
         if delegate != nil {
-            // Client-side hook — for social_login, the delegate handles auth and returns
-            // .proceed/.proceedWithData to advance, or .block to stay, or dismisses the host.
+            // Client-side hook — for auth actions, the delegate handles the side
+            // effect and returns .proceed/.proceedWithData to advance, .block to
+            // stay (e.g. show "Signing in..."), or dismisses the host.
             executeClientHook(step: step, data: data)
         } else if let hook = step.hook, hook.enabled == true {
             // Server-side hook (P1)
             executeServerHook(step: step, data: data, hookConfig: hook)
-        } else if isSocialLogin {
-            // Social login without a delegate: do NOT auto-advance.
-            // The app must implement AppDNAOnboardingDelegate to handle social auth.
-            Log.warning("[Onboarding] social_login action received but no delegate is set. Implement AppDNAOnboardingDelegate to handle social auth.")
+        } else if requiresDelegate {
+            // Auth/account action without a delegate: do NOT auto-advance.
+            // The app must implement AppDNAOnboardingDelegate to handle the side effect.
+            Log.warning("[Onboarding] '\(actionString)' action received but no delegate is set. Implement AppDNAOnboardingDelegate to handle the action.")
         } else {
             // No hook — advance immediately
             advanceOrComplete()
@@ -1449,6 +1456,12 @@ struct OnboardingStepRouter: View {
     /// then emits `{action, [channel?], [recipient?], ...inputValues}` so the
     /// host can route via `onBeforeStepAdvance`. Stays on the step (no auto-
     /// advance) so the host can show a "Signing in..." spinner via `.block(...)`.
+    ///
+    /// Merge order: inputValues are placed first so the SDK-controlled keys
+    /// (`action`, `channel`, `recipient`) always win. A field id collision
+    /// (e.g. customer named an input "action") cannot mask the button identity.
+    /// `channel` is omitted entirely when nil rather than wrapped as `Any`,
+    /// since wrapping `Optional.none` breaks JSONSerialization downstream.
     private func emitAuthAction(_ action: String, actionValue: String?, includeChannel: Bool = false) {
         // Required-field validation runs first — same gate as `next`.
         guard canAdvance else {
@@ -1458,16 +1471,19 @@ struct OnboardingStepRouter: View {
             }
             return
         }
-        var data: [String: Any] = ["action": action]
+        var data: [String: Any] = [:]
+        for (key, value) in inputValues {
+            data[key] = value
+        }
+        data["action"] = action
         if includeChannel {
             let resolved = resolveOtpChannel(actionValue: actionValue)
-            data["channel"] = resolved.channel as Any
+            if let channel = resolved.channel {
+                data["channel"] = channel
+            }
             if let recipient = resolved.recipient {
                 data["recipient"] = recipient
             }
-        }
-        for (key, value) in inputValues {
-            data[key] = value
         }
         onNext(data)
     }
@@ -1482,6 +1498,28 @@ struct OnboardingStepRouter: View {
             inputValues: inputValues,
         )
     }
+}
+
+// MARK: - Auth Action Policy
+
+/// Single source of truth for which button actions REQUIRE an
+/// `AppDNAOnboardingDelegate` to be set before the SDK will advance the user
+/// past a credential-collection step. If a host fires one of these actions
+/// without a delegate, `handleStepCompleted` logs a warning and stays on the
+/// step — credentials never silently flow into `responses` without a side
+/// effect (sign in, register, send OTP, etc.) actually being performed.
+enum AuthActionPolicy {
+    static let delegateRequiredActions: Set<String> = [
+        // existing
+        "social_login",
+        // entry
+        "login", "register", "reset_password", "magic_link",
+        "request_otp", "verify_otp", "verify_email", "resend_verification",
+        "enable_biometric",
+        // lifecycle
+        "logout", "change_password", "set_new_password",
+        "delete_account", "update_profile",
+    ]
 }
 
 // MARK: - OTP Channel Resolver

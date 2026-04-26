@@ -171,6 +171,42 @@ final class OnboardingActionPassthroughTests: XCTestCase {
         XCTAssertEqual(result.recipient, "+15551234567")
     }
 
+    // MARK: - Auth action policy (delegate-required guard)
+
+    func testAllAuthActionsRequireDelegate() {
+        // Every strict-typed auth action — entry + lifecycle + the legacy
+        // social_login — must be in the delegate-required set so the SDK
+        // refuses to silently advance past credential collection without a
+        // host-side handler.
+        let entry: [String] = [
+            "login", "register", "reset_password", "magic_link",
+            "request_otp", "verify_otp", "verify_email", "resend_verification",
+            "enable_biometric",
+        ]
+        let lifecycle: [String] = [
+            "logout", "change_password", "set_new_password",
+            "delete_account", "update_profile",
+        ]
+        for action in entry + lifecycle + ["social_login"] {
+            XCTAssertTrue(
+                AuthActionPolicy.delegateRequiredActions.contains(action),
+                "Action '\(action)' must be guarded by AuthActionPolicy",
+            )
+        }
+    }
+
+    func testFlowControlActionsDoNotRequireDelegate() {
+        // Flow-control actions advance the step on their own — they MUST NOT
+        // be in the delegate-required set or hosts that don't implement a
+        // delegate would get stuck on every step.
+        for action in ["next", "skip", "link", "permission"] {
+            XCTAssertFalse(
+                AuthActionPolicy.delegateRequiredActions.contains(action),
+                "Action '\(action)' must NOT require a delegate",
+            )
+        }
+    }
+
     // MARK: - Helpers
 
     private func blockJson(id: String, type: String) -> String {
