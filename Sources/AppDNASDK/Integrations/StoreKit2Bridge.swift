@@ -7,15 +7,44 @@ final class StoreKit2Bridge: BillingBridgeProtocol {
     func purchase(productId: String) async throws -> PurchaseResult {
         let products = try await Product.products(for: [productId])
         guard let product = products.first else {
-            throw StoreKit2Error.productNotFound(productId)
+            let err = StoreKit2Error.productNotFound(productId)
+            await fireBillingPurchaseFailed(productId: productId, error: err)
+            throw err
         }
 
-        let result = try await product.purchase()
+        let result: Product.PurchaseResult
+        do {
+            result = try await product.purchase()
+        } catch {
+            await fireBillingPurchaseFailed(productId: productId, error: error)
+            throw error
+        }
 
         switch result {
         case .success(let verification):
-            let transaction = try checkVerified(verification)
+            let transaction: Transaction
+            do {
+                transaction = try checkVerified(verification)
+            } catch {
+                await fireBillingPurchaseFailed(productId: productId, error: error)
+                throw error
+            }
             await transaction.finish()
+
+            // SPEC-400 — fire onPurchaseCompleted to the host's
+            // registered AppDNABillingDelegate. Single source of truth
+            // for billing-delegate purchase callbacks; PaywallManager
+            // does NOT fire here, so each successful purchase produces
+            // exactly one onPurchaseCompleted invocation.
+            let txInfo = TransactionInfo(
+                transactionId: String(transaction.id),
+                productId: product.id,
+                purchaseDate: transaction.purchaseDate,
+                environment: "production"
+            )
+            await MainActor.run {
+                AppDNA.billingDelegate?.onPurchaseCompleted(productId: product.id, transaction: txInfo)
+            }
 
             return PurchaseResult(
                 productId: product.id,
@@ -26,13 +55,19 @@ final class StoreKit2Bridge: BillingBridgeProtocol {
             )
 
         case .userCancelled:
-            throw StoreKit2Error.userCancelled
+            let err = StoreKit2Error.userCancelled
+            await fireBillingPurchaseFailed(productId: productId, error: err)
+            throw err
 
         case .pending:
-            throw StoreKit2Error.purchasePending
+            let err = StoreKit2Error.purchasePending
+            await fireBillingPurchaseFailed(productId: productId, error: err)
+            throw err
 
         @unknown default:
-            throw StoreKit2Error.unknown
+            let err = StoreKit2Error.unknown
+            await fireBillingPurchaseFailed(productId: productId, error: err)
+            throw err
         }
     }
 
@@ -45,7 +80,20 @@ final class StoreKit2Bridge: BillingBridgeProtocol {
             }
         }
 
+        // SPEC-400 — fire onRestoreCompleted alongside the return.
+        let ids = restoredIds
+        await MainActor.run {
+            AppDNA.billingDelegate?.onRestoreCompleted(restoredProducts: ids)
+        }
+
         return restoredIds
+    }
+
+    /// SPEC-400 — single helper for the purchase-failure delegate fan-out.
+    private func fireBillingPurchaseFailed(productId: String, error: Error) async {
+        await MainActor.run {
+            AppDNA.billingDelegate?.onPurchaseFailed(productId: productId, error: error)
+        }
     }
 
     func getEntitlements() async -> [String] {

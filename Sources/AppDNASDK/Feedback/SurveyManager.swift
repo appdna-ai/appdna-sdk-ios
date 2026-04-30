@@ -92,6 +92,14 @@ final class SurveyManager {
             "trigger_event": triggerEvent,
         ])
 
+        // SPEC-400 — fire onSurveyPresented to the host's registered
+        // survey delegate. Read fresh on every callback; no init-time
+        // capture. Default extension (empty no-op) means hosts that
+        // don't implement this method are unaffected.
+        DispatchQueue.main.async {
+            AppDNA.surveys.delegate?.onSurveyPresented(surveyId: surveyId)
+        }
+
         renderer.present(config: config, onQuestionAnswered: { [weak self] surveyName, question, answer in
             self?.eventTracker.track(event: "survey_question_answered", properties: [
                 "survey_id": surveyId,
@@ -109,6 +117,12 @@ final class SurveyManager {
                 self.trackSurveyCompleted(surveyId: surveyId, config: config, answers: answers)
                 self.submitResponse(surveyId: surveyId, config: config, answers: answers)
                 self.executeFollowUpAction(config: config, answers: answers)
+                // SPEC-400 — fire onSurveyCompleted with the responses
+                // mapped to the public `[SurveyResponse]` shape.
+                let responses = answers.map { SurveyResponse(questionId: $0.question_id, answer: $0.answer) }
+                DispatchQueue.main.async {
+                    AppDNA.surveys.delegate?.onSurveyCompleted(surveyId: surveyId, responses: responses)
+                }
 
             case .dismissed(let answeredCount):
                 self.frequencyTracker.recordDisplay(surveyId: surveyId)
@@ -116,6 +130,10 @@ final class SurveyManager {
                     "survey_id": surveyId,
                     "questions_answered": answeredCount,
                 ])
+                // SPEC-400 — fire onSurveyDismissed.
+                DispatchQueue.main.async {
+                    AppDNA.surveys.delegate?.onSurveyDismissed(surveyId: surveyId)
+                }
             }
         }
     }

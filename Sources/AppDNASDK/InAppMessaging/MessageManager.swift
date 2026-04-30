@@ -104,6 +104,17 @@ final class MessageManager {
 
     private func present(messageId: String, config: MessageConfig, triggerEvent: String) {
         guard !isPresenting else { return }
+
+        // SPEC-400 — `shouldShowMessage` veto. Run BEFORE any analytics
+        // tracking or view construction so a vetoed message produces no
+        // `in_app_message_shown` event. The protocol's default extension
+        // returns `true`, so hosts that don't implement this method are
+        // unaffected. Reading the delegate fresh on every call.
+        if let host = AppDNA.inAppMessages.delegate, host.shouldShowMessage(messageId: messageId) == false {
+            Log.debug("In-app message \(messageId) suppressed by host shouldShowMessage veto")
+            return
+        }
+
         guard let windowScene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first,
@@ -128,6 +139,12 @@ final class MessageManager {
             "trigger_event": triggerEvent,
         ])
 
+        // SPEC-400 — fire onMessageShown to the host's registered
+        // delegate alongside the existing analytics track.
+        DispatchQueue.main.async {
+            AppDNA.inAppMessages.delegate?.onMessageShown(messageId: messageId, trigger: triggerEvent)
+        }
+
         let messageView = MessageRenderer(
             messageId: messageId,
             config: config,
@@ -136,9 +153,21 @@ final class MessageManager {
                     "message_id": messageId,
                     "cta_action": config.content?.cta_action?.type?.rawValue ?? "dismiss",
                 ])
+                // SPEC-400 — fire onMessageAction with action type + cta_action data.
+                let ctaActionType = config.content?.cta_action?.type?.rawValue ?? "dismiss"
+                let ctaData: [String: Any]? = {
+                    guard let cta = config.content?.cta_action, let url = cta.url else { return nil }
+                    return ["url": url]
+                }()
+                DispatchQueue.main.async {
+                    AppDNA.inAppMessages.delegate?.onMessageAction(messageId: messageId, action: ctaActionType, data: ctaData)
+                }
                 self?.handleCTAAction(config.content?.cta_action)
                 topVC.dismiss(animated: true) {
                     self?.isPresenting = false
+                    DispatchQueue.main.async {
+                        AppDNA.inAppMessages.delegate?.onMessageDismissed(messageId: messageId)
+                    }
                 }
             },
             onDismiss: { [weak self] in
@@ -147,6 +176,10 @@ final class MessageManager {
                 ])
                 topVC.dismiss(animated: true) {
                     self?.isPresenting = false
+                    // SPEC-400 — fire onMessageDismissed.
+                    DispatchQueue.main.async {
+                        AppDNA.inAppMessages.delegate?.onMessageDismissed(messageId: messageId)
+                    }
                 }
             }
         )

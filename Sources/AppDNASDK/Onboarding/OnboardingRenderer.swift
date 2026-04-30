@@ -1591,10 +1591,29 @@ enum OtpChannelResolver {
 /// Paywall SDK already emits `onPaywallPurchaseFailed` — previous
 /// onboarding bridge simply didn't wire it. Onboarding used to collapse
 /// all three into "complete flow" which swallowed real user intent.
+/// SPEC-400 Phase 1 — 12-method forwarding bridge.
+///
+/// Forwards every `AppDNAPaywallDelegate` callback to the host's
+/// registered global delegate at `AppDNA.paywall.delegate` BEFORE
+/// running the onboarding chain routing. The host delegate is read
+/// fresh on every callback (never captured at init) so a host that
+/// registers `AppDNA.paywall.setDelegate(...)` AFTER the onboarding
+/// flow is presented still receives forwards.
+///
+/// Routing side-effects (`didPurchase`, `didFail`, `onPurchased()`,
+/// `onFailed()`, `onDismissedWithoutPurchase()`) preserve the existing
+/// `on_success_target` / `on_fail_target` / `on_dismiss_target`
+/// chaining exactly. Onboarding routing must NOT depend on host
+/// delegate availability.
+///
+/// Each instance handles exactly one paywall presentation; flags
+/// initialize to false on every fresh init so no manual reset is
+/// needed between paywall opens.
 private class OnboardingPaywallBridge: AppDNAPaywallDelegate {
     private let onPurchased: () -> Void
     private let onFailed: () -> Void
     private let onDismissedWithoutPurchase: () -> Void
+    // Per-instance state (one bridge per paywall presentation).
     private var didPurchase = false
     private var didFail = false
 
@@ -1608,11 +1627,27 @@ private class OnboardingPaywallBridge: AppDNAPaywallDelegate {
         self.onDismissedWithoutPurchase = onDismissedWithoutPurchase
     }
 
+    // MARK: - AppDNAPaywallDelegate (12 methods, forward then route)
+
+    func onPaywallPresented(paywallId: String) {
+        forwardOnMain { $0.onPaywallPresented(paywallId: paywallId) }
+    }
+
+    func onPaywallAction(paywallId: String, action: PaywallAction) {
+        forwardOnMain { $0.onPaywallAction(paywallId: paywallId, action: action) }
+    }
+
+    func onPaywallPurchaseStarted(paywallId: String, productId: String) {
+        forwardOnMain { $0.onPaywallPurchaseStarted(paywallId: paywallId, productId: productId) }
+    }
+
     func onPaywallPurchaseCompleted(paywallId: String, productId: String, transaction: TransactionInfo) {
+        forwardOnMain { $0.onPaywallPurchaseCompleted(paywallId: paywallId, productId: productId, transaction: transaction) }
         didPurchase = true
     }
 
     func onPaywallPurchaseFailed(paywallId: String, error: Error) {
+        forwardOnMain { $0.onPaywallPurchaseFailed(paywallId: paywallId, error: error) }
         // Paywall stays on screen (iOS convention — error toast, retry
         // allowed). Mark the intent; the onboarding router decides what
         // to do if `on_fail_target` requests navigating away.
@@ -1621,6 +1656,7 @@ private class OnboardingPaywallBridge: AppDNAPaywallDelegate {
     }
 
     func onPaywallDismissed(paywallId: String) {
+        forwardOnMain { $0.onPaywallDismissed(paywallId: paywallId) }
         if didPurchase {
             onPurchased()
         } else {
@@ -1628,6 +1664,53 @@ private class OnboardingPaywallBridge: AppDNAPaywallDelegate {
             // paywall stays visible after a failure and the user later
             // taps X, they've now dismissed — route the dismiss branch.
             onDismissedWithoutPurchase()
+        }
+    }
+
+    func onPromoCodeSubmit(paywallId: String, code: String, completion: @escaping (Bool) -> Void) {
+        // Synchronous forward — the SDK depends on the completion
+        // handler being called. If the host hasn't registered a
+        // delegate, fall through to the protocol's default behavior
+        // (completion(false)) so standalone and onboarding-embedded
+        // paywalls behave identically.
+        if let host = AppDNA.paywall.delegate {
+            host.onPromoCodeSubmit(paywallId: paywallId, code: code, completion: completion)
+        } else {
+            completion(false)
+        }
+    }
+
+    func onPostPurchaseDeepLink(paywallId: String, url: String) {
+        forwardOnMain { $0.onPostPurchaseDeepLink(paywallId: paywallId, url: url) }
+    }
+
+    func onPostPurchaseNextStep(paywallId: String) {
+        forwardOnMain { $0.onPostPurchaseNextStep(paywallId: paywallId) }
+    }
+
+    func onPaywallRestoreStarted(paywallId: String) {
+        forwardOnMain { $0.onPaywallRestoreStarted(paywallId: paywallId) }
+    }
+
+    func onPaywallRestoreCompleted(paywallId: String, productIds: [String]) {
+        forwardOnMain { $0.onPaywallRestoreCompleted(paywallId: paywallId, productIds: productIds) }
+    }
+
+    func onPaywallRestoreFailed(paywallId: String, error: Error) {
+        forwardOnMain { $0.onPaywallRestoreFailed(paywallId: paywallId, error: error) }
+    }
+
+    /// Read `AppDNA.paywall.delegate` fresh on every call (no init-time
+    /// capture). Reading the slot is performed on the main thread for
+    /// both branches to avoid a data race against `setDelegate(...)`
+    /// (which is `internal var`, mutable, non-atomic).
+    private func forwardOnMain(_ block: @escaping (AppDNAPaywallDelegate) -> Void) {
+        if Thread.isMainThread {
+            if let host = AppDNA.paywall.delegate { block(host) }
+        } else {
+            DispatchQueue.main.async {
+                if let host = AppDNA.paywall.delegate { block(host) }
+            }
         }
     }
 }

@@ -10,7 +10,9 @@ import Foundation
 //
 //   - AppDNAPaywallDelegate → Sources/AppDNASDK/Paywalls/PaywallConfig.swift
 //     Methods: onPaywallPresented, onPaywallAction, onPaywallPurchaseStarted,
-//              onPaywallPurchaseCompleted, onPaywallPurchaseFailed, onPaywallDismissed
+//              onPaywallPurchaseCompleted, onPaywallPurchaseFailed, onPaywallDismissed,
+//              onPromoCodeSubmit, onPostPurchaseDeepLink, onPostPurchaseNextStep,
+//              onPaywallRestoreStarted, onPaywallRestoreCompleted, onPaywallRestoreFailed
 //
 //   - AppDNAPushDelegate → Sources/AppDNASDK/Integrations/AppDNAPushDelegate.swift
 //     Methods: onPushTokenRegistered, onPushReceived, onPushTapped

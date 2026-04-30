@@ -179,6 +179,11 @@ internal class ScreenManager {
         if let expId = config.experiment_id { trackProps["experiment_id"] = expId }
         if let vk = variantKey { trackProps["variant_key"] = vk }
         AppDNA.track(event:"screen_presented", properties: trackProps)
+        // SPEC-400 — fire onScreenPresented to the host's
+        // AppDNAScreenDelegate. Read fresh on every callback.
+        DispatchQueue.main.async {
+            AppDNA.screenDelegate?.onScreenPresented(screenId: screenId)
+        }
 
         // Present via PresentationCoordinator
         PresentationCoordinator.shared.requestPresentation(type: .screen) {
@@ -190,7 +195,13 @@ internal class ScreenManager {
                     "duration_ms": duration,
                 ])
                 self?.nestingDepth -= 1
-                completion?(ScreenResult(screenId: screenId, dismissed: true, duration_ms: duration))
+                let screenResult = ScreenResult(screenId: screenId, dismissed: true, duration_ms: duration)
+                // SPEC-400 — fire onScreenDismissed alongside the
+                // existing analytics track + completion handler.
+                DispatchQueue.main.async {
+                    AppDNA.screenDelegate?.onScreenDismissed(screenId: screenId, result: screenResult)
+                }
+                completion?(screenResult)
             }
         }
     }
@@ -214,6 +225,13 @@ internal class ScreenManager {
                 "screens_viewed": result.screensViewed,
                 "duration_ms": result.duration_ms,
             ])
+            // SPEC-400 — fire onFlowCompleted to the host's
+            // AppDNAScreenDelegate. Fires for both completed and
+            // abandoned flows; the FlowResult.completed flag tells
+            // the host which path was taken.
+            DispatchQueue.main.async {
+                AppDNA.screenDelegate?.onFlowCompleted(flowId: flowId, result: result)
+            }
             completion?(result)
         }
 

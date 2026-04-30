@@ -55,6 +55,18 @@ final class AdaptyBridge: BillingBridgeProtocol {
                 "currency": purchaseResult.currency,
                 "provider": "adapty",
             ])
+            // SPEC-400 — fire onPurchaseCompleted to the host's
+            // AppDNABillingDelegate. Bridges are the single source of
+            // truth for billing-delegate purchase events.
+            let txInfo = TransactionInfo(
+                transactionId: purchaseResult.transactionId,
+                productId: productId,
+                purchaseDate: Date(),
+                environment: "production"
+            )
+            await MainActor.run {
+                AppDNA.billingDelegate?.onPurchaseCompleted(productId: productId, transaction: txInfo)
+            }
             return purchaseResult
         } catch {
             eventTracker?.track(event: "purchase_failed", properties: [
@@ -62,15 +74,23 @@ final class AdaptyBridge: BillingBridgeProtocol {
                 "error": error.localizedDescription,
                 "provider": "adapty",
             ])
+            // SPEC-400 — fire onPurchaseFailed.
+            await MainActor.run {
+                AppDNA.billingDelegate?.onPurchaseFailed(productId: productId, error: error)
+            }
             throw error
         }
         #else
         // Stub: Adapty not available
-        throw NSError(
+        let err = NSError(
             domain: "ai.appdna.sdk",
             code: -1,
             userInfo: [NSLocalizedDescriptionKey: "Adapty SDK not linked"]
         )
+        await MainActor.run {
+            AppDNA.billingDelegate?.onPurchaseFailed(productId: productId, error: err)
+        }
+        throw err
         #endif
     }
 
@@ -82,8 +102,17 @@ final class AdaptyBridge: BillingBridgeProtocol {
             "restored_count": ids.count,
             "provider": "adapty",
         ])
+        // SPEC-400 — fire onRestoreCompleted.
+        await MainActor.run {
+            AppDNA.billingDelegate?.onRestoreCompleted(restoredProducts: ids)
+        }
         return ids
         #else
+        // Even when Adapty is not linked we still surface the empty
+        // restore so hosts get a consistent callback.
+        await MainActor.run {
+            AppDNA.billingDelegate?.onRestoreCompleted(restoredProducts: [])
+        }
         return []
         #endif
     }
