@@ -708,8 +708,15 @@ struct OnboardingFlowHost: View {
                 }
                 let target = rule.target_step_id
 
+                // Resolve the graph-node type (if any) so we can route by
+                // type instead of relying on ID prefix. The editor now
+                // generates short IDs (`paywall1`, `analytics2`, `end1`)
+                // that no longer carry the legacy prefix; both forms must
+                // route correctly.
+                let nodeType = graphNodeType(for: target)
+
                 // Analytics event node — fire event, then follow downstream edge
-                if target.hasPrefix("analytics_event_") {
+                if target.hasPrefix("analytics_event_") || nodeType == "analytics_event" {
                     // Get event details from graph_nodes
                     let nodeData = resolveGraphNode(target)
                     let eventName = nodeData?["event_name"] as? String ?? "onboarding_analytics"
@@ -728,13 +735,13 @@ struct OnboardingFlowHost: View {
 
                 // Paywall trigger node — extracted so post-dismiss outcome
                 // routing (winback chains) can re-enter the same code path.
-                if target.hasPrefix("paywall_trigger_") {
+                if target.hasPrefix("paywall_trigger_") || nodeType == "paywall_trigger" {
                     presentPaywallTrigger(target)
                     return
                 }
 
                 // End node
-                if target.hasPrefix("end_") {
+                if target.hasPrefix("end_") || nodeType == "end" {
                     onFlowCompleted(responses)
                     return
                 }
@@ -1032,6 +1039,16 @@ struct OnboardingFlowHost: View {
         return nil
     }
 
+    /// Look up a graph node's `type` from `graph_nodes` (the lightweight
+    /// extract synced for runtime). Lets the renderer route by type
+    /// instead of by ID prefix — necessary because the editor switched
+    /// from `paywall_trigger_<timestamp>` IDs to short `paywall<N>` IDs
+    /// and the prefix check would silently fall through. Returns nil
+    /// when the ID is unknown (legacy flows or actual step IDs).
+    private func graphNodeType(for nodeId: String) -> String? {
+        return resolveGraphNode(nodeId)?["type"] as? String
+    }
+
     /// Resolve paywall ID from a paywall_trigger graph node.
     private func resolvePaywallFromTrigger(_ triggerNodeId: String) -> String? {
         return resolvePaywallTriggerData(triggerNodeId)?["paywall_id"] as? String
@@ -1065,19 +1082,25 @@ struct OnboardingFlowHost: View {
         navigate(to: targetIndex)
     }
 
-    /// Route to any target by prefix — step id, paywall_trigger_* node,
-    /// or end_* node. Centralizes what used to be duplicated across
+    /// Route to any target — step id, paywall_trigger node, end node, or
+    /// analytics_event. Resolves graph nodes by `type` (looked up in the
+    /// `graph_nodes` lightweight extract) AND by legacy ID prefix, so
+    /// both modern (`paywall1`, `end1`) and legacy
+    /// (`paywall_trigger_<timestamp>`, `end_<timestamp>`) IDs route
+    /// correctly. Centralizes what used to be duplicated across
     /// advanceOrComplete and post-paywall outcome closures. Previously
     /// `skipToStep` (called from an outcome like on_dismiss_target)
     /// couldn't present a paywall, so dismiss → winback chains silently
     /// fell through to `advanceOrComplete` on the step underneath,
     /// looping the user back to paywall #1.
     private func navigateToTarget(_ target: String) {
-        if target.hasPrefix("end_") {
+        let nodeType = graphNodeType(for: target)
+
+        if target.hasPrefix("end_") || nodeType == "end" {
             onFlowCompleted(responses)
             return
         }
-        if target.hasPrefix("paywall_trigger_") {
+        if target.hasPrefix("paywall_trigger_") || nodeType == "paywall_trigger" {
             presentPaywallTrigger(target)
             return
         }
