@@ -741,7 +741,17 @@ struct ContentBlockRendererView: View {
             return btnStyle == "outlined" ? 1.5 : 0
         }()
         return Button {
-            onAction("social_login", providerType)
+            // The email provider in a social_login block is not actually OAuth — emit
+            // `email_login` so hosts can branch their auth handler cleanly. We also
+            // dual-emit the legacy `social_login` action this release so existing
+            // handlers that switch on `social_login` + value=="email" keep working.
+            // The legacy emit will be removed in v1.1.0.
+            if providerType == "email" {
+                onAction("email_login", providerType)
+                onAction("social_login", providerType) // deprecated; remove in v1.1.0
+            } else {
+                onAction("social_login", providerType)
+            }
         } label: {
             HStack(spacing: 10) {
                 socialLoginIcon(providerType, iconStyle: provider.icon_style)

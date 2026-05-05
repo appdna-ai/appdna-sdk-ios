@@ -1,16 +1,17 @@
 Pod::Spec.new do |s|
   s.name             = 'AppDNASDK'
-  s.version          = '1.0.59'
+  s.version          = '1.0.60'
   s.summary          = 'AppDNA iOS SDK — analytics, experiments, paywalls, onboarding, billing, push, and more.'
   s.description      = <<-DESC
 Native iOS SDK for AppDNA providing analytics, remote configuration, feature flags,
 experiments, paywalls, onboarding flows, surveys, web entitlements, and deferred deep links.
                        DESC
   s.homepage         = 'https://appdna.ai'
-  s.license          = { :type => 'MIT', :file => 'LICENSE' }
+  s.license          = { :type => 'Proprietary', :file => 'LICENSE' }
   s.author           = { 'AppDNA' => 'hello@appdna.ai' }
   s.source           = { :git => 'https://github.com/appdna-ai/appdna-sdk-ios.git', :tag => "v#{s.version}" }
   s.source_files     = 'Sources/AppDNASDK/**/*.swift'
+  s.resource_bundles = { 'AppDNASDK' => ['Sources/AppDNASDK/PrivacyInfo.xcprivacy'] }
   s.platform         = :ios, '16.0'
   s.swift_version    = '5.9'
 

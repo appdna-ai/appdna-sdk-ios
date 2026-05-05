@@ -20,6 +20,10 @@ struct OnboardingFlowHost: View {
     @State private var loadingText: String = "Processing..."
     @State private var errorMessage: String?
     @State private var showError = false
+    // .stay(message:) success-banner state — distinct from showError so the
+    // toast can render in success styling (green/info) instead of error (red).
+    @State private var successMessage: String?
+    @State private var showSuccess = false
     @State private var configOverrides: [String: StepConfigOverride] = [:]
 
     /// True while the SDK is prefetching images for the NEXT step. During this
@@ -76,6 +80,15 @@ struct OnboardingFlowHost: View {
                     if showError, let msg = errorMessage {
                         VStack {
                             errorBanner(message: msg)
+                            Spacer()
+                        }
+                    }
+
+                    // .stay(message:) success banner — same layout as the error
+                    // banner but rendered in success styling.
+                    if showSuccess, let msg = successMessage {
+                        VStack {
+                            successBanner(message: msg)
                             Spacer()
                         }
                     }
@@ -329,6 +342,47 @@ struct OnboardingFlowHost: View {
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
                 withAnimation { showError = false; errorMessage = nil }
+            }
+        }
+    }
+
+    // MARK: - .stay(message:) success banner
+
+    /// Non-error banner used by `StepAdvanceResult.stay(message:)`. Same layout
+    /// shape as `errorBanner` but rendered in success styling (green) so users
+    /// don't read it as a failure. Auto-dismisses after 4 seconds (slightly
+    /// shorter than error since success messages are less critical to read).
+    private func successBanner(message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.subheadline)
+                .foregroundColor(.white)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundColor(.white)
+                .multilineTextAlignment(.leading)
+
+            Spacer()
+
+            Button {
+                withAnimation { showSuccess = false; successMessage = nil }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption.bold())
+                    .foregroundColor(.white.opacity(0.8))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color(red: 0.18, green: 0.62, blue: 0.32)) // #2E9E51 success green
+        .cornerRadius(8)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                withAnimation { showSuccess = false; successMessage = nil }
             }
         }
     }
@@ -607,6 +661,12 @@ struct OnboardingFlowHost: View {
         case "block":
             return .block(message: message ?? hookConfig.error_text ?? "Request blocked by server.")
 
+        case "stay":
+            // Server can return action: "stay" to keep the user on the step.
+            // Optional `message` field renders in success styling. Empty/nil message
+            // is silent (server-side handler did its work; SDK shows nothing).
+            return .stay(message: message)
+
         case "skip_to":
             guard let targetStepId else {
                 return .proceed
@@ -645,6 +705,15 @@ struct OnboardingFlowHost: View {
             errorMessage = message
             withAnimation { showError = true }
 
+        case .stay(let message):
+            // Stay on current step. If a non-empty message is provided, render
+            // it in success styling. Otherwise truly silent — host has handled
+            // the UI (e.g., presented their own popup) before returning.
+            if let msg = message, !msg.isEmpty {
+                successMessage = msg
+                withAnimation { showSuccess = true }
+            }
+
         case .skipTo(let targetStepId):
             skipToStep(targetStepId)
 
@@ -672,6 +741,7 @@ struct OnboardingFlowHost: View {
         case .proceed: return "proceed"
         case .proceedWithData: return "proceed_with_data"
         case .block: return "block"
+        case .stay: return "stay"
         case .skipTo: return "skip_to"
         case .skipToWithData: return "skip_to"
         }
@@ -1460,7 +1530,8 @@ struct OnboardingStepRouter: View {
 
         // MARK: Auth actions (entry)
         case "login", "register", "reset_password", "magic_link",
-             "verify_email", "resend_verification", "enable_biometric":
+             "verify_email", "resend_verification", "enable_biometric",
+             "email_login":
             emitAuthAction(action, actionValue: actionValue)
         case "request_otp", "verify_otp":
             emitAuthAction(action, actionValue: actionValue, includeChannel: true)
@@ -1539,6 +1610,7 @@ enum AuthActionPolicy {
         "login", "register", "reset_password", "magic_link",
         "request_otp", "verify_otp", "verify_email", "resend_verification",
         "enable_biometric",
+        "email_login",
         // lifecycle
         "logout", "change_password", "set_new_password",
         "delete_account", "update_profile",

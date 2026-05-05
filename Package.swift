@@ -20,6 +20,9 @@ let package = Package(
             dependencies: [
                 "KeychainAccess",
                 .product(name: "FirebaseFirestore", package: "firebase-ios-sdk"),
+            ],
+            resources: [
+                .copy("PrivacyInfo.xcprivacy")
             ]
         ),
         .testTarget(

@@ -472,6 +472,17 @@ public enum StepAdvanceResult {
 
     /// Skip to a specific step, merging data.
     case skipToWithData(stepId: String, data: [String: Any])
+
+    /// Stay on the current step without advancing and without showing an error.
+    /// Use this when your hook handled the user's action (e.g., sent a password
+    /// reset email, displayed a success popup yourself) and you want the user to
+    /// remain on the same step.
+    ///
+    /// - Parameter message: Optional non-error message to display as a success
+    ///   toast/banner. Pass `nil` to stay silently — your code handles all UI.
+    ///   Pass a non-empty string and the SDK renders it in success styling
+    ///   (distinct from `.block`'s error styling).
+    case stay(message: String? = nil)
 }
 
 /// Optional config override for dynamic step content.
