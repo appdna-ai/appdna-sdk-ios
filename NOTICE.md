@@ -19,7 +19,7 @@
 - Use any part of the SDK to build a competing product
 
 A Commercial Agreement means either:
-- AppDNA's **Terms of Service** at https://appdna.ai/terms (self-serve customers), accepted electronically; or
+- AppDNA's **Terms of Service** at https://appdna.ai/legal/terms (self-serve customers), accepted electronically; or
 - A signed **Statement of Work** or **Master Services Agreement** (enterprise customers).
 
 To get started, visit **https://appdna.ai** or email **sales@appdna.ai**.
