@@ -2,7 +2,7 @@
 // Source: src/lib/sdk-delegates/index.ts
 // Generator: scripts/sdk-codegen/emit-delegates.ts
 // Regenerate: pnpm sdk-codegen
-// Last codegen commit: 6fd004b5c21e59f4be687ce38d7fa348724a1370
+// Last codegen commit: 1f63af072d8c4839595d3795fb27f094282cc367
 
 import Foundation
 
@@ -27,11 +27,11 @@ public protocol AppDNAPaywallDelegate: AnyObject {
     func onPaywallAction(paywallId: String, action: String)
     func onPaywallPurchaseStarted(paywallId: String, productId: String)
     func onPaywallPurchaseCompleted(paywallId: String, productId: String, transaction: [String: Any])
-    /// error type: Swift Error / Kotlin Throwable / Dart dynamic / TS unknown.
-    func onPaywallPurchaseFailed(paywallId: String, error: Any)
+    /// error type: Swift Error / Kotlin Throwable / Dart Object / TS unknown.
+    func onPaywallPurchaseFailed(paywallId: String, error: Error)
     func onPaywallRestoreStarted(paywallId: String)
     func onPaywallRestoreCompleted(paywallId: String, restoredProductIds: [String])
-    func onPaywallRestoreFailed(paywallId: String, error: Any)
+    func onPaywallRestoreFailed(paywallId: String, error: Error)
     func onPaywallDismissed(paywallId: String)
 }
 
@@ -40,10 +40,10 @@ public extension AppDNAPaywallDelegate {
     func onPaywallAction(paywallId: String, action: String) {}
     func onPaywallPurchaseStarted(paywallId: String, productId: String) {}
     func onPaywallPurchaseCompleted(paywallId: String, productId: String, transaction: [String: Any]) {}
-    func onPaywallPurchaseFailed(paywallId: String, error: Any) {}
+    func onPaywallPurchaseFailed(paywallId: String, error: Error) {}
     func onPaywallRestoreStarted(paywallId: String) {}
     func onPaywallRestoreCompleted(paywallId: String, restoredProductIds: [String]) {}
-    func onPaywallRestoreFailed(paywallId: String, error: Any) {}
+    func onPaywallRestoreFailed(paywallId: String, error: Error) {}
     func onPaywallDismissed(paywallId: String) {}
 }
 
@@ -92,13 +92,13 @@ public extension AppDNAPushDelegate {
 /// Direct (non-paywall) billing observer.
 public protocol AppDNABillingDelegate: AnyObject {
     func onPurchaseCompleted(productId: String, transaction: [String: Any])
-    func onPurchaseFailed(productId: String, error: Any)
+    func onPurchaseFailed(productId: String, error: Error)
     func onEntitlementsChanged(entitlements: [String])
 }
 
 public extension AppDNABillingDelegate {
     func onPurchaseCompleted(productId: String, transaction: [String: Any]) {}
-    func onPurchaseFailed(productId: String, error: Any) {}
+    func onPurchaseFailed(productId: String, error: Error) {}
     func onEntitlementsChanged(entitlements: [String]) {}
 }
 
