@@ -10,6 +10,9 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/kishikawakatsumi/KeychainAccess.git", from: "4.2.2"),
         .package(url: "https://github.com/firebase/firebase-ios-sdk.git", from: "11.0.0"),
+        // SPEC-070-0 §3.4 — visual snapshot harness (iOS leg).
+        // PNG goldens live in Tests/__Snapshots__/ and are committed; reviewed during PR.
+        .package(url: "https://github.com/pointfreeco/swift-snapshot-testing.git", from: "1.17.0"),
         // Optional billing providers (conditionally imported)
         // .package(url: "https://github.com/adaptyteam/AdaptySDK-iOS.git", from: "2.0.0"),
         // .package(url: "https://github.com/RevenueCat/purchases-ios.git", from: "4.0.0"),
@@ -27,7 +30,10 @@ let package = Package(
         ),
         .testTarget(
             name: "AppDNASDKTests",
-            dependencies: ["AppDNASDK"]
+            dependencies: [
+                "AppDNASDK",
+                .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+            ]
         )
     ]
 )
