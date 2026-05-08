@@ -180,6 +180,39 @@ public class NativeBillingManager {
         }
     }
 
+    /// SPEC-401 Fix 1D — silent entitlement-cache refresh.
+    ///
+    /// Reads `Transaction.currentEntitlements` and updates `EntitlementCache`
+    /// in place — same conversion pattern as `restorePurchases()` but skips
+    /// the heavy/visible parts: no `AppStore.sync()` network call, no
+    /// `purchase_restored` event emission, no delegate callback. Designed
+    /// for `AppDNA.identify` and host-driven post-auth refresh hooks where
+    /// firing user-visible restore events would be wrong.
+    ///
+    /// Errors are swallowed and logged at warning level — callers must be
+    /// able to chain without try/catch (identify is fire-and-forget). On
+    /// failure the cache stays at whatever it was before; no state mutation.
+    public func refreshEntitlementCache() async {
+        do {
+            var transactions: [String] = []
+            for await result in Transaction.currentEntitlements {
+                if case .verified = result {
+                    transactions.append(result.jwsRepresentation)
+                }
+            }
+            // Empty entitlements is a valid state (user has no past purchases)
+            // — short-circuit before hitting the verifier so we don't make a
+            // network call for nothing.
+            guard !transactions.isEmpty else { return }
+            let entitlements = try await receiptVerifier.restore(transactions: transactions)
+            for entitlement in entitlements {
+                entitlementCache.update(entitlement)
+            }
+        } catch {
+            Log.warning("refreshEntitlementCache: silent refresh failed — \(error.localizedDescription)")
+        }
+    }
+
     /// Restore purchases via AppStore.sync() and Transaction.currentEntitlements.
     public func restorePurchases() async throws -> [ServerEntitlement] {
         try await AppStore.sync()

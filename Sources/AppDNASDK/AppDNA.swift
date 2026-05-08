@@ -11,7 +11,7 @@ import FirebaseFirestore
 public final class AppDNA: @unchecked Sendable {
 
     /// SDK version string.
-    public static let sdkVersion = "1.0.60"
+    public static let sdkVersion = "1.0.61"
 
     /// Firestore instance used by the SDK.
     /// Uses a secondary Firebase app ("appdna") if GoogleService-Info-AppDNA.plist is found,
@@ -228,6 +228,16 @@ public final class AppDNA: @unchecked Sendable {
                     appId: bootstrapData.appId,
                     userId: userId
                 )
+            }
+
+            // SPEC-401 Fix 1D — silently refresh the entitlement cache so
+            // the next paywall_trigger entitlement gate (Fix 1A) reflects
+            // the identified user's current StoreKit subscriptions, not
+            // the prior anonymous user's empty entitlements. Fire-and-
+            // forget; identify is not blocked on completion. Errors are
+            // swallowed inside refreshEntitlementCache.
+            Task {
+                await AppDNA.billing.refreshEntitlementCache()
             }
         }
     }

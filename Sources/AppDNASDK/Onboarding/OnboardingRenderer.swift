@@ -1247,7 +1247,30 @@ struct OnboardingFlowHost: View {
             }
         }()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        // SPEC-401 Fix 1A — entitlement-aware skip gate.
+        // Default `true` matches the new SDK contract: paywalls auto-skip
+        // for already-subscribed users unless the author explicitly opts
+        // out (upsell paywalls). Older flows that never authored the field
+        // resolve to nil → defaults to true here. The check is wrapped in
+        // a Task because BillingModule.hasActiveSubscription is async; if
+        // the cache isn't loaded yet, falls through false → paywall
+        // presents normally (acceptable defensive fallback per spec edge
+        // cases).
+        let skipIfSubscribed = triggerData?["skip_if_subscribed"] as? Bool ?? true
+        Task { @MainActor in
+            if skipIfSubscribed && (await AppDNA.billing.hasActiveSubscription()) {
+                tracker?.track(event: "onboarding_paywall_skip", properties: [
+                    "flow_id": flowId,
+                    "paywall_id": paywallId,
+                    "reason": "user_already_subscribed",
+                ])
+                routeOutcome(onSuccessTarget, "continue", "user_already_subscribed")
+                return
+            }
+            // 0.1s present delay preserved — matches pre-SPEC-401 timing
+            // so existing visual cadence (host fade-out + paywall appear)
+            // is unchanged for non-subscribed users.
+            try? await Task.sleep(nanoseconds: 100_000_000)
             // Present on top of the onboarding host so the renderer stays
             // mounted; post-dismiss routing needs a live view to transition
             // to. Dismissing the host first used to strand the user in the
@@ -1789,6 +1812,16 @@ private class OnboardingPaywallBridge: AppDNAPaywallDelegate {
 
     func onPaywallRestoreCompleted(paywallId: String, productIds: [String]) {
         forwardOnMain { $0.onPaywallRestoreCompleted(paywallId: paywallId, productIds: productIds) }
+        // SPEC-401 Fix 1B — treat a non-empty restore as equivalent to a
+        // successful purchase so subsequent dismiss routes via on_success
+        // instead of on_dismiss. Empty productIds means "restore call
+        // succeeded but found no entitlements" (user is genuinely not
+        // subscribed) — leave didPurchase=false and let the user either
+        // dismiss or attempt a fresh purchase. Mirrors Android.
+        if !productIds.isEmpty {
+            didPurchase = true
+            onPurchased()
+        }
     }
 
     func onPaywallRestoreFailed(paywallId: String, error: Error) {

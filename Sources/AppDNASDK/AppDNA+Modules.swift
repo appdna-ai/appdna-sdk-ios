@@ -117,6 +117,39 @@ extension AppDNA {
             return !entitlements.isEmpty
         }
 
+        /// SPEC-401 Fix 1D — silently refresh cached entitlement state.
+        ///
+        /// Calls into the configured billing bridge to re-read the user's
+        /// current entitlements (StoreKit `Transaction.currentEntitlements`,
+        /// RevenueCat / Adapty `customerInfo`, etc.) and primes any
+        /// internal cache the bridge maintains. Designed for two callers:
+        ///   1. `AppDNA.identify` — auto-refresh after host signs in a user
+        ///      so the next paywall_trigger entitlement gate (Fix 1A)
+        ///      reflects that user's subscriptions, not the previous
+        ///      anonymous user's empty entitlements.
+        ///   2. Hosts that complete auth out-of-band (SSO callbacks, deep
+        ///      links, OAuth web flows) and need to flush stale cache
+        ///      without firing user-visible restore events.
+        ///
+        /// Side effects: ZERO. No analytics events, no delegate callbacks,
+        /// no UI. Errors are swallowed and logged at warning level — the
+        /// method returns normally so callers can chain without try/catch.
+        ///
+        /// Performance: cheap when StoreKit cache is warm (one verified
+        /// transaction read), bounded by the bridge's network behavior on
+        /// cold start. Identify hook should not be blocked on completion.
+        public func refreshEntitlementCache() async {
+            guard let bridge = bridge else {
+                Log.warning("BillingModule.refreshEntitlementCache: no billing provider configured")
+                return
+            }
+            // Calling getEntitlements() reads `Transaction.currentEntitlements`
+            // (or RC/Adapty customerInfo) without firing restore events. The
+            // result is discarded — we only care about the side-effect of
+            // priming any internal cache the bridge maintains.
+            _ = await bridge.getEntitlements()
+        }
+
         /// Register a callback that fires when entitlements change.
         /// Listens to the internal `entitlementsChanged` notification.
         /// Only one NotificationCenter observer is registered; all callbacks are dispatched from it.

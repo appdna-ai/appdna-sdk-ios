@@ -7,6 +7,18 @@ extension Notification.Name {
     static let paywallPurchaseFailure = Notification.Name("ai.appdna.paywallPurchaseFailure")
 }
 
+/// SPEC-401 Fix 1C — per-presentation guard that prevents double-dismiss
+/// races between the user tapping X (calls onDismiss) and the SDK's
+/// auto-dismiss-on-restore-success path. First caller flips the flag;
+/// subsequent callers no-op. Mirrors Android's `PaywallActivity.dispatchedDismiss`.
+private final class PaywallDismissGuard {
+    var dispatched: Bool = false
+    /// True if the host's `onPaywallRestoreCompleted` set this — used to
+    /// suppress SDK auto-dismiss when the host wants to keep the paywall
+    /// up after restore (e.g. a "Restored! Tap X when ready" overlay).
+    var skipSDKAutoDismiss: Bool = false
+}
+
 /// Manages paywall presentation, purchase flow, and event tracking.
 final class PaywallManager {
     private let remoteConfigManager: RemoteConfigManager
@@ -90,6 +102,11 @@ final class PaywallManager {
         // (which populates from the now-warm URLCache, so second-paint
         // fills in instantly).
         let imageURLs = Self.collectImageURLs(from: config)
+        // SPEC-401 Fix 1C — shared dismiss guard for this presentation.
+        // Captured by both the onDismiss closure (user-tap X path) and the
+        // auto-dismiss-on-restore-success path inside handleRestore. First
+        // caller wins; the second is a no-op so dismiss never fires twice.
+        let dismissGuard = PaywallDismissGuard()
         let buildAndPresent: () -> Void = { [weak self] in
             guard let self else { return }
             let paywallView = PaywallRenderer(
@@ -98,13 +115,15 @@ final class PaywallManager {
                     self?.handlePurchase(paywallId: id, plan: plan, config: config, metadata: metadata, delegate: delegate, viewController: viewController)
                 },
                 onRestore: { [weak self] in
-                    self?.handleRestore(paywallId: id, delegate: delegate)
+                    self?.handleRestore(paywallId: id, delegate: delegate, viewController: viewController, dismissGuard: dismissGuard)
                 },
                 onDismiss: { [weak self] reason in
                     self?.eventTracker.track(event: "paywall_close", properties: [
                         "paywall_id": id,
                         "dismiss_reason": reason.rawValue,
                     ])
+                    guard !dismissGuard.dispatched else { return }
+                    dismissGuard.dispatched = true
                     viewController.dismiss(animated: true) {
                         delegate?.onPaywallDismissed(paywallId: id)
                     }
@@ -318,7 +337,12 @@ final class PaywallManager {
         }
     }
 
-    private func handleRestore(paywallId: String, delegate: AppDNAPaywallDelegate?) {
+    private func handleRestore(
+        paywallId: String,
+        delegate: AppDNAPaywallDelegate?,
+        viewController: UIViewController,
+        dismissGuard: PaywallDismissGuard,
+    ) {
         guard let bridge = billingBridge else {
             // No billing bridge configured — surface the failure so hosts don't see silence.
             DispatchQueue.main.async {
@@ -341,12 +365,35 @@ final class PaywallManager {
                     "paywall_id": paywallId,
                     "restored_count": restored.count,
                 ])
+                // SPEC-401 Fix 1C — fire delegate forward FIRST so a host
+                // that wants to handle dismiss itself can call dismiss
+                // synchronously inside the delegate body (its dismiss flips
+                // dispatchedDismiss before our auto-dismiss runs). Auto-
+                // dismiss only fires when restore actually found
+                // entitlements (productIds is non-empty) AND the host
+                // didn't already dismiss AND didn't ask the SDK to skip.
                 DispatchQueue.main.async {
                     delegate?.onPaywallRestoreCompleted(
                         paywallId: paywallId,
                         productIds: restored,
                     )
                     Log.info("Restore completed for paywall \(paywallId) with \(restored.count) products")
+
+                    // Auto-dismiss the paywall on restore success. Empty
+                    // restored array = "restore call worked but user has no
+                    // entitlements to restore" — leave paywall up so user
+                    // can either close manually or attempt a fresh purchase.
+                    guard !restored.isEmpty else { return }
+                    guard !dismissGuard.dispatched else { return }
+                    guard !dismissGuard.skipSDKAutoDismiss else { return }
+                    dismissGuard.dispatched = true
+                    self.eventTracker.track(event: "paywall_close", properties: [
+                        "paywall_id": paywallId,
+                        "dismiss_reason": "restore_success",
+                    ])
+                    viewController.dismiss(animated: true) {
+                        delegate?.onPaywallDismissed(paywallId: paywallId)
+                    }
                 }
             } catch {
                 eventTracker.track(event: "purchase_restore_failed", properties: [
