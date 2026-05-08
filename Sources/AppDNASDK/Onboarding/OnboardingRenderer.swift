@@ -1258,7 +1258,14 @@ struct OnboardingFlowHost: View {
         // cases).
         let skipIfSubscribed = triggerData?["skip_if_subscribed"] as? Bool ?? true
         Task { @MainActor in
-            if skipIfSubscribed && (await AppDNA.billing.hasActiveSubscription()) {
+            // Pull the entitlement state into a `let` first — `&&` is an
+            // autoclosure and Swift forbids `await` inside it. Short-
+            // circuit at the call site preserves the same semantics
+            // (skip the network/cache read when the gate is disabled).
+            let isSubscribed: Bool = skipIfSubscribed
+                ? await AppDNA.billing.hasActiveSubscription()
+                : false
+            if skipIfSubscribed && isSubscribed {
                 tracker?.track(event: "onboarding_paywall_skip", properties: [
                     "flow_id": flowId,
                     "paywall_id": paywallId,
