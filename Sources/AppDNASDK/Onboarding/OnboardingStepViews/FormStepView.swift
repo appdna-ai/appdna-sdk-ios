@@ -220,6 +220,10 @@ struct FormStepView: View {
         switch field.type {
         case .text, .email, .phone:
             textField(field)
+        case .url:
+            UrlFieldView(field: field, value: bindingFor(field))
+        case .password:
+            PasswordFieldView(field: field, value: bindingFor(field))
         case .textarea:
             textArea(field)
         case .number:
@@ -249,7 +253,28 @@ struct FormStepView: View {
                 ),
                 apiClient: apiClient
             )
+        case .rating:
+            RatingFieldView(field: field, value: bindingFor(field))
+        case .range_slider:
+            RangeSliderFieldView(field: field, value: bindingFor(field))
+        case .image_picker:
+            ImagePickerFieldView(field: field, value: bindingFor(field))
+        case .color:
+            ColorFieldView(field: field, value: bindingFor(field))
+        case .multiline_chips:
+            MultilineChipsFieldView(field: field, value: bindingFor(field))
+        case .signature:
+            SignatureFieldView(field: field, value: bindingFor(field))
         }
+    }
+
+    /// Generic binding helper that drops the per-field error on any change.
+    /// Used by the SPEC-401-A renderer views which all need this same pattern.
+    private func bindingFor(_ field: FormField) -> Binding<Any?> {
+        Binding(
+            get: { values[field.id] },
+            set: { values[field.id] = $0; errors[field.id] = nil }
+        )
     }
 
     // MARK: - Text

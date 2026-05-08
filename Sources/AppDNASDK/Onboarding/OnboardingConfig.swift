@@ -367,9 +367,21 @@ public struct ValuePropItem: Codable, Identifiable {
 
 public enum FormFieldType: String, Codable {
     case text, textarea, number, email, phone
+    // SPEC-401-A: previously-missing types now first-class on iOS so the
+    // dispatch in `FormStepView.fieldControl(_:)` matches Android (which
+    // already renders all 22 of these). The schema source-of-truth is
+    // `flow.schema.ts FORM_FIELD_TYPES`.
+    case password
+    case url
     case date, time, datetime
     case select, slider, toggle, stepper, segmented
     case location
+    case rating
+    case range_slider
+    case image_picker
+    case color
+    case multiline_chips
+    case signature
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -404,8 +416,11 @@ public struct FormFieldDependency: Codable {
 
 public struct FormFieldConfig: Codable {
     public let max_length: Int?
+    public let min_length: Int?
     public let keyboard_type: String?
     public let autocapitalize: String?
+    public let autocorrect: Bool?
+    public let multiline_min_lines: Int?
     public let min_value: Double?
     public let max_value: Double?
     public let step: Double?
@@ -413,9 +428,11 @@ public struct FormFieldConfig: Codable {
     public let decimal_places: Int?
     public let min_date: String?
     public let max_date: String?
+    public let date_format: String?
     public let picker_style: String?
     public let search_enabled: Bool?
     public let multi_select: Bool?
+    public let max_selections: Int?
     public let default_value: AnyCodable?
     // Location (SPEC-089)
     public let location_type: String?
@@ -423,6 +440,34 @@ public struct FormFieldConfig: Codable {
     public let location_language: String?
     public let location_placeholder: String?
     public let location_min_chars: Int?
+    // SPEC-401-A: rating
+    public let max_stars: Int?
+    public let allow_half: Bool?
+    public let star_size: Int?
+    public let filled_color: String?
+    public let empty_color: String?
+    // SPEC-401-A: range_slider
+    public let min_label: String?
+    public let max_label: String?
+    // SPEC-401-A: image_picker
+    public let max_size_mb: Double?
+    public let allowed_types: String?
+    public let aspect_ratio: String?
+    public let placeholder_text: String?
+    // SPEC-401-A: color picker
+    public let default_color: String?
+    public let show_opacity: Bool?
+    public let preset_colors: [String]?
+    // SPEC-401-A: url
+    public let validate_format: Bool?
+    // SPEC-401-A: multiline_chips
+    public let max_chips: Int?
+    public let suggestions: [String]?
+    public let allow_custom: Bool?
+    // SPEC-401-A: signature
+    public let stroke_color: String?
+    public let stroke_width: Double?
+    public let clear_button_text: String?
 }
 
 public struct FormField: Codable, Identifiable {
