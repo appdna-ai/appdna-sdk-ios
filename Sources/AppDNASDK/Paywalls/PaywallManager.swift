@@ -385,6 +385,18 @@ final class PaywallManager {
                     // can either close manually or attempt a fresh purchase.
                     guard !restored.isEmpty else { return }
                     guard !dismissGuard.dispatched else { return }
+                    // SPEC-401 R2 audit Lens B P0 — read the public host
+                    // opt-out flag (one-shot: read + clear). Hosts set this
+                    // synchronously inside their `onPaywallRestoreCompleted`
+                    // delegate body when they want to keep the paywall up
+                    // after a successful restore (e.g., for a custom
+                    // "Restored — tap continue" overlay). Internal
+                    // `skipSDKAutoDismiss` is an alternative path the SDK
+                    // itself can flip; we honor either.
+                    if AppDNA.paywall.skipNextAutoDismissOnRestore {
+                        AppDNA.paywall.skipNextAutoDismissOnRestore = false
+                        return
+                    }
                     guard !dismissGuard.skipSDKAutoDismiss else { return }
                     dismissGuard.dispatched = true
                     self.eventTracker.track(event: "paywall_close", properties: [

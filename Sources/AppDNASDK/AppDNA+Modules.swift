@@ -250,6 +250,25 @@ extension AppDNA {
         internal weak var paywallManager: PaywallManager?
         internal var delegate: AppDNAPaywallDelegate?
 
+        /// SPEC-401 Fix 1C — host opt-out for SDK auto-dismiss-on-restore-success.
+        ///
+        /// When set to `true`, the next successful Restore tap on a presented
+        /// paywall will fire `onPaywallRestoreCompleted` to the delegate as
+        /// usual, but the SDK will NOT auto-dismiss the paywall surface. The
+        /// host owns dismissal in this case (typical pattern: show a
+        /// "Restored — tap continue when ready" overlay, then call
+        /// `viewController.dismiss(...)` from a button tap).
+        ///
+        /// One-shot: PaywallManager.handleRestore reads + clears this flag
+        /// each time it processes a restore. After the next restore (success
+        /// or failure), the flag resets to `false` so subsequent paywall
+        /// presentations get the default auto-dismiss behavior.
+        ///
+        /// Thread-safety: read/written on the main thread (set inside the
+        /// host's `onPaywallRestoreCompleted` body before returning, read
+        /// from PaywallManager.handleRestore's main-thread completion).
+        public var skipNextAutoDismissOnRestore: Bool = false
+
         init(manager: PaywallManager?) {
             self.paywallManager = manager
         }
