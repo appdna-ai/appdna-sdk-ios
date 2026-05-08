@@ -1820,14 +1820,18 @@ private class OnboardingPaywallBridge: AppDNAPaywallDelegate {
     func onPaywallRestoreCompleted(paywallId: String, productIds: [String]) {
         forwardOnMain { $0.onPaywallRestoreCompleted(paywallId: paywallId, productIds: productIds) }
         // SPEC-401 Fix 1B — treat a non-empty restore as equivalent to a
-        // successful purchase so subsequent dismiss routes via on_success
-        // instead of on_dismiss. Empty productIds means "restore call
-        // succeeded but found no entitlements" (user is genuinely not
-        // subscribed) — leave didPurchase=false and let the user either
-        // dismiss or attempt a fresh purchase. Mirrors Android.
+        // successful purchase so the subsequent dismiss routes via
+        // on_success instead of on_dismiss. Mirrors the existing
+        // onPaywallPurchaseCompleted pattern at line 1741: just flip the
+        // flag here, let the dismiss path call onPurchased() once.
+        // SPEC-401 R1 audit: do NOT call onPurchased() directly here —
+        // PaywallManager auto-dismiss (Fix 1C) will fire
+        // onPaywallDismissed which reads didPurchase and routes once.
+        // Calling onPurchased() here too would route twice. Empty
+        // productIds means "restore call succeeded but found no
+        // entitlements" — leave didPurchase=false.
         if !productIds.isEmpty {
             didPurchase = true
-            onPurchased()
         }
     }
 
