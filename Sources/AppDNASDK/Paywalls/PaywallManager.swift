@@ -383,20 +383,27 @@ final class PaywallManager {
                     // restored array = "restore call worked but user has no
                     // entitlements to restore" — leave paywall up so user
                     // can either close manually or attempt a fresh purchase.
+                    // SPEC-401 R3 audit Lens A/B — clear the public
+                    // `skipNextAutoDismissOnRestore` flag on EVERY restore
+                    // terminal event (success-with-products, empty-success,
+                    // and the failure path below) so the one-shot flag
+                    // can't leak from one paywall presentation into the
+                    // next. Captured outside the early-return below.
+                    let hostRequestedSkip = AppDNA.paywall.skipNextAutoDismissOnRestore
+                    AppDNA.paywall.skipNextAutoDismissOnRestore = false
+
                     guard !restored.isEmpty else { return }
                     guard !dismissGuard.dispatched else { return }
-                    // SPEC-401 R2 audit Lens B P0 — read the public host
-                    // opt-out flag (one-shot: read + clear). Hosts set this
-                    // synchronously inside their `onPaywallRestoreCompleted`
-                    // delegate body when they want to keep the paywall up
-                    // after a successful restore (e.g., for a custom
-                    // "Restored — tap continue" overlay). Internal
-                    // `skipSDKAutoDismiss` is an alternative path the SDK
-                    // itself can flip; we honor either.
-                    if AppDNA.paywall.skipNextAutoDismissOnRestore {
-                        AppDNA.paywall.skipNextAutoDismissOnRestore = false
-                        return
-                    }
+                    // SPEC-401 R2 audit Lens B P0 — honor the public host
+                    // opt-out flag we just snapshot+cleared above. Hosts
+                    // set this synchronously inside their
+                    // `onPaywallRestoreCompleted` delegate body when they
+                    // want to keep the paywall up after a successful
+                    // restore (e.g., for a custom "Restored — tap
+                    // continue" overlay). Internal `skipSDKAutoDismiss`
+                    // is an alternative path the SDK itself can flip; we
+                    // honor either.
+                    if hostRequestedSkip { return }
                     guard !dismissGuard.skipSDKAutoDismiss else { return }
                     dismissGuard.dispatched = true
                     self.eventTracker.track(event: "paywall_close", properties: [
@@ -415,6 +422,15 @@ final class PaywallManager {
                 DispatchQueue.main.async {
                     delegate?.onPaywallRestoreFailed(paywallId: paywallId, error: error)
                     Log.error("Restore failed: \(error.localizedDescription)")
+                    // SPEC-401 R3 audit Lens A — clear the one-shot
+                    // skipNextAutoDismissOnRestore flag on failure too,
+                    // not just on success. Otherwise a host that set the
+                    // flag for a restore that failed would carry the flag
+                    // into the next paywall presentation, suppressing
+                    // auto-dismiss for that unrelated restore. The flag
+                    // semantics are "next restore", not "next successful
+                    // restore" — clear unconditionally on either outcome.
+                    AppDNA.paywall.skipNextAutoDismissOnRestore = false
                 }
             }
         }
