@@ -447,7 +447,15 @@ struct FormStepView: View {
             get: { values[field.id] as? Bool ?? false },
             set: { values[field.id] = $0 }
         )
+        // SPEC-401-A — `field.style.background_color` (or input_style.fill_color
+        // sub-key) tints the Toggle's on-track. Mirrors the Android Switch's
+        // `checkedTrackColor`. Falls back to system tint if no style set.
+        let inputStyle = field.style?.input_style?.value as? [String: Any]
+        let trackHex = field.style?.background_color
+            ?? (inputStyle?["fill_color"] as? String)
+            ?? (inputStyle?["background_color"] as? String)
         return Toggle((field.label ?? "").interpolated(), isOn: binding)
+            .tint(trackHex.map { Color(hex: $0) } ?? .accentColor)
     }
 
     // MARK: - Stepper

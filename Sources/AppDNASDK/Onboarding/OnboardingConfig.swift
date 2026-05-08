@@ -470,6 +470,23 @@ public struct FormFieldConfig: Codable {
     public let clear_button_text: String?
 }
 
+/// SPEC-401-A — per-field style envelope mirroring `FormFieldStyleSchema`
+/// in `flow.schema.ts:101-109` and the Android `FormFieldStyle` data
+/// class. Authors set these in the console; the renderer applies them
+/// to the equivalent SwiftUI controls (Toggle.tint, TextField overlay
+/// border, corner_radius). The free-form sub-maps `label_style`,
+/// `input_style`, `error_style` are untyped because the schema treats
+/// them as opaque records — authors can pass any sub-keys.
+public struct FormFieldStyle: Codable {
+    public let label_style: AnyCodable?
+    public let input_style: AnyCodable?
+    public let error_style: AnyCodable?
+    public let corner_radius: Double?
+    public let border_color: String?
+    public let focus_border_color: String?
+    public let background_color: String?
+}
+
 public struct FormField: Codable, Identifiable {
     public let id: String
     public let type: FormFieldType
@@ -480,9 +497,10 @@ public struct FormField: Codable, Identifiable {
     public let options: [FormFieldOption]?
     public let config: FormFieldConfig?
     public let depends_on: FormFieldDependency?
+    public let style: FormFieldStyle?
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, label, placeholder, required, validation, options, config, depends_on
+        case id, type, label, placeholder, required, validation, options, config, depends_on, style
     }
 
     public init(from decoder: Decoder) throws {
@@ -496,6 +514,7 @@ public struct FormField: Codable, Identifiable {
         self.options = try c.decodeIfPresent([FormFieldOption].self, forKey: .options)
         self.config = try c.decodeIfPresent(FormFieldConfig.self, forKey: .config)
         self.depends_on = try c.decodeIfPresent(FormFieldDependency.self, forKey: .depends_on)
+        self.style = try c.decodeIfPresent(FormFieldStyle.self, forKey: .style)
     }
 }
 
