@@ -331,18 +331,35 @@ struct FormStepView: View {
 
     // MARK: - Date/Time
 
+    /// SPEC-401-A B2 P1 — parse min/max date config (ISO `yyyy-MM-dd`)
+    /// into a `ClosedRange<Date>` and apply via SwiftUI's `in:` parameter.
+    /// Mirrors Android `DatePickerDialog.datePicker.minDate/maxDate`.
+    private func dateRange(for field: FormField) -> ClosedRange<Date>? {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        guard let min = field.config?.min_date.flatMap({ fmt.date(from: $0) })
+                ?? field.config?.max_date.flatMap({ fmt.date(from: $0) }) else { return nil }
+        let lower = field.config?.min_date.flatMap { fmt.date(from: $0) } ?? Date.distantPast
+        let upper = field.config?.max_date.flatMap { fmt.date(from: $0) } ?? Date.distantFuture
+        guard lower <= upper else { return nil }
+        _ = min // silence unused
+        return lower...upper
+    }
+
+    @ViewBuilder
     private func datePicker(_ field: FormField) -> some View {
         let binding = Binding<Date>(
             get: { values[field.id] as? Date ?? Date() },
             set: { values[field.id] = $0; errors[field.id] = nil }
         )
-        return DatePicker(
-            "",
-            selection: binding,
-            displayedComponents: .date
-        )
-        .datePickerStyle(.compact)
-        .labelsHidden()
+        if let range = dateRange(for: field) {
+            DatePicker("", selection: binding, in: range, displayedComponents: .date)
+                .datePickerStyle(.compact).labelsHidden()
+        } else {
+            DatePicker("", selection: binding, displayedComponents: .date)
+                .datePickerStyle(.compact).labelsHidden()
+        }
     }
 
     private func timePicker(_ field: FormField) -> some View {
@@ -359,18 +376,19 @@ struct FormStepView: View {
         .labelsHidden()
     }
 
+    @ViewBuilder
     private func dateTimePicker(_ field: FormField) -> some View {
         let binding = Binding<Date>(
             get: { values[field.id] as? Date ?? Date() },
             set: { values[field.id] = $0; errors[field.id] = nil }
         )
-        return DatePicker(
-            "",
-            selection: binding,
-            displayedComponents: [.date, .hourAndMinute]
-        )
-        .datePickerStyle(.compact)
-        .labelsHidden()
+        if let range = dateRange(for: field) {
+            DatePicker("", selection: binding, in: range, displayedComponents: [.date, .hourAndMinute])
+                .datePickerStyle(.compact).labelsHidden()
+        } else {
+            DatePicker("", selection: binding, displayedComponents: [.date, .hourAndMinute])
+                .datePickerStyle(.compact).labelsHidden()
+        }
     }
 
     // MARK: - Select
