@@ -1199,6 +1199,12 @@ struct OnboardingFlowHost: View {
         let triggerData = resolvePaywallTriggerData(target)
         let onSuccessTarget = (triggerData?["on_success_target"] as? String)?.isEmpty == false
             ? triggerData?["on_success_target"] as? String : nil
+        // SPEC-403 — explicit skip-when-subscribed target. Empty / missing
+        // falls back to onSuccessTarget (preserving SPEC-401 1.0.61 flows
+        // that used on_success_target as a workaround) and then to the
+        // legacy "continue" edge follow inside routeOutcome below.
+        let onSubscribedSkipTarget = (triggerData?["on_subscribed_skip_target"] as? String)?.isEmpty == false
+            ? triggerData?["on_subscribed_skip_target"] as? String : nil
         let onFailTarget = (triggerData?["on_fail_target"] as? String)?.isEmpty == false
             ? triggerData?["on_fail_target"] as? String : nil
         let onDismissTarget = (triggerData?["on_dismiss_target"] as? String)?.isEmpty == false
@@ -1271,7 +1277,10 @@ struct OnboardingFlowHost: View {
                     "paywall_id": paywallId,
                     "reason": "user_already_subscribed",
                 ])
-                routeOutcome(onSuccessTarget, "continue", "user_already_subscribed")
+                // SPEC-403 resolver chain: on_subscribed_skip_target wins,
+                // falls back to on_success_target (back-compat with SPEC-401
+                // 1.0.61 workaround flows), then to "continue" (legacy edge).
+                routeOutcome(onSubscribedSkipTarget ?? onSuccessTarget, "continue", "user_already_subscribed")
                 return
             }
             // 0.1s present delay preserved — matches pre-SPEC-401 timing
