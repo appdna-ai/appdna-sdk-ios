@@ -352,6 +352,18 @@ struct PaywallRenderer: View {
                 errorAllowRetry = (info["action"] as? String) == "retry"
                 isPurchasing = false
                 withAnimation { showErrorBanner = true }
+                // Auto-dismiss after 4s when there is no retry button —
+                // the banner otherwise has no escape path besides closing
+                // the entire paywall (e.g. when host triggers a failure
+                // without a retry action, the user sees a "Payment failed"
+                // banner pinned to the bottom of the screen indefinitely).
+                // When errorAllowRetry is true the banner stays up; user
+                // action is required to choose retry vs dismiss.
+                if !errorAllowRetry {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                        withAnimation { showErrorBanner = false }
+                    }
+                }
             }
         }
         .gesture(
