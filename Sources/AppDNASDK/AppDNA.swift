@@ -186,8 +186,6 @@ public final class AppDNA: @unchecked Sendable {
         shared.queue.async {
             let previousAnonId = shared.identityManager?.currentIdentity.anonId
             let previousUserId = shared.identityManager?.currentIdentity.userId
-            shared.identityManager?.identify(userId: userId, traits: traits)
-            Log.info("Identified user: \(userId)")
 
             // Cross-account-leak defence — anchor the device's "first
             // identifier" the first time anyone identifies. Untagged
@@ -197,7 +195,18 @@ public final class AppDNA: @unchecked Sendable {
             // them. Idempotent — a later `identify(B)` does NOT change
             // the anchor; that user gets `denyUntaggedOtherUser` for
             // untagged transactions. See `EntitlementOwnerFilter`.
+            //
+            // Recorded BEFORE the inner `identityManager.identify(...)`
+            // call so that any synchronous downstream observer (event
+            // listener, notification, etc.) that immediately reads
+            // `firstIdentifiedToken()` sees the anchor populated.
+            // Everything inside this block runs on `shared.queue`
+            // (serial) so the read-modify-write under the hood is not
+            // racy across concurrent identify() calls.
             AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded(userId)
+
+            shared.identityManager?.identify(userId: userId, traits: traits)
+            Log.info("Identified user: \(userId)")
 
             // Fire identify event for backend alias/merge
             var identifyProps: [String: Any] = [
@@ -253,6 +262,18 @@ public final class AppDNA: @unchecked Sendable {
     }
 
     /// Clear user identity (keeps anonymous ID).
+    ///
+    /// Resets the host-supplied user identity, experiment exposures, the
+    /// in-app message session, the survey session, the web-entitlement
+    /// observer, and the journey-triggered pending-message listener.
+    /// **Does NOT clear the device's first-identifier anchor used by
+    /// the cross-account-entitlement-leak defence** (see
+    /// `EntitlementOwnerFilter`) — that anchor is intentionally durable
+    /// for the lifetime of the app installation. App uninstall (or
+    /// Settings → App → Clear data on Android) is the only path that
+    /// wipes it. This makes `reset()` safe to call as the host's
+    /// "sign-out" hook without re-opening the leak surface for a
+    /// subsequent user signing in on the same device.
     public static func reset() {
         shared.queue.async {
             shared.identityManager?.reset()
@@ -261,13 +282,15 @@ public final class AppDNA: @unchecked Sendable {
             shared.surveyManager?.resetSession()
             shared.webEntitlementManager?.stopObserving()
             shared.pendingMessageListener?.stopObserving()
-            // Cross-account-leak defence — `reset()` is the explicit
-            // "fully sign out + start fresh" surface. Clearing the
-            // first-identifier anchor lets the NEXT `identify(...)` claim
-            // any untagged historical transactions on this device. Hosts
-            // that don't want this behaviour should call `identify(...)`
-            // directly without `reset()`.
-            AppAccountTokenResolver.clearFirstIdentifiedUserId()
+            // Cross-account-leak defence — DELIBERATELY do NOT call
+            // `AppAccountTokenResolver.clearFirstIdentifiedUserId()`
+            // here. The anchor is a security boundary: clearing it on
+            // sign-out would let the next `identify(B)` become the new
+            // first-identifier and inherit any untagged purchase on
+            // the device (the exact reproducer R2 surfaced). The
+            // anchor's natural lifecycle is the app installation;
+            // factory-reset / uninstall wipe UserDefaults, which is
+            // the correct invalidation event.
             Log.info("Identity reset")
         }
     }

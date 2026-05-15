@@ -329,10 +329,37 @@ public class NativeBillingManager {
     }
 
     /// Start listening for transaction updates (renewals, revocations).
+    ///
+    /// **NOTE (v1.0.63):** `NativeBillingManager` is currently not wired in
+    /// the active runtime path (the production billing surface goes through
+    /// `BillingModule.bridge` → `StoreKit2Bridge` instead). The
+    /// `EntitlementOwnerFilter` call below is kept in parity with the
+    /// active read sites in `StoreKit2Bridge` so a future revival of this
+    /// listener class doesn't silently reintroduce the cross-account-leak
+    /// on auto-renewals (user A's renewal arriving while user B is logged
+    /// in must NOT push user A's entitlement into user B's cache).
     public func listenForTransactionUpdates() {
         transactionListenerTask = Task {
             for await result in Transaction.updates {
                 if case .verified(let transaction) = result {
+                    // Per-user binding filter — see `EntitlementOwnerFilter`
+                    // for the full decision matrix. A renewal arriving for
+                    // user A's subscription while user B is identified
+                    // MUST NOT update B's cache.
+                    let expectedToken = AppAccountTokenResolver.tokenForCurrentUser()
+                    let firstIdentifier = AppAccountTokenResolver.firstIdentifiedToken()
+                    switch EntitlementOwnerFilter.decide(
+                        transactionToken: transaction.appAccountToken,
+                        expectedToken: expectedToken,
+                        firstIdentifiedToken: firstIdentifier
+                    ) {
+                    case .denyOtherUser, .denyUntaggedOtherUser:
+                        Log.warning("listenForTransactionUpdates: skipped transaction \(transaction.id) — does not belong to the current user.")
+                        await transaction.finish()
+                        continue
+                    case .grant, .grantAnonymousPolicy, .grantUntaggedMigration:
+                        break
+                    }
                     let signedJWS = result.jwsRepresentation
                     do {
                         let entitlement = try await receiptVerifier.verify(

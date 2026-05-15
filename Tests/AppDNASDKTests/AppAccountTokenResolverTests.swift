@@ -98,11 +98,6 @@ final class AppAccountTokenResolverTests: XCTestCase {
     override func tearDown() {
         // Drop every key in the suite (suiteName-scoped, so nothing else
         // is affected) and restore production defaults for the next test.
-        if let bundleId = testSuite.dictionaryRepresentation().keys.first {
-            // Best-effort: removePersistentDomain wipes everything in the
-            // suite. We do it indirectly to keep the API minimal here.
-            _ = bundleId
-        }
         for key in testSuite.dictionaryRepresentation().keys {
             testSuite.removeObject(forKey: key)
         }
@@ -150,9 +145,10 @@ final class AppAccountTokenResolverTests: XCTestCase {
     }
 
     func testClearFirstIdentifier_resetsAnchor() {
-        // Used by `AppDNA.reset()` — the explicit "sign out + start
-        // fresh" surface. After clear, the next identify becomes the
-        // new first.
+        // Internal/test-only API. (Note: `AppDNA.reset()` deliberately
+        // does NOT call this — the anchor's natural lifecycle is the
+        // app installation; uninstall/factory-reset is the correct
+        // invalidation event. See `AppDNA.reset()` docstring.)
         AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded("alice")
         AppAccountTokenResolver.clearFirstIdentifiedUserId()
         XCTAssertNil(AppAccountTokenResolver.firstIdentifiedToken())
@@ -162,6 +158,57 @@ final class AppAccountTokenResolverTests: XCTestCase {
             AppAccountTokenResolver.firstIdentifiedToken(),
             AppAccountTokenResolver.token(forUserId: "bob"),
             "After clear(), the next identify becomes the new first-identifier"
+        )
+    }
+
+    func testRecordIdentify_clearAnchor_recordSameUser_re_anchors() {
+        // identify("A") → clearFirstIdentifiedUserId() → identify("A").
+        // After clearing the anchor (test/migration utility path —
+        // NOT what production `AppDNA.reset()` does), A becomes the
+        // new first-identifier again on the next record call. This is
+        // the round-trip contract for the resolver layer.
+        AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded("alice")
+        XCTAssertEqual(
+            AppAccountTokenResolver.firstIdentifiedToken(),
+            AppAccountTokenResolver.token(forUserId: "alice")
+        )
+
+        AppAccountTokenResolver.clearFirstIdentifiedUserId()
+        XCTAssertNil(AppAccountTokenResolver.firstIdentifiedToken())
+
+        AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded("alice")
+        XCTAssertEqual(
+            AppAccountTokenResolver.firstIdentifiedToken(),
+            AppAccountTokenResolver.token(forUserId: "alice"),
+            "clear() → record(A) MUST re-anchor to A"
+        )
+    }
+
+    func testConcurrentRecord_anchorEndsAsExactlyOneCallerInput() {
+        // Stress test the race window in `recordFirstIdentifiedUserIdIfNeeded`.
+        // iOS production code serialises identify(...) on AppDNA's
+        // private queue, so this is a defence-in-depth test that pins
+        // the invariant "after N concurrent first-identifies, the
+        // anchor is set to ONE of the N inputs (never unset, never to
+        // some other value)" — that's what protects hosts who decide
+        // to call identify from a non-serialised path.
+        let candidates = (0..<50).map { "concurrent-user-\($0)" }
+        let expectations = (0..<candidates.count).map { _ in expectation(description: "identify") }
+        for (i, userId) in candidates.enumerated() {
+            DispatchQueue.global(qos: .userInitiated).async {
+                AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded(userId)
+                expectations[i].fulfill()
+            }
+        }
+        wait(for: expectations, timeout: 5)
+
+        // The anchor must be set to ONE of the candidate userIds.
+        let derived = AppAccountTokenResolver.firstIdentifiedToken()
+        XCTAssertNotNil(derived, "Anchor must end up set after concurrent first-identifies (never unset)")
+        let expectedTokens = Set(candidates.map { AppAccountTokenResolver.token(forUserId: $0) })
+        XCTAssertTrue(
+            expectedTokens.contains(derived),
+            "Anchor must equal exactly one of the concurrent candidates — not some other value"
         )
     }
 }

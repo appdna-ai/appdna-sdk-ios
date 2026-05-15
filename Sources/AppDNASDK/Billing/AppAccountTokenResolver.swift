@@ -100,14 +100,29 @@ enum AppAccountTokenResolver {
     /// instance so tests can run in isolation without polluting standard.
     private static var defaults: UserDefaults = .standard
 
+    /// Serialises the check-then-set inside `recordFirstIdentifiedUserIdIfNeeded`
+    /// and the matching clear. `UserDefaults` is documented thread-safe
+    /// per-call, but the `getString → null → setString` sequence isn't
+    /// atomic without external locking. Production iOS code already
+    /// serialises `identify(...)` on `AppDNA`'s internal queue (closing
+    /// the race in practice), but this lock makes the resolver
+    /// thread-safe **at its own boundary** so defence-in-depth doesn't
+    /// rely on the caller's serialisation. Mirrors Android's
+    /// `@Synchronized`.
+    private static let anchorLock = NSLock()
+
     /// Test-only hook to redirect first-identifier reads/writes at a
     /// suite-scoped UserDefaults. Production code never calls this.
     static func setDefaultsForTesting(_ defaults: UserDefaults) {
+        anchorLock.lock()
+        defer { anchorLock.unlock() }
         self.defaults = defaults
     }
 
     /// Test-only hook to restore the production UserDefaults instance.
     static func resetDefaultsForTesting() {
+        anchorLock.lock()
+        defer { anchorLock.unlock() }
         self.defaults = .standard
     }
 
@@ -118,16 +133,21 @@ enum AppAccountTokenResolver {
     /// Empty `userId` is ignored.
     static func recordFirstIdentifiedUserIdIfNeeded(_ userId: String) {
         guard !userId.isEmpty else { return }
+        anchorLock.lock()
+        defer { anchorLock.unlock() }
         if defaults.string(forKey: firstIdentifiedUserIdKey) == nil {
             defaults.set(userId, forKey: firstIdentifiedUserIdKey)
         }
     }
 
-    /// Clear the first-identifier anchor. Called from `AppDNA.reset()`
-    /// (which the host invokes for a "fully sign out + start fresh"
-    /// flow). After this, the next `identify(...)` becomes the new
-    /// first-identifier for the device.
+    /// Clear the first-identifier anchor. **NOT** called by
+    /// `AppDNA.reset()` — the anchor is deliberately durable for the
+    /// lifetime of the app installation (factory-reset / uninstall is
+    /// the correct invalidation event). This method is kept internal
+    /// for SDK test code and any future migration utility.
     static func clearFirstIdentifiedUserId() {
+        anchorLock.lock()
+        defer { anchorLock.unlock() }
         defaults.removeObject(forKey: firstIdentifiedUserIdKey)
     }
 
@@ -135,6 +155,8 @@ enum AppAccountTokenResolver {
     /// using the same derivation as `token(forUserId:)`. Returns nil if
     /// the host has not yet identified any user on this device.
     static func firstIdentifiedToken() -> UUID? {
+        anchorLock.lock()
+        defer { anchorLock.unlock() }
         guard let userId = defaults.string(forKey: firstIdentifiedUserIdKey),
               !userId.isEmpty else { return nil }
         return token(forUserId: userId)
