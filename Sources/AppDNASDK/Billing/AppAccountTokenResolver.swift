@@ -85,8 +85,11 @@ enum AppAccountTokenResolver {
 
     /// UserDefaults key that stores the userId string of the FIRST user
     /// ever identified on this device. Persisted across app launches —
-    /// reinstalling the app clears it (UserDefaults are app-scoped).
-    /// Cleared explicitly by `AppDNA.reset()`.
+    /// reinstalling the app (or factory-resetting the device) is the
+    /// only invalidation event. **NOT** cleared by `AppDNA.reset()` —
+    /// see the `clearFirstIdentifiedUserId` docstring and the
+    /// `AppDNA.reset()` docstring for why (clearing on sign-out would
+    /// re-open the cross-account leak this anchor is meant to close).
     ///
     /// This anchor scopes the "grant untagged historical transactions"
     /// migration policy to a single device-level identity: only the first
