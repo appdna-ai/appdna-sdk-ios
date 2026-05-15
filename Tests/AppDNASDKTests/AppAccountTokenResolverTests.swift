@@ -79,4 +79,89 @@ final class AppAccountTokenResolverTests: XCTestCase {
         // once the server-side mapping is implemented to validate the
         // algorithm hasn't drifted on either side.
     }
+
+    // MARK: - First-identifier persistence (v1.0.63 fix)
+
+    /// Each test gets its own isolated UserDefaults suite so the
+    /// first-identifier anchor doesn't leak between tests OR pollute the
+    /// standard defaults on the host. Cleanup in tearDown clears the
+    /// suite and restores production defaults.
+    private var testSuite: UserDefaults!
+
+    override func setUp() {
+        super.setUp()
+        let suiteName = "appdna.tests.AppAccountTokenResolverTests.\(UUID().uuidString)"
+        testSuite = UserDefaults(suiteName: suiteName)
+        AppAccountTokenResolver.setDefaultsForTesting(testSuite)
+    }
+
+    override func tearDown() {
+        // Drop every key in the suite (suiteName-scoped, so nothing else
+        // is affected) and restore production defaults for the next test.
+        if let bundleId = testSuite.dictionaryRepresentation().keys.first {
+            // Best-effort: removePersistentDomain wipes everything in the
+            // suite. We do it indirectly to keep the API minimal here.
+            _ = bundleId
+        }
+        for key in testSuite.dictionaryRepresentation().keys {
+            testSuite.removeObject(forKey: key)
+        }
+        AppAccountTokenResolver.resetDefaultsForTesting()
+        super.tearDown()
+    }
+
+    func testFirstIdentifier_initiallyNil() {
+        // Fresh suite — no anchor recorded yet.
+        XCTAssertNil(AppAccountTokenResolver.firstIdentifiedToken())
+    }
+
+    func testRecordFirstIdentifier_setsAnchor() {
+        AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded("alice")
+        let derived = AppAccountTokenResolver.firstIdentifiedToken()
+        XCTAssertNotNil(derived)
+        XCTAssertEqual(derived, AppAccountTokenResolver.token(forUserId: "alice"),
+                       "First-identifier token must use the same derivation as tokenForCurrentUser")
+    }
+
+    func testRecordFirstIdentifier_isIdempotent() {
+        // The CORE invariant of the v1.0.63 fix: only the FIRST identify
+        // sets the anchor. A later identify(B) on the same device does
+        // NOT change the anchor — otherwise B could claim A's untagged
+        // purchases just by being the most recent identify call.
+        AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded("alice")
+        AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded("bob")
+        AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded("carol")
+        let derived = AppAccountTokenResolver.firstIdentifiedToken()
+        XCTAssertEqual(derived, AppAccountTokenResolver.token(forUserId: "alice"),
+                       "First-identifier anchor MUST NOT change on subsequent identify calls")
+    }
+
+    func testRecordFirstIdentifier_ignoresEmptyString() {
+        // Empty userId is treated as "no identified user" by `token(...)`
+        // — don't record it as a first-identifier either.
+        AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded("")
+        XCTAssertNil(AppAccountTokenResolver.firstIdentifiedToken())
+        // ...and a later real identify still becomes the first.
+        AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded("alice")
+        XCTAssertEqual(
+            AppAccountTokenResolver.firstIdentifiedToken(),
+            AppAccountTokenResolver.token(forUserId: "alice")
+        )
+    }
+
+    func testClearFirstIdentifier_resetsAnchor() {
+        // Used by `AppDNA.reset()` — the explicit "sign out + start
+        // fresh" surface. After clear, the next identify becomes the
+        // new first.
+        AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded("alice")
+        AppAccountTokenResolver.clearFirstIdentifiedUserId()
+        XCTAssertNil(AppAccountTokenResolver.firstIdentifiedToken())
+
+        AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded("bob")
+        XCTAssertEqual(
+            AppAccountTokenResolver.firstIdentifiedToken(),
+            AppAccountTokenResolver.token(forUserId: "bob"),
+            "After clear(), the next identify becomes the new first-identifier"
+        )
+    }
 }

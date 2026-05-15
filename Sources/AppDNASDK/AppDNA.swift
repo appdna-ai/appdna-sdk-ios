@@ -11,7 +11,7 @@ import FirebaseFirestore
 public final class AppDNA: @unchecked Sendable {
 
     /// SDK version string.
-    public static let sdkVersion = "1.0.62"
+    public static let sdkVersion = "1.0.63"
 
     /// Firestore instance used by the SDK.
     /// Uses a secondary Firebase app ("appdna") if GoogleService-Info-AppDNA.plist is found,
@@ -189,6 +189,16 @@ public final class AppDNA: @unchecked Sendable {
             shared.identityManager?.identify(userId: userId, traits: traits)
             Log.info("Identified user: \(userId)")
 
+            // Cross-account-leak defence — anchor the device's "first
+            // identifier" the first time anyone identifies. Untagged
+            // historical transactions (e.g. SDK-driven onboarding-paywall
+            // purchases that fired BEFORE the host identified anyone) are
+            // scoped to this anchor so a later user-switch can't inherit
+            // them. Idempotent — a later `identify(B)` does NOT change
+            // the anchor; that user gets `denyUntaggedOtherUser` for
+            // untagged transactions. See `EntitlementOwnerFilter`.
+            AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded(userId)
+
             // Fire identify event for backend alias/merge
             var identifyProps: [String: Any] = [
                 "user_id": userId,
@@ -251,6 +261,13 @@ public final class AppDNA: @unchecked Sendable {
             shared.surveyManager?.resetSession()
             shared.webEntitlementManager?.stopObserving()
             shared.pendingMessageListener?.stopObserving()
+            // Cross-account-leak defence — `reset()` is the explicit
+            // "fully sign out + start fresh" surface. Clearing the
+            // first-identifier anchor lets the NEXT `identify(...)` claim
+            // any untagged historical transactions on this device. Hosts
+            // that don't want this behaviour should call `identify(...)`
+            // directly without `reset()`.
+            AppAccountTokenResolver.clearFirstIdentifiedUserId()
             Log.info("Identity reset")
         }
     }

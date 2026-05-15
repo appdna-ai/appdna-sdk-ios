@@ -90,24 +90,35 @@ final class StoreKit2Bridge: BillingBridgeProtocol {
     func restore(appAccountToken: UUID?) async throws -> [String] {
         var restoredIds: [String] = []
 
+        // Resolve the first-identifier anchor ONCE per restore call so the
+        // decision matrix below sees a stable value across all transactions
+        // even if the host identifies a different user mid-iteration.
+        let firstIdentifier = AppAccountTokenResolver.firstIdentifiedToken()
+
         for await result in Transaction.currentEntitlements {
             guard let transaction = try? checkVerified(result) else { continue }
             // Per-user binding filter (see `EntitlementOwnerFilter`):
-            // skip transactions tagged with a different user's token.
-            // Untagged historical transactions are granted under the
-            // migration-tolerant policy; server-side verification (when the
-            // host wires it into restore) is the primary enforcement layer.
+            // - tagged + matches current user → grant
+            // - tagged + different user → DENY (cross-account leak guard)
+            // - untagged + current user is the device's first-identifier
+            //   → grant (migration-tolerant; legacy / pre-identify
+            //   onboarding-paywall purchase)
+            // - untagged + current user is NOT the first-identifier
+            //   → DENY (the v1.0.62 leak close — was incorrectly granted)
             switch EntitlementOwnerFilter.decide(
                 transactionToken: transaction.appAccountToken,
-                expectedToken: appAccountToken
+                expectedToken: appAccountToken,
+                firstIdentifiedToken: firstIdentifier
             ) {
             case .grant, .grantAnonymousPolicy:
                 restoredIds.append(transaction.productID)
             case .grantUntaggedMigration:
-                Log.info("StoreKit2Bridge.restore: granting untagged historical transaction \(transaction.id) to current user (migration-tolerant policy — server should claim ownership).")
+                Log.info("StoreKit2Bridge.restore: granting untagged historical transaction \(transaction.id) to the device's first-identifier (migration-tolerant policy — server should claim ownership).")
                 restoredIds.append(transaction.productID)
             case .denyOtherUser:
                 Log.warning("StoreKit2Bridge.restore: skipped transaction \(transaction.id) — appAccountToken does not match the current user.")
+            case .denyUntaggedOtherUser:
+                Log.warning("StoreKit2Bridge.restore: skipped untagged transaction \(transaction.id) — the current user is not the device's first-identifier, so the untagged history is not inherited (cross-account leak guard).")
             }
         }
 
@@ -130,18 +141,25 @@ final class StoreKit2Bridge: BillingBridgeProtocol {
     func getEntitlements(appAccountToken: UUID?) async -> [String] {
         var entitlements: [String] = []
 
+        // See `restore(...)` above for the rationale on resolving the
+        // first-identifier anchor once at the top of the read loop.
+        let firstIdentifier = AppAccountTokenResolver.firstIdentifiedToken()
+
         for await result in Transaction.currentEntitlements {
             guard let transaction = try? checkVerified(result) else { continue }
             // Same per-user binding filter as `restore` above — see
-            // `EntitlementOwnerFilter` for the decision matrix.
+            // `EntitlementOwnerFilter` for the full decision matrix.
             switch EntitlementOwnerFilter.decide(
                 transactionToken: transaction.appAccountToken,
-                expectedToken: appAccountToken
+                expectedToken: appAccountToken,
+                firstIdentifiedToken: firstIdentifier
             ) {
             case .grant, .grantAnonymousPolicy, .grantUntaggedMigration:
                 entitlements.append(transaction.productID)
             case .denyOtherUser:
                 Log.warning("StoreKit2Bridge.getEntitlements: skipped transaction \(transaction.id) — appAccountToken does not match the current user.")
+            case .denyUntaggedOtherUser:
+                Log.warning("StoreKit2Bridge.getEntitlements: skipped untagged transaction \(transaction.id) — the current user is not the device's first-identifier, so the untagged history is not inherited (cross-account leak guard).")
             }
         }
 

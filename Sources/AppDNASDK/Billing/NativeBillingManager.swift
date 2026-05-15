@@ -276,19 +276,27 @@ public class NativeBillingManager {
     /// migration-tolerant policy.
     private func ownedJWSes(expectedToken: UUID?, source: String) async -> [String] {
         var owned: [String] = []
+        // Resolve the first-identifier anchor once per call (see
+        // `StoreKit2Bridge.restore` for the same pattern). Scopes the
+        // `grantUntaggedMigration` carve-out to the device's first-identified
+        // user so a later user-switch can't inherit untagged history.
+        let firstIdentifier = AppAccountTokenResolver.firstIdentifiedToken()
         for await result in Transaction.currentEntitlements {
             guard case .verified(let tx) = result else { continue }
             switch EntitlementOwnerFilter.decide(
                 transactionToken: tx.appAccountToken,
-                expectedToken: expectedToken
+                expectedToken: expectedToken,
+                firstIdentifiedToken: firstIdentifier
             ) {
             case .grant, .grantAnonymousPolicy:
                 owned.append(result.jwsRepresentation)
             case .grantUntaggedMigration:
-                Log.info("\(source): granting untagged historical transaction \(tx.id) to current user (migration-tolerant policy — server should claim ownership).")
+                Log.info("\(source): granting untagged historical transaction \(tx.id) to the device's first-identifier (migration-tolerant policy — server should claim ownership).")
                 owned.append(result.jwsRepresentation)
             case .denyOtherUser:
                 Log.warning("\(source): skipped transaction \(tx.id) — appAccountToken does not match the current user.")
+            case .denyUntaggedOtherUser:
+                Log.warning("\(source): skipped untagged transaction \(tx.id) — the current user is not the device's first-identifier, so the untagged history is not inherited (cross-account leak guard).")
             }
         }
         return owned

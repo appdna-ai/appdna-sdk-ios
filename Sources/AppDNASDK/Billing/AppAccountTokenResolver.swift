@@ -80,4 +80,63 @@ enum AppAccountTokenResolver {
               let userId = identity.userId else { return nil }
         return token(forUserId: userId)
     }
+
+    // MARK: - First-identifier persistence (cross-account-leak defence)
+
+    /// UserDefaults key that stores the userId string of the FIRST user
+    /// ever identified on this device. Persisted across app launches —
+    /// reinstalling the app clears it (UserDefaults are app-scoped).
+    /// Cleared explicitly by `AppDNA.reset()`.
+    ///
+    /// This anchor scopes the "grant untagged historical transactions"
+    /// migration policy to a single device-level identity: only the first
+    /// user to identify on the device may inherit untagged purchases (which
+    /// in SDK-driven onboarding flows includes the install-time paywall
+    /// purchase made before the host called `identify(...)`).
+    static let firstIdentifiedUserIdKey = "com.appdna.firstIdentifiedUserId"
+
+    /// Returns the underlying UserDefaults instance — overridable in tests.
+    /// Use `setDefaultsForTesting(_:)` to swap in a `UserDefaults(suiteName:)`
+    /// instance so tests can run in isolation without polluting standard.
+    private static var defaults: UserDefaults = .standard
+
+    /// Test-only hook to redirect first-identifier reads/writes at a
+    /// suite-scoped UserDefaults. Production code never calls this.
+    static func setDefaultsForTesting(_ defaults: UserDefaults) {
+        self.defaults = defaults
+    }
+
+    /// Test-only hook to restore the production UserDefaults instance.
+    static func resetDefaultsForTesting() {
+        self.defaults = .standard
+    }
+
+    /// Idempotently record `userId` as the first-identifier for this
+    /// device. If already set, this is a no-op — a subsequent `identify`
+    /// of a different user does NOT change the anchor (that user is
+    /// scoped to `denyUntaggedOtherUser`, not `grantUntaggedMigration`).
+    /// Empty `userId` is ignored.
+    static func recordFirstIdentifiedUserIdIfNeeded(_ userId: String) {
+        guard !userId.isEmpty else { return }
+        if defaults.string(forKey: firstIdentifiedUserIdKey) == nil {
+            defaults.set(userId, forKey: firstIdentifiedUserIdKey)
+        }
+    }
+
+    /// Clear the first-identifier anchor. Called from `AppDNA.reset()`
+    /// (which the host invokes for a "fully sign out + start fresh"
+    /// flow). After this, the next `identify(...)` becomes the new
+    /// first-identifier for the device.
+    static func clearFirstIdentifiedUserId() {
+        defaults.removeObject(forKey: firstIdentifiedUserIdKey)
+    }
+
+    /// Resolve the persisted first-identifier UserId into a UUID token
+    /// using the same derivation as `token(forUserId:)`. Returns nil if
+    /// the host has not yet identified any user on this device.
+    static func firstIdentifiedToken() -> UUID? {
+        guard let userId = defaults.string(forKey: firstIdentifiedUserIdKey),
+              !userId.isEmpty else { return nil }
+        return token(forUserId: userId)
+    }
 }
