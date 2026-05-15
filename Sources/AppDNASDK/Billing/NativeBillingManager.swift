@@ -68,7 +68,21 @@ public class NativeBillingManager {
     }
 
     /// Purchase a product via StoreKit 2, verify server-side.
-    public func purchase(productId: String, offer: PromotionalOfferPayload? = nil) async throws -> BillingResult {
+    ///
+    /// `appAccountToken` (when supplied) is attached to the StoreKit
+    /// transaction via `.appAccountToken(...)` so the transaction is bound
+    /// to the current app user — preventing the cross-account leak where a
+    /// later user signed in on the same device could otherwise see this
+    /// transaction in `Transaction.currentEntitlements`. If `nil`, the
+    /// resolver falls back to the currently-identified user (via
+    /// `AppAccountTokenResolver.tokenForCurrentUser()`); if no user has
+    /// identified yet the purchase still proceeds untagged (with a warning),
+    /// preserving pre-identify first-launch behaviour.
+    public func purchase(
+        productId: String,
+        offer: PromotionalOfferPayload? = nil,
+        appAccountToken: UUID? = nil
+    ) async throws -> BillingResult {
         // Track purchase_started event
         AppDNA.track(event: "purchase_started", properties: [
             "product_id": productId,
@@ -106,6 +120,14 @@ public class NativeBillingManager {
                 signature: Data(base64Encoded: offer.signature) ?? Data(),
                 timestamp: offer.timestamp
             ))
+        }
+        // Per-user binding token: explicit caller token wins; otherwise
+        // derive from the currently-identified user.
+        let resolvedToken = appAccountToken ?? AppAccountTokenResolver.tokenForCurrentUser()
+        if let token = resolvedToken {
+            options.insert(.appAccountToken(token))
+        } else {
+            Log.warning("NativeBillingManager.purchase: no appAccountToken — host should call AppDNA.identify(userId:) BEFORE purchase to avoid cross-account entitlement leaks.")
         }
 
         let result: Product.PurchaseResult
@@ -194,12 +216,14 @@ public class NativeBillingManager {
     /// failure the cache stays at whatever it was before; no state mutation.
     public func refreshEntitlementCache() async {
         do {
-            var transactions: [String] = []
-            for await result in Transaction.currentEntitlements {
-                if case .verified = result {
-                    transactions.append(result.jwsRepresentation)
-                }
-            }
+            // Per-user binding filter (see `EntitlementOwnerFilter`): only
+            // transactions tagged with the currently-identified user's token
+            // are collected — transactions tagged with a different user are
+            // skipped (this is the cached/silent counterpart of the
+            // `restorePurchases` defence below). When no user is yet
+            // identified, the filter is permissive (anonymous policy).
+            let expectedToken = AppAccountTokenResolver.tokenForCurrentUser()
+            let transactions = await ownedJWSes(expectedToken: expectedToken, source: "refreshEntitlementCache")
             // Empty entitlements is a valid state (user has no past purchases)
             // — short-circuit before hitting the verifier so we don't make a
             // network call for nothing.
@@ -214,15 +238,18 @@ public class NativeBillingManager {
     }
 
     /// Restore purchases via AppStore.sync() and Transaction.currentEntitlements.
+    ///
+    /// Cross-account-leak defence: transactions tagged with a different
+    /// user's `appAccountToken` are skipped (the device-level
+    /// `Transaction.currentEntitlements` includes them, but they don't belong
+    /// to the currently-identified app user). Untagged historical transactions
+    /// are granted under the migration-tolerant policy and surfaced to the
+    /// server-side `receiptVerifier.restore(...)` for ownership claiming.
     public func restorePurchases() async throws -> [ServerEntitlement] {
         try await AppStore.sync()
 
-        var transactions: [String] = []
-        for await result in Transaction.currentEntitlements {
-            if case .verified = result {
-                transactions.append(result.jwsRepresentation)
-            }
-        }
+        let expectedToken = AppAccountTokenResolver.tokenForCurrentUser()
+        let transactions = await ownedJWSes(expectedToken: expectedToken, source: "restorePurchases")
 
         let entitlements = try await receiptVerifier.restore(transactions: transactions)
 
@@ -234,6 +261,37 @@ public class NativeBillingManager {
         }
 
         return entitlements
+    }
+
+    // MARK: - Owner-filtered transaction reader (cross-account-leak defence)
+
+    /// Iterate `Transaction.currentEntitlements`, apply the per-user
+    /// ownership filter (`EntitlementOwnerFilter`), and return the verified
+    /// JWS strings of the transactions that belong to the current user. The
+    /// `source` parameter is used only for log breadcrumbs.
+    ///
+    /// Returns the JWS strings (not `Transaction` values) because both
+    /// callers immediately ship them off to `receiptVerifier.restore(...)` —
+    /// the server is the authoritative ownership store under the
+    /// migration-tolerant policy.
+    private func ownedJWSes(expectedToken: UUID?, source: String) async -> [String] {
+        var owned: [String] = []
+        for await result in Transaction.currentEntitlements {
+            guard case .verified(let tx) = result else { continue }
+            switch EntitlementOwnerFilter.decide(
+                transactionToken: tx.appAccountToken,
+                expectedToken: expectedToken
+            ) {
+            case .grant, .grantAnonymousPolicy:
+                owned.append(result.jwsRepresentation)
+            case .grantUntaggedMigration:
+                Log.info("\(source): granting untagged historical transaction \(tx.id) to current user (migration-tolerant policy — server should claim ownership).")
+                owned.append(result.jwsRepresentation)
+            case .denyOtherUser:
+                Log.warning("\(source): skipped transaction \(tx.id) — appAccountToken does not match the current user.")
+            }
+        }
+        return owned
     }
 
     /// Get localized product info from StoreKit.

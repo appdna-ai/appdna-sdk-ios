@@ -218,7 +218,13 @@ final class PaywallManager {
 
         Task {
             do {
-                let result = try await bridge.purchase(productId: plan.productId ?? "")
+                // Cross-account-leak defence — bind the StoreKit transaction
+                // to the currently-identified app user via `appAccountToken`.
+                // See `AppAccountTokenResolver` for the derivation contract.
+                let result = try await bridge.purchase(
+                    productId: plan.productId ?? "",
+                    appAccountToken: AppAccountTokenResolver.tokenForCurrentUser()
+                )
                 eventTracker.track(event: "purchase_completed", properties: [
                     "paywall_id": paywallId,
                     "product_id": result.productId,
@@ -360,7 +366,11 @@ final class PaywallManager {
 
         Task {
             do {
-                let restored = try await bridge.restore()
+                // Cross-account-leak defence — restored entitlements are
+                // filtered by the currently-identified user's `appAccountToken`.
+                let restored = try await bridge.restore(
+                    appAccountToken: AppAccountTokenResolver.tokenForCurrentUser()
+                )
                 eventTracker.track(event: "purchase_restored", properties: [
                     "paywall_id": paywallId,
                     "restored_count": restored.count,

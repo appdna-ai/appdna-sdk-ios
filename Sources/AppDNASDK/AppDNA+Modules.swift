@@ -69,12 +69,22 @@ extension AppDNA {
 
         /// Initiate a purchase for the given product ID.
         /// Delegates to the configured billing bridge.
+        ///
+        /// Cross-account-leak defence (`PurchaseOptions.appAccountToken`):
+        ///   - Explicit `options.appAccountToken` wins (host controls binding).
+        ///   - Otherwise the SDK derives a deterministic token from the
+        ///     currently-identified user (`AppDNA.identify(userId:)`).
+        ///   - If no user has identified yet, the purchase still proceeds
+        ///     untagged (the bridge logs a warning). This preserves
+        ///     pre-identify first-launch flows; hosts SHOULD call
+        ///     `AppDNA.identify(...)` before letting the user purchase.
         public func purchase(_ productId: String, options: PurchaseOptions? = nil) async throws -> TransactionInfo {
             guard let bridge = bridge else {
                 Log.warning("BillingModule: No billing provider configured")
                 throw BillingModuleError.noBillingProvider
             }
-            let result = try await bridge.purchase(productId: productId)
+            let token = options?.appAccountToken ?? AppAccountTokenResolver.tokenForCurrentUser()
+            let result = try await bridge.purchase(productId: productId, appAccountToken: token)
             return TransactionInfo(
                 transactionId: result.transactionId,
                 productId: result.productId,
@@ -85,12 +95,17 @@ extension AppDNA {
 
         /// Restore previously purchased products.
         /// Returns an array of restored product IDs.
+        ///
+        /// Cross-account-leak defence: restored products are filtered to the
+        /// currently-identified user's `appAccountToken`. Untagged historical
+        /// transactions are surfaced under the migration-tolerant policy and
+        /// the server claims ownership via `receiptVerifier.restore(...)`.
         public func restorePurchases() async throws -> [String] {
             guard let bridge = bridge else {
                 Log.warning("BillingModule: No billing provider configured")
                 throw BillingModuleError.noBillingProvider
             }
-            return try await bridge.restore()
+            return try await bridge.restore(appAccountToken: AppAccountTokenResolver.tokenForCurrentUser())
         }
 
         /// Get current entitlements as `Entitlement` objects.
@@ -99,7 +114,7 @@ extension AppDNA {
                 Log.warning("BillingModule: No billing provider configured")
                 return []
             }
-            let productIds = await bridge.getEntitlements()
+            let productIds = await bridge.getEntitlements(appAccountToken: AppAccountTokenResolver.tokenForCurrentUser())
             return productIds.map { productId in
                 Entitlement(
                     identifier: productId,
@@ -113,7 +128,7 @@ extension AppDNA {
         /// Check if the user has any active subscription.
         public func hasActiveSubscription() async -> Bool {
             guard let bridge = bridge else { return false }
-            let entitlements = await bridge.getEntitlements()
+            let entitlements = await bridge.getEntitlements(appAccountToken: AppAccountTokenResolver.tokenForCurrentUser())
             return !entitlements.isEmpty
         }
 
@@ -146,8 +161,12 @@ extension AppDNA {
             // Calling getEntitlements() reads `Transaction.currentEntitlements`
             // (or RC/Adapty customerInfo) without firing restore events. The
             // result is discarded — we only care about the side-effect of
-            // priming any internal cache the bridge maintains.
-            _ = await bridge.getEntitlements()
+            // priming any internal cache the bridge maintains. Token is
+            // critical here: this method is auto-called by `identify`, and
+            // the whole point of that call is to make the cache reflect the
+            // *newly-identified* user — passing the freshly-resolved token
+            // is what filters out the previous user's transactions.
+            _ = await bridge.getEntitlements(appAccountToken: AppAccountTokenResolver.tokenForCurrentUser())
         }
 
         /// Register a callback that fires when entitlements change.

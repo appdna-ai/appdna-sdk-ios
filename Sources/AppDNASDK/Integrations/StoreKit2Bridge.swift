@@ -4,7 +4,10 @@ import StoreKit
 /// Native StoreKit 2 billing bridge. Default fallback when RevenueCat is not available.
 final class StoreKit2Bridge: BillingBridgeProtocol {
 
-    func purchase(productId: String) async throws -> PurchaseResult {
+    func purchase(
+        productId: String,
+        appAccountToken: UUID?
+    ) async throws -> PurchaseResult {
         let products = try await Product.products(for: [productId])
         guard let product = products.first else {
             let err = StoreKit2Error.productNotFound(productId)
@@ -12,9 +15,22 @@ final class StoreKit2Bridge: BillingBridgeProtocol {
             throw err
         }
 
+        // Bind the resulting transaction to the current app user (Apple
+        // surfaces it on `Transaction.appAccountToken` and in App Store
+        // Server-Server notifications, so the binding survives renewals).
+        // `nil` token = host has not identified a user — proceed untagged,
+        // preserving pre-identify first-launch behaviour, but log it so the
+        // app developer can see it during integration.
+        var options: Set<Product.PurchaseOption> = []
+        if let token = appAccountToken {
+            options.insert(.appAccountToken(token))
+        } else {
+            Log.warning("StoreKit2Bridge.purchase: no appAccountToken — host should call AppDNA.identify(userId:) BEFORE purchase to avoid cross-account entitlement leaks.")
+        }
+
         let result: Product.PurchaseResult
         do {
-            result = try await product.purchase()
+            result = try await product.purchase(options: options)
         } catch {
             await fireBillingPurchaseFailed(productId: productId, error: error)
             throw error
@@ -71,12 +87,27 @@ final class StoreKit2Bridge: BillingBridgeProtocol {
         }
     }
 
-    func restore() async throws -> [String] {
+    func restore(appAccountToken: UUID?) async throws -> [String] {
         var restoredIds: [String] = []
 
         for await result in Transaction.currentEntitlements {
-            if let transaction = try? checkVerified(result) {
+            guard let transaction = try? checkVerified(result) else { continue }
+            // Per-user binding filter (see `EntitlementOwnerFilter`):
+            // skip transactions tagged with a different user's token.
+            // Untagged historical transactions are granted under the
+            // migration-tolerant policy; server-side verification (when the
+            // host wires it into restore) is the primary enforcement layer.
+            switch EntitlementOwnerFilter.decide(
+                transactionToken: transaction.appAccountToken,
+                expectedToken: appAccountToken
+            ) {
+            case .grant, .grantAnonymousPolicy:
                 restoredIds.append(transaction.productID)
+            case .grantUntaggedMigration:
+                Log.info("StoreKit2Bridge.restore: granting untagged historical transaction \(transaction.id) to current user (migration-tolerant policy — server should claim ownership).")
+                restoredIds.append(transaction.productID)
+            case .denyOtherUser:
+                Log.warning("StoreKit2Bridge.restore: skipped transaction \(transaction.id) — appAccountToken does not match the current user.")
             }
         }
 
@@ -96,12 +127,21 @@ final class StoreKit2Bridge: BillingBridgeProtocol {
         }
     }
 
-    func getEntitlements() async -> [String] {
+    func getEntitlements(appAccountToken: UUID?) async -> [String] {
         var entitlements: [String] = []
 
         for await result in Transaction.currentEntitlements {
-            if let transaction = try? checkVerified(result) {
+            guard let transaction = try? checkVerified(result) else { continue }
+            // Same per-user binding filter as `restore` above — see
+            // `EntitlementOwnerFilter` for the decision matrix.
+            switch EntitlementOwnerFilter.decide(
+                transactionToken: transaction.appAccountToken,
+                expectedToken: appAccountToken
+            ) {
+            case .grant, .grantAnonymousPolicy, .grantUntaggedMigration:
                 entitlements.append(transaction.productID)
+            case .denyOtherUser:
+                Log.warning("StoreKit2Bridge.getEntitlements: skipped transaction \(transaction.id) — appAccountToken does not match the current user.")
             }
         }
 

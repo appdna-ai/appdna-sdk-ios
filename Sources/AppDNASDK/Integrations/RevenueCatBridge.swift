@@ -15,7 +15,19 @@ final class RevenueCatBridge: NSObject, BillingBridgeProtocol {
         Purchases.shared.delegate = self
     }
 
-    func purchase(productId: String) async throws -> PurchaseResult {
+    func purchase(
+        productId: String,
+        appAccountToken: UUID?
+    ) async throws -> PurchaseResult {
+        // NOTE on appAccountToken: RevenueCat manages per-user binding
+        // through its own `Purchases.shared.logIn(appUserID:)` API — when the
+        // host calls `AppDNA.identify(...)` the integration layer is expected
+        // to also call `Purchases.logIn(...)`, and RC then attaches the
+        // resulting purchase to that appUserID server-side (including via
+        // App Store Server-Server notifications). We therefore do NOT pass
+        // an `appAccountToken` purchase option here — RC drives the binding,
+        // and passing both would risk an inconsistent attribution.
+        _ = appAccountToken  // explicitly acknowledged; binding lives in RC
         let offerings: Offerings
         do {
             offerings = try await Purchases.shared.offerings()
@@ -67,7 +79,11 @@ final class RevenueCatBridge: NSObject, BillingBridgeProtocol {
         )
     }
 
-    func restore() async throws -> [String] {
+    func restore(appAccountToken: UUID?) async throws -> [String] {
+        // RC restores against its own currently-logged-in appUserID (set via
+        // `Purchases.logIn` during identify), so `appAccountToken` is not
+        // applied here — RC's server-side binding is the source of truth.
+        _ = appAccountToken
         let customerInfo = try await Purchases.shared.restorePurchases()
         let restoredIds = Array(customerInfo.entitlements.active.keys)
         // SPEC-400 — fire onRestoreCompleted.
@@ -84,7 +100,8 @@ final class RevenueCatBridge: NSObject, BillingBridgeProtocol {
         }
     }
 
-    func getEntitlements() async -> [String] {
+    func getEntitlements(appAccountToken: UUID?) async -> [String] {
+        _ = appAccountToken  // RC binds entitlements to its own appUserID
         guard let info = try? await Purchases.shared.customerInfo() else { return [] }
         return Array(info.entitlements.active.keys)
     }
@@ -125,15 +142,15 @@ final class RevenueCatBridge: BillingBridgeProtocol {
         Log.warning("RevenueCat module not available — RevenueCatBridge is a no-op stub")
     }
 
-    func purchase(productId: String) async throws -> PurchaseResult {
+    func purchase(productId: String, appAccountToken: UUID?) async throws -> PurchaseResult {
         throw BillingError.providerNotAvailable("RevenueCat is not available. Install the RevenueCat SDK or use native StoreKit.")
     }
 
-    func restore() async throws -> [String] {
+    func restore(appAccountToken: UUID?) async throws -> [String] {
         throw BillingError.providerNotAvailable("RevenueCat is not available. Install the RevenueCat SDK or use native StoreKit.")
     }
 
-    func getEntitlements() async -> [String] {
+    func getEntitlements(appAccountToken: UUID?) async -> [String] {
         return []
     }
 }

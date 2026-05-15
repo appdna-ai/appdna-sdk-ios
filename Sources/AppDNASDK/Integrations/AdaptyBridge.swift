@@ -33,7 +33,15 @@ final class AdaptyBridge: BillingBridgeProtocol {
 
     // MARK: - BillingBridgeProtocol
 
-    func purchase(productId: String) async throws -> PurchaseResult {
+    func purchase(
+        productId: String,
+        appAccountToken: UUID?
+    ) async throws -> PurchaseResult {
+        // Adapty binds purchases to its own customer-user-id (set via
+        // `Adapty.identify(customerUserId:)` when AppDNA.identify runs),
+        // so passing `appAccountToken` separately would risk inconsistent
+        // attribution between Apple-side and Adapty-side ownership.
+        _ = appAccountToken
         eventTracker?.track(event: "purchase_started", properties: [
             "product_id": productId,
             "provider": "adapty",
@@ -94,7 +102,8 @@ final class AdaptyBridge: BillingBridgeProtocol {
         #endif
     }
 
-    func restore() async throws -> [String] {
+    func restore(appAccountToken: UUID?) async throws -> [String] {
+        _ = appAccountToken  // Adapty binds via its own customerUserId
         #if canImport(Adapty)
         let profile = try await Adapty.restorePurchases()
         let ids = profile.accessLevels.filter(\.value.isActive).map(\.key)
@@ -117,7 +126,8 @@ final class AdaptyBridge: BillingBridgeProtocol {
         #endif
     }
 
-    func getEntitlements() async -> [String] {
+    func getEntitlements(appAccountToken: UUID?) async -> [String] {
+        _ = appAccountToken  // Adapty binds via its own customerUserId
         #if canImport(Adapty)
         do {
             let profile = try await Adapty.getProfile()
