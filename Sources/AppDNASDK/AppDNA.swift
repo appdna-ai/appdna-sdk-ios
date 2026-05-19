@@ -11,7 +11,7 @@ import FirebaseFirestore
 public final class AppDNA: @unchecked Sendable {
 
     /// SDK version string.
-    public static let sdkVersion = "1.0.63"
+    public static let sdkVersion = "1.0.64"
 
     /// Firestore instance used by the SDK.
     /// Uses a secondary Firebase app ("appdna") if GoogleService-Info-AppDNA.plist is found,
@@ -38,6 +38,20 @@ public final class AppDNA: @unchecked Sendable {
 
     /// Delegate for server-driven screen events (SPEC-089c).
     public static weak var screenDelegate: AppDNAScreenDelegate?
+
+    /// SPEC-404 — lifecycle delegate. Fires `onSdkRuntimeLocked` once when
+    /// the bootstrap response carries a `runtime_lock`, and
+    /// `onSdkRuntimeUnlocked` once when a subsequent bootstrap returns
+    /// without one. Hosts use this to surface a custom "service unavailable"
+    /// banner and to trigger a one-shot event-queue retry on unlock.
+    public static weak var lifecycleDelegate: AppDNALifecycleDelegate?
+
+    /// SPEC-404 — current backend-driven SDK lock state. `nil` when active;
+    /// a non-nil value means the SDK is in locked mode and UI render paths
+    /// (paywall_trigger, messages, surveys) should pause. Set by the
+    /// bootstrap completion handler; cleared by the next bootstrap that
+    /// returns without `runtime_lock`. Synchronised via the internal `queue`.
+    public private(set) static var runtimeLock: BootstrapRuntimeLock?
 
     /// Internal accessor for the push token manager (legacy).
     static var push: PushTokenManager? { shared.pushTokenManager }
@@ -381,6 +395,15 @@ public final class AppDNA: @unchecked Sendable {
         context: PaywallContext? = nil,
         delegate: AppDNAPaywallDelegate? = nil
     ) {
+        // SPEC-404 — refuse to present any paywall while the SDK is in
+        // backend-locked mode. The lock fires only when the tenant is
+        // per-key-suspended (day 20+) or org cancelled, so a paywall
+        // purchase would be wasted UX (the receipt-validate route would 401
+        // and no entitlement would ever land on our side).
+        if runtimeLock != nil {
+            Log.warning("AppDNA.presentPaywall(id:\(id)) skipped — SDK in runtime-locked mode")
+            return
+        }
         DispatchQueue.main.async {
             shared.paywallManager?.present(
                 id: id,
@@ -399,6 +422,11 @@ public final class AppDNA: @unchecked Sendable {
         context: PaywallContext? = nil,
         delegate: AppDNAPaywallDelegate? = nil
     ) {
+        // SPEC-404 — same lock check as the id-based variant above.
+        if runtimeLock != nil {
+            Log.warning("AppDNA.presentPaywall(placement:\(placement)) skipped — SDK in runtime-locked mode")
+            return
+        }
         DispatchQueue.main.async {
             shared.paywallManager?.presentByPlacement(
                 placement: placement,
@@ -968,6 +996,22 @@ public final class AppDNA: @unchecked Sendable {
             }
             Log.info("Bootstrap successful: orgId=\(data.orgId), appId=\(data.appId)")
 
+            // SPEC-404 — reconcile runtime lock state from the bootstrap
+            // response. Fire delegate callbacks ONLY on a state transition
+            // (idle → locked or locked → idle), not on every bootstrap.
+            // Repeated bootstraps in the same state are a no-op for delegate
+            // notification.
+            let previousLock = AppDNA.runtimeLock
+            let currentLock = data.runtime_lock
+            AppDNA.runtimeLock = currentLock
+            if previousLock == nil, let newLock = currentLock {
+                Log.warning("AppDNA runtime locked by backend (reason=\(newLock.reason), locked_at=\(newLock.locked_at)) — pausing paywall/message/survey presentation")
+                AppDNA.lifecycleDelegate?.onSdkRuntimeLocked(reason: newLock.reason, lockedAt: newLock.locked_at)
+            } else if previousLock != nil, currentLock == nil {
+                Log.info("AppDNA runtime lock cleared — restoring normal SDK behaviour")
+                AppDNA.lifecycleDelegate?.onSdkRuntimeUnlocked()
+            }
+
             // Auto-inject geo traits from bootstrap response
             if let geo = data.geo {
                 var geoTraits: [String: Any] = [:]
@@ -1226,6 +1270,12 @@ struct BootstrapData: Codable {
     let firestorePath: String
     let settings: BootstrapSettings
     let geo: BootstrapGeo?
+    // SPEC-404 — optional runtime_lock. Backend sends this only when the
+    // tenant is per-key-suspended (day 20+) or cancelled. Older SDKs that
+    // pre-date this field still deserialise the response — Swift's Decodable
+    // ignores unknown keys by default, and the Optional means missing key
+    // decodes to nil. Forward-compatible across both directions.
+    let runtime_lock: BootstrapRuntimeLock?
 }
 
 struct BootstrapSettings: Codable {
@@ -1241,4 +1291,18 @@ struct BootstrapGeo: Codable {
     let timezone: String?
     let latitude: Double?
     let longitude: Double?
+}
+
+/// SPEC-404 — runtime lock payload from the bootstrap response. When present,
+/// the SDK enters locked mode: paywall_trigger nodes auto-skip, messages and
+/// surveys pause, identify continues to work locally (anchor + UserDefaults),
+/// event uploads cleanly disable via the existing eventUploadPermanentlyFailed
+/// flag on first 401.
+public struct BootstrapRuntimeLock: Codable, Sendable {
+    /// Backend-supplied reason for the lock. `org_cancelled` is terminal;
+    /// `billing_overdue` and `manual_admin` clear when the back end restores.
+    public let reason: String
+    /// ISO-8601 string the lock was first observed (per-key suspended_at when
+    /// available, else the moment the bootstrap saw org=cancelled).
+    public let locked_at: String
 }

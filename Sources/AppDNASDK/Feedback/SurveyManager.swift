@@ -83,6 +83,15 @@ final class SurveyManager {
 
     private func presentSurvey(surveyId: String, config: SurveyConfig, triggerEvent: String) {
         guard !isPresenting else { return }
+
+        // SPEC-404 — pause new survey presentation while the SDK is
+        // backend-locked (per-key suspended day 20+ OR org cancelled). No
+        // analytics event, no delegate fire.
+        if AppDNA.runtimeLock != nil {
+            Log.debug("Survey \(surveyId) suppressed — SDK in runtime-locked mode")
+            return
+        }
+
         isPresenting = true
 
         // Track survey shown

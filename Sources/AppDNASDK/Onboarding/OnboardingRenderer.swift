@@ -1253,6 +1253,23 @@ struct OnboardingFlowHost: View {
             }
         }()
 
+        // SPEC-404 — runtime lock skip. When the backend has signalled the
+        // SDK is in locked mode (per-key suspended at day 20+ or org
+        // cancelled), every paywall_trigger auto-skips via the SPEC-403
+        // resolver chain. Reuses the same routing so existing flow targets
+        // (`on_subscribed_skip_target` → `on_success_target` → "continue")
+        // keep working. Tracker fires with reason='sdk_runtime_locked' so
+        // analytics can distinguish this from organic subscribed-skips.
+        if AppDNA.runtimeLock != nil {
+            tracker?.track(event: "onboarding_paywall_skip", properties: [
+                "flow_id": flowId,
+                "paywall_id": paywallId,
+                "reason": "sdk_runtime_locked",
+            ])
+            routeOutcome(onSubscribedSkipTarget ?? onSuccessTarget, "continue", "sdk_runtime_locked")
+            return
+        }
+
         // SPEC-401 Fix 1A — entitlement-aware skip gate.
         // Default `true` matches the new SDK contract: paywalls auto-skip
         // for already-subscribed users unless the author explicitly opts

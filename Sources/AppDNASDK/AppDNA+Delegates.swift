@@ -74,6 +74,43 @@ public extension AppDNADeepLinkDelegate {
     func onDeepLinkReceived(url: URL, params: [String: String]) {}
 }
 
+/// SPEC-404 — lifecycle delegate for backend-driven SDK lock state.
+///
+/// The SDK enters "locked mode" when the `/sdk/bootstrap` response carries a
+/// `runtime_lock` object (per-key suspended at day 20+, OR org cancelled).
+/// In locked mode: paywall_trigger nodes auto-skip; messages/surveys pause;
+/// event uploads cleanly disable on first 401 (existing
+/// `eventUploadPermanentlyFailed` flag). Identify continues working locally
+/// (anchor + UserDefaults), so the EntitlementOwnerFilter still gates
+/// correctly per-user.
+///
+/// Implement this protocol on a host class and set
+/// `AppDNA.lifecycleDelegate = self` to surface a custom UI banner
+/// ("Service temporarily unavailable") and to be notified when the lock
+/// clears (e.g. trigger a one-shot retry of pending event uploads).
+public protocol AppDNALifecycleDelegate: AnyObject {
+    /// Fires exactly once per idle → locked transition. `reason` is one of
+    /// `'billing_overdue' | 'manual_admin' | 'org_cancelled'` (raw string,
+    /// host translates if needed). `lockedAt` is the ISO-8601 timestamp the
+    /// backend recorded the lock (per-key suspended_at when available).
+    /// String type preserves cross-platform parity (Kotlin / Dart / TS
+    /// implementations also take the raw ISO string — see
+    /// `src/lib/sdk-delegates/index.ts` for the codegen source of truth).
+    func onSdkRuntimeLocked(reason: String, lockedAt: String)
+
+    /// Fires exactly once per locked → idle transition (lock cleared, the
+    /// next bootstrap returned no `runtime_lock`). Host typically uses this
+    /// to drop a "service unavailable" banner and force an event-queue
+    /// flush retry.
+    func onSdkRuntimeUnlocked()
+}
+
+/// Default no-op extensions — hosts that don't care stay zero-config.
+public extension AppDNALifecycleDelegate {
+    func onSdkRuntimeLocked(reason: String, lockedAt: String) {}
+    func onSdkRuntimeUnlocked() {}
+}
+
 /// Delegate for server-driven screen events (SPEC-089c).
 public protocol AppDNAScreenDelegate: AnyObject {
     func onScreenPresented(screenId: String)

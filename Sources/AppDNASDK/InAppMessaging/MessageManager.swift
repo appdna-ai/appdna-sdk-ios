@@ -105,6 +105,14 @@ final class MessageManager {
     private func present(messageId: String, config: MessageConfig, triggerEvent: String) {
         guard !isPresenting else { return }
 
+        // SPEC-404 — pause new in-app message presentation while the SDK is
+        // backend-locked (per-key suspended day 20+ OR org cancelled).
+        // Messages already shown stay visible. No analytics event emitted.
+        if AppDNA.runtimeLock != nil {
+            Log.debug("In-app message \(messageId) suppressed — SDK in runtime-locked mode")
+            return
+        }
+
         // SPEC-400 — `shouldShowMessage` veto. Run BEFORE any analytics
         // tracking or view construction so a vetoed message produces no
         // `in_app_message_shown` event. The protocol's default extension
