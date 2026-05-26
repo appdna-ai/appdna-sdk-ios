@@ -24,15 +24,20 @@ final class PaywallManager {
     private let remoteConfigManager: RemoteConfigManager
     private let billingBridge: BillingBridgeProtocol?
     private let eventTracker: EventTracker
+    /// SPEC-036-F §1.2 — consulted at present-time for a running paywall
+    /// experiment targeting the entity being shown.
+    private let experimentManager: ExperimentManager?
 
     init(
         remoteConfigManager: RemoteConfigManager,
         billingBridge: BillingBridgeProtocol?,
-        eventTracker: EventTracker
+        eventTracker: EventTracker,
+        experimentManager: ExperimentManager? = nil
     ) {
         self.remoteConfigManager = remoteConfigManager
         self.billingBridge = billingBridge
         self.eventTracker = eventTracker
+        self.experimentManager = experimentManager
     }
 
     /// Present a paywall by placement — selects best match using audience rules.
@@ -76,7 +81,7 @@ final class PaywallManager {
         context: PaywallContext?,
         delegate: AppDNAPaywallDelegate?
     ) {
-        guard let config = remoteConfigManager.getPaywallConfig(id: id) else {
+        guard let activeConfig = remoteConfigManager.getPaywallConfig(id: id) else {
             Log.error("Paywall config not found for id: \(id)")
             let error = NSError(
                 domain: "ai.appdna.sdk",
@@ -85,6 +90,19 @@ final class PaywallManager {
             )
             delegate?.onPaywallPurchaseFailed(paywallId: id, error: error)
             return
+        }
+
+        // SPEC-036-F §1.2 — experiment-aware presentation. If a `running`
+        // paywall experiment targets this entity and the user buckets into the
+        // treatment, render the treatment `payload` config instead of the
+        // active one. Control / non-bucketed / old-doc → render the active
+        // entity (cohort isolation §1.3 — treatment lives only in the doc).
+        var config = activeConfig
+        if let experimentManager,
+           case let .renderTreatment(_, _, payload) = experimentManager.resolveSurfacePresentation(surfaceType: "paywall", entityId: id),
+           let treatment = remoteConfigManager.decodePaywallPayload(payload) {
+            Log.info("Paywall \(id) rendering experiment treatment variant")
+            config = treatment
         }
 
         // Track view event

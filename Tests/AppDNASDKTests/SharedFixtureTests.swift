@@ -267,6 +267,8 @@ final class SharedFixtureTests: XCTestCase {
                 runIdentify(fixture: fixture, spy: spy)
             case "evaluate_audience":
                 runEvaluateAudience(fixture: fixture, spy: spy)
+            case "present_surface_under_experiment":
+                runPresentSurfaceUnderExperiment(fixture: fixture, spy: spy)
             default:
                 spy.skipReasons.append(
                     "Phase 0.5+ assertion not yet implemented for action.kind=\(fixture.action.kind)"
@@ -419,6 +421,118 @@ final class SharedFixtureTests: XCTestCase {
         }
         let match = matchMode == "all" ? !results.contains(false) : results.contains(true)
         spy.setState("audience_match", match)
+    }
+
+    // MARK: - SPEC-036-F experiment-aware presentation driver
+
+    /// Drives `present_surface_under_experiment`. Decodes the served experiment
+    /// doc into the REAL `ExperimentConfig`/`ExperimentVariant` Codable structs
+    /// (so the field-map fix is exercised), then runs the SAME resolution logic
+    /// `ExperimentManager.resolveSurfacePresentation` uses — bucketing is forced
+    /// deterministically via `setup.experiment_assignments` so the assertion
+    /// doesn't depend on the hash (the bucketer itself is covered by its own
+    /// tests). `mode: decode_only` asserts the decoded fields directly.
+    private func runPresentSurfaceUnderExperiment(fixture: Fixture, spy: Spy) {
+        guard case let .object(config) = (fixture.setup.config ?? .null),
+              case let .object(expObj)? = config["experiment"] else {
+            spy.skipReasons.append("experiment config missing")
+            return
+        }
+
+        // Decode the served experiment doc through the real SDK Codable.
+        let expAny = Self.anyJSONToFoundation(.object(expObj))
+        guard let expData = try? JSONSerialization.data(withJSONObject: expAny),
+              let experiment = try? JSONDecoder().decode(ExperimentConfig.self, from: expData) else {
+            spy.recordError("DecodingError", "ExperimentConfig decode failed")
+            return
+        }
+
+        guard case let .object(action) = fixture.action.raw else { return }
+        let mode = stringValue(action["mode"]) ?? "present"
+
+        if mode == "decode_only" {
+            let variants = experiment.variants ?? []
+            let control = variants.first(where: { $0.is_control == true })
+            let treatment = variants.first(where: { $0.is_control == false })
+            spy.setState("decoded_type", experiment.type ?? "null")
+            spy.setState("decoded_status", experiment.status ?? "null")
+            spy.setState("decoded_salt", experiment.salt ?? "null")
+            spy.setState("decoded_variant_count", variants.count)
+            spy.setState("control_config_ref", control?.config_ref ?? "null")
+            spy.setState("control_is_control", control?.is_control ?? false)
+            spy.setState("treatment_config_ref", treatment?.config_ref ?? "null")
+            spy.setState("treatment_is_control", treatment?.is_control ?? true)
+            spy.setState("treatment_has_payload", (treatment?.payload != nil))
+            return
+        }
+
+        // Present mode — replicate resolveSurfacePresentation.
+        let surfaceType = stringValue(action["surface_type"]) ?? ""
+        let entityId = stringValue(action["entity_id"]) ?? ""
+        let activeEntityId = stringValue(config["active_entity_id"]) ?? entityId
+
+        // Forced bucket assignment for this experiment (deterministic).
+        let assignments: [String: AnyJSON] = {
+            if case let .object(a) = (fixture.setup.experiment_assignments ?? .null) { return a }
+            return [:]
+        }()
+        let forcedVariantId = stringValue(assignments[experiment.id ?? ""])
+
+        // Match: running + type == surfaceType + control config_ref == entity.
+        let variants = experiment.variants ?? []
+        let controlMatches = variants.contains { ($0.is_control ?? false) && $0.config_ref == entityId }
+        let isRunningMatch = experiment.status == "running"
+            && experiment.type == surfaceType
+            && (experiment.platforms ?? []).contains("ios")
+            && controlMatches
+
+        guard isRunningMatch, let variantId = forcedVariantId,
+              let variant = variants.first(where: { $0.id == variantId }) else {
+            // No match / not bucketed → render active, no exposure.
+            spy.setState("resolution", "active")
+            spy.setState("presented_config_id", activeEntityId)
+            return
+        }
+
+        // Exposure tracked regardless of bucket.
+        spy.recordEvent("experiment_exposure", [
+            "experiment_id": experiment.id ?? "",
+            "variant": variantId,
+            "source": "sdk",
+        ])
+
+        if (variant.is_control ?? false) {
+            spy.setState("resolution", "control")
+            spy.setState("presented_config_id", activeEntityId)
+            return
+        }
+        guard let payload = variant.payload else {
+            spy.setState("resolution", "control")
+            spy.setState("presented_config_id", activeEntityId)
+            return
+        }
+        // The presented config id is the payload's own `id` (mirrors the SDK
+        // decoding the payload into a typed config and rendering it).
+        let payloadId = (payload["id"]?.value as? String) ?? activeEntityId
+        spy.setState("resolution", "treatment")
+        spy.setState("presented_config_id", payloadId)
+    }
+
+    /// Convert the test's AnyJSON tree into a Foundation object graph suitable
+    /// for `JSONSerialization.data(withJSONObject:)`.
+    private static func anyJSONToFoundation(_ v: AnyJSON) -> Any {
+        switch v {
+        case .null: return NSNull()
+        case .bool(let b): return b
+        case .int(let i): return i
+        case .double(let d): return d
+        case .string(let s): return s
+        case .array(let a): return a.map { anyJSONToFoundation($0) }
+        case .object(let o):
+            var out: [String: Any] = [:]
+            for (k, val) in o { out[k] = anyJSONToFoundation(val) }
+            return out
+        }
     }
 
     // MARK: - Assertions

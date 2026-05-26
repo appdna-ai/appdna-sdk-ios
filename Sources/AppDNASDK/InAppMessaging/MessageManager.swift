@@ -6,6 +6,9 @@ import SwiftUI
 final class MessageManager {
     private let remoteConfigManager: RemoteConfigManager
     private let eventTracker: EventTracker
+    /// SPEC-036-F §1.2 — consulted per-candidate (inside the present hook) for a
+    /// running in-app-message experiment targeting the message being shown.
+    private let experimentManager: ExperimentManager?
     private let frequencyTracker = MessageFrequencyTracker()
     private var isPresenting = false
 
@@ -19,9 +22,14 @@ final class MessageManager {
         return f
     }()
 
-    init(remoteConfigManager: RemoteConfigManager, eventTracker: EventTracker) {
+    init(
+        remoteConfigManager: RemoteConfigManager,
+        eventTracker: EventTracker,
+        experimentManager: ExperimentManager? = nil
+    ) {
         self.remoteConfigManager = remoteConfigManager
         self.eventTracker = eventTracker
+        self.experimentManager = experimentManager
     }
 
     /// Evaluate all active messages against an event. Called internally after every track() call.
@@ -86,11 +94,11 @@ final class MessageManager {
         let delay = winner.config.trigger_rules?.delay_seconds ?? 0
         if delay > 0 {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(delay)) { [weak self] in
-                self?.present(messageId: winner.id, config: winner.config, triggerEvent: eventName)
+                self?.present(messageId: winner.id, activeConfig: winner.config, triggerEvent: eventName)
             }
         } else {
             DispatchQueue.main.async { [weak self] in
-                self?.present(messageId: winner.id, config: winner.config, triggerEvent: eventName)
+                self?.present(messageId: winner.id, activeConfig: winner.config, triggerEvent: eventName)
             }
         }
     }
@@ -102,8 +110,20 @@ final class MessageManager {
 
     // MARK: - Presentation
 
-    private func present(messageId: String, config: MessageConfig, triggerEvent: String) {
+    private func present(messageId: String, activeConfig: MessageConfig, triggerEvent: String) {
         guard !isPresenting else { return }
+
+        // SPEC-036-F §1.2 — experiment-aware presentation, attached inside the
+        // candidate/present path (not a host present() call). A running in-app-
+        // message experiment targeting this message + a treatment bucket renders
+        // the treatment payload; control / non-bucketed / old-doc → active.
+        var config = activeConfig
+        if let experimentManager,
+           case let .renderTreatment(_, _, payload) = experimentManager.resolveSurfacePresentation(surfaceType: "in_app_message", entityId: messageId),
+           let treatment = remoteConfigManager.decodeMessagePayload(payload) {
+            Log.info("In-app message \(messageId) rendering experiment treatment variant")
+            config = treatment
+        }
 
         // SPEC-404 — pause new in-app message presentation while the SDK is
         // backend-locked (per-key suspended day 20+ OR org cancelled).

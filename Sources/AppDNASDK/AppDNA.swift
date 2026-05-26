@@ -11,7 +11,7 @@ import FirebaseFirestore
 public final class AppDNA: @unchecked Sendable {
 
     /// SDK version string.
-    public static let sdkVersion = "1.0.64"
+    public static let sdkVersion = "1.0.65"
 
     /// Firestore instance used by the SDK.
     /// Uses a secondary Firebase app ("appdna") if GoogleService-Info-AppDNA.plist is found,
@@ -1090,34 +1090,43 @@ public final class AppDNA: @unchecked Sendable {
 
         self.featureFlagManager = FeatureFlagManager(remoteConfigManager: remoteCfg)
 
-        self.experimentManager = ExperimentManager(
+        let experimentMgr = ExperimentManager(
             remoteConfigManager: remoteCfg,
             identityManager: identityMgr,
             eventTracker: tracker
         )
+        self.experimentManager = experimentMgr
 
+        // SPEC-036-F §1.2 — surface managers receive the ExperimentManager so
+        // they can consult it for a running experiment targeting the surface+
+        // entity being presented (treatment → render variant payload; control/
+        // none → render the active entity through the normal path).
         self.paywallManager = PaywallManager(
             remoteConfigManager: remoteCfg,
             billingBridge: self.billingBridge,
-            eventTracker: tracker
+            eventTracker: tracker,
+            experimentManager: experimentMgr
         )
 
         // v0.2 managers
         self.onboardingFlowManager = OnboardingFlowManager(
             remoteConfigManager: remoteCfg,
-            eventTracker: tracker
+            eventTracker: tracker,
+            experimentManager: experimentMgr
         )
 
         self.messageManager = MessageManager(
             remoteConfigManager: remoteCfg,
-            eventTracker: tracker
+            eventTracker: tracker,
+            experimentManager: experimentMgr
         )
 
         // v0.3 managers
         let surveyMgr = SurveyManager(
             remoteConfigManager: remoteCfg,
             eventTracker: tracker,
-            apiClient: self.apiClient
+            apiClient: self.apiClient,
+            experimentManager: experimentMgr
         )
         self.surveyManager = surveyMgr
         remoteCfg.onSurveyConfigsUpdated { configs in

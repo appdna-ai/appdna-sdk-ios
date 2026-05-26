@@ -6,10 +6,18 @@ import SwiftUI
 final class OnboardingFlowManager {
     private let remoteConfigManager: RemoteConfigManager
     private let eventTracker: EventTracker
+    /// SPEC-036-F §1.2 — consulted at present-time for a running onboarding
+    /// experiment targeting the resolved flow.
+    private let experimentManager: ExperimentManager?
 
-    init(remoteConfigManager: RemoteConfigManager, eventTracker: EventTracker) {
+    init(
+        remoteConfigManager: RemoteConfigManager,
+        eventTracker: EventTracker,
+        experimentManager: ExperimentManager? = nil
+    ) {
         self.remoteConfigManager = remoteConfigManager
         self.eventTracker = eventTracker
+        self.experimentManager = experimentManager
     }
 
     /// Present an onboarding flow. Returns false if config is unavailable.
@@ -20,9 +28,20 @@ final class OnboardingFlowManager {
         delegate: AppDNAOnboardingDelegate?
     ) -> Bool {
         // Resolve flow config
-        guard let flow = resolveFlow(flowId: flowId) else {
+        guard let activeFlow = resolveFlow(flowId: flowId) else {
             Log.warning("Onboarding flow not found — flowId: \(flowId ?? "active")")
             return false
+        }
+
+        // SPEC-036-F §1.2 — experiment-aware presentation. A running onboarding
+        // experiment targeting this flow + a treatment bucket → render the
+        // treatment payload flow; otherwise the active flow (cohort isolation).
+        var flow = activeFlow
+        if let experimentManager,
+           case let .renderTreatment(_, _, payload) = experimentManager.resolveSurfacePresentation(surfaceType: "onboarding_flow", entityId: activeFlow.id),
+           let treatment = remoteConfigManager.decodeOnboardingPayload(payload) {
+            Log.info("Onboarding flow \(activeFlow.id) rendering experiment treatment variant")
+            flow = treatment
         }
 
         // Track flow started

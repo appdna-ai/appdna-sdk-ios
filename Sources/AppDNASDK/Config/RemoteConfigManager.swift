@@ -87,6 +87,40 @@ final class RemoteConfigManager {
         queue.sync { experiments[id] }
     }
 
+    // MARK: - SPEC-036-F §1.2 — typed-config decode for experiment treatment payloads
+
+    /// Decode an experiment treatment `payload` dict into a typed `PaywallConfig`
+    /// using the SAME `sanitizedJSONData` + decoder pipeline `parsePaywalls`
+    /// uses, so a treatment renders byte-for-byte like a normal active config.
+    /// Returns nil on decode failure → caller falls back to the active entity.
+    func decodePaywallPayload(_ payload: [String: Any]) -> PaywallConfig? {
+        Self.decodeTypedConfig(payload)
+    }
+
+    func decodeOnboardingPayload(_ payload: [String: Any]) -> OnboardingFlowConfig? {
+        Self.decodeTypedConfig(payload)
+    }
+
+    func decodeMessagePayload(_ payload: [String: Any]) -> MessageConfig? {
+        Self.decodeTypedConfig(payload)
+    }
+
+    func decodeSurveyPayload(_ payload: [String: Any]) -> SurveyConfig? {
+        Self.decodeTypedConfig(payload)
+    }
+
+    /// Shared typed-config decode helper — runs the Firestore dict through the
+    /// same sanitize + JSONDecoder path the live-config parsers use.
+    private static func decodeTypedConfig<T: Decodable>(_ payload: [String: Any]) -> T? {
+        do {
+            let jsonData = try sanitizedJSONData(payload)
+            return try snakeCaseDecoder.decode(T.self, from: jsonData)
+        } catch {
+            Log.error("Failed to decode experiment treatment payload as \(T.self): \(error)")
+            return nil
+        }
+    }
+
     func getAllExperiments() -> [String: ExperimentConfig] {
         queue.sync { experiments }
     }
@@ -781,14 +815,28 @@ struct ExperimentConfig: Codable {
     let id: String?
     let name: String?
     let status: String? // "running", "paused", "completed"
+    // SPEC-036-F §1.2 — the served `type` (surface kind the experiment targets,
+    // e.g. "paywall", "onboarding_flow", "in_app_message", "survey"). Used by the
+    // experiment-aware presentation hook to match a running experiment against
+    // the surface+entity being presented. Defaulted so the memberwise init
+    // stays source-compatible with existing call sites / fixtures.
+    var type: String? = nil
     let salt: String?
     let platforms: [String]?
     let variants: [ExperimentVariant]?
-    let segments: [String]?
+    var segments: [String]? = nil
 }
 
 public struct ExperimentVariant: Codable {
     let id: String?
     let weight: Double?
     let payload: [String: AnyCodable]?
+    // SPEC-036-F §1.2 — `config_ref` is the entity id this variant maps to:
+    // for the control it's the live active entity id (rendered via the surface
+    // index, no payload); for the treatment it's the materialized draft entity
+    // whose renderable config the server inlined into `payload`. `is_control`
+    // distinguishes the two. Both nullable + defaulted for backward-compat with
+    // docs that predate the field-map fix and existing memberwise call sites.
+    var config_ref: String? = nil
+    var is_control: Bool? = nil
 }

@@ -78,6 +78,88 @@ final class ExperimentManager {
         return payload[key]?.value
     }
 
+    // MARK: - SPEC-036-F §1.2 — experiment-aware surface presentation
+
+    /// The outcome of resolving whether a running experiment governs how a
+    /// given surface entity should be presented.
+    enum SurfaceResolution {
+        /// No running experiment targets this surface+entity, the user wasn't
+        /// bucketed, or the SDK fell to the control bucket → render the live
+        /// active entity through the normal (index-backed) path.
+        case renderActive
+        /// The user is bucketed into the treatment variant → render the inlined
+        /// `payload` config instead of the active entity. The dictionary is the
+        /// raw Firestore-shaped config map (same shape `parsePaywalls` etc.
+        /// consume), ready to run through `sanitizedJSONData`.
+        case renderTreatment(experimentId: String, variantId: String, payload: [String: Any])
+    }
+
+    /// SPEC-036-F §1.2 — decide whether a `running` experiment governs the
+    /// presentation of `entityId` for the given surface `type`. Matches an
+    /// experiment whose served `type` == `surfaceType` AND whose control
+    /// variant's `config_ref` == `entityId` (the entity the host is about to
+    /// present). On a match the user is bucketed via the SAME
+    /// `ExperimentBucketer.assignVariant` path (+ exposure tracked):
+    ///   - control bucket / no payload → `.renderActive`
+    ///   - treatment bucket with payload → `.renderTreatment(...)`
+    /// Cohort isolation (§1.3): the treatment config lives ONLY in the
+    /// experiment doc payload, so a non-bucketed / control / old-SDK user can
+    /// never resolve to it — they always fall to `.renderActive`.
+    func resolveSurfacePresentation(surfaceType: String, entityId: String) -> SurfaceResolution {
+        let allExperiments = remoteConfigManager.getAllExperiments()
+
+        for (experimentId, config) in allExperiments {
+            // Only `running` experiments serve, and only on the requested
+            // platform (`resolveConfig` enforces both — reuse it).
+            guard config.status == "running" else { continue }
+            guard config.type == surfaceType else { continue }
+            guard (config.platforms ?? []).contains("ios") else { continue }
+
+            // The control variant's config_ref names the live active entity.
+            let variants = config.variants ?? []
+            guard variants.contains(where: { ($0.is_control ?? false) && $0.config_ref == entityId }) else {
+                continue
+            }
+
+            // Bucket the user deterministically (same path as getVariant).
+            let identity = identityManager.currentIdentity
+            let userId = identity.userId ?? identity.anonId
+            guard let variantId = ExperimentBucketer.assignVariant(
+                experimentId: experimentId,
+                userId: userId,
+                salt: config.salt ?? experimentId,
+                variants: variants
+            ) else {
+                continue
+            }
+
+            // Track exposure once per session, regardless of bucket — the user
+            // WAS exposed to the experiment by virtue of seeing this surface.
+            trackExposure(experimentId: experimentId, variant: variantId)
+
+            guard let variant = variants.first(where: { $0.id == variantId }) else {
+                return .renderActive
+            }
+
+            // Control bucket → render the live active entity. Treatment WITHOUT
+            // a payload (e.g. an old/over-limit served doc that dropped it) →
+            // safe fallback to active. Only a treatment WITH a payload renders
+            // the variant config.
+            if (variant.is_control ?? false) {
+                return .renderActive
+            }
+            guard let payloadCodable = variant.payload else {
+                return .renderActive
+            }
+            // Unwrap [String: AnyCodable] → [String: Any] for the typed-config
+            // decode pipeline (sanitizedJSONData) the surface managers run.
+            let payload = payloadCodable.mapValues { $0.value }
+            return .renderTreatment(experimentId: experimentId, variantId: variantId, payload: payload)
+        }
+
+        return .renderActive
+    }
+
     /// Get all active experiment exposures as (experimentId, variant) tuples.
     func getExposures() -> [(experimentId: String, variant: String)] {
         queue.sync {

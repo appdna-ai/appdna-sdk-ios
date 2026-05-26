@@ -6,16 +6,25 @@ final class SurveyManager {
     private let remoteConfigManager: RemoteConfigManager
     private let eventTracker: EventTracker
     private let apiClient: APIClient?
+    /// SPEC-036-F §1.2 — consulted per-survey (inside the present path) for a
+    /// running survey experiment targeting the survey being shown.
+    private let experimentManager: ExperimentManager?
     private let frequencyTracker = SurveyFrequencyTracker()
     private let renderer = SurveyRenderer()
     private var isPresenting = false
 
     private var surveyConfigs: [String: SurveyConfig] = [:]
 
-    init(remoteConfigManager: RemoteConfigManager, eventTracker: EventTracker, apiClient: APIClient? = nil) {
+    init(
+        remoteConfigManager: RemoteConfigManager,
+        eventTracker: EventTracker,
+        apiClient: APIClient? = nil,
+        experimentManager: ExperimentManager? = nil
+    ) {
         self.remoteConfigManager = remoteConfigManager
         self.eventTracker = eventTracker
         self.apiClient = apiClient
+        self.experimentManager = experimentManager
     }
 
     /// Present a specific survey by ID.
@@ -81,8 +90,21 @@ final class SurveyManager {
 
     // MARK: - Presentation
 
-    private func presentSurvey(surveyId: String, config: SurveyConfig, triggerEvent: String) {
+    private func presentSurvey(surveyId: String, config activeConfig: SurveyConfig, triggerEvent: String) {
         guard !isPresenting else { return }
+
+        // SPEC-036-F §1.2 — experiment-aware presentation, attached inside the
+        // present path (surveys are event-auto-triggered, not host present()).
+        // A running survey experiment targeting this survey + a treatment
+        // bucket renders the treatment payload; control / none / old-doc →
+        // active (cohort isolation §1.3).
+        var config = activeConfig
+        if let experimentManager,
+           case let .renderTreatment(_, _, payload) = experimentManager.resolveSurfacePresentation(surfaceType: "survey", entityId: surveyId),
+           let treatment = remoteConfigManager.decodeSurveyPayload(payload) {
+            Log.info("Survey \(surveyId) rendering experiment treatment variant")
+            config = treatment
+        }
 
         // SPEC-404 — pause new survey presentation while the SDK is
         // backend-locked (per-key suspended day 20+ OR org cancelled). No
