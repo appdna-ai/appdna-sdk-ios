@@ -685,15 +685,19 @@ final class RemoteConfigManager {
             }
 
             // SPEC-036-H — flags + messages now arrive via per-item index, so re-cache them here too
-            // (the old mega-doc handlers cached inline; the per-item parsers don't). Flags are stored as
-            // the bare map (loadCachedConfigs does `self.flags = dict`); messages wrapped under "messages"
-            // (loadCachedConfigs → parseMessages, which unwraps it).
-            if !self.flags.isEmpty {
+            // (the old mega-doc handlers cached inline; the per-item parsers don't). Flags stored as the
+            // bare map (loadCachedConfigs does `self.flags = dict`); messages wrapped under "messages"
+            // (loadCachedConfigs → parseMessages, which unwraps it). Written UNCONDITIONALLY (no !isEmpty
+            // guard): when the last flag/message is removed, the per-item index prunes self.flags/messages
+            // to empty and we MUST clear the disk cache too (else a cold start resurrects them). A failed
+            // fetch leaves the PRIOR in-memory values intact (the parsers only run on success), so writing
+            // unconditionally never clobbers a good cache with a transient-empty one.
+            do {
                 if let jsonData = try? JSONSerialization.data(withJSONObject: self.flags) {
                     self.configCache.storeFlags(jsonData)
                 }
             }
-            if !self.messages.isEmpty {
+            do {
                 var dict: [String: Any] = [:]
                 for (id, config) in self.messages {
                     if let data = try? encoder.encode(config),
@@ -802,25 +806,28 @@ final class RemoteConfigManager {
     /// `{value, type, description, updated_at}`; `FeatureFlagManager`/`getConfig` expect the raw value
     /// (Bool/Number/String/json), so store `flags[key] = entry.value`. Defensive: if an entry is already
     /// a raw scalar (legacy / future flat shape), keep it as-is.
-    private static func flagRawValue(_ entry: Any) -> Any {
-        if let dict = entry as? [String: Any], dict["value"] != nil {
-            return dict["value"] as Any
-        }
-        return entry
+    /// Returns nil for a wrapper whose `value` is null/NSNull (unset flag — omitted, matching Android),
+    /// the raw value for a normal wrapper, or the entry itself if it isn't a `{value,...}` wrapper.
+    private static func flagRawValue(_ entry: Any) -> Any? {
+        guard let dict = entry as? [String: Any], let v = dict["value"] else { return entry }
+        return (v is NSNull) ? nil : v
     }
 
-    /// SPEC-036-H — mega-doc flags fallback (`{flags:{key:{value,...}}}`), normalized to raw values.
+    /// SPEC-036-H — mega-doc flags fallback (`{flags:{key:{value,...}}}`), normalized to raw values
+    /// (null-valued flags omitted).
     private func parseFlags(_ data: [String: Any]) {
         let unwrapped = (data["flags"] as? [String: Any]) ?? data
-        let normalized = unwrapped.mapValues { Self.flagRawValue($0) }
+        var normalized: [String: Any] = [:]
+        for (k, v) in unwrapped { if let raw = Self.flagRawValue(v) { normalized[k] = raw } }
         queue.async { self.flags = normalized }
     }
 
     /// SPEC-036-H — per-item flag doc `config/flag_index/flags/{key}` = `{key,value,type,description,updated_at}`.
-    /// Stored as the RAW value under `flags[key]` (what FeatureFlagManager.isEnabled/getValue consume).
+    /// Stored as the RAW value under `flags[key]` (what FeatureFlagManager.isEnabled/getValue consume);
+    /// a null value unsets the key.
     private func parseSingleFlag(key: String, data: [String: Any]) {
         let value = Self.flagRawValue(data)
-        queue.async { self.flags[key] = value }
+        queue.async { self.flags[key] = value }  // nil ⇒ removes the key (Swift dict semantics)
     }
 
     /// SPEC-036-H — per-item message doc `config/message_index/messages/{id}` (same shape the mega-doc
