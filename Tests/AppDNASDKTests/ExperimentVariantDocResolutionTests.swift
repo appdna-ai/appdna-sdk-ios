@@ -26,7 +26,8 @@ final class ExperimentVariantDocResolutionTests: XCTestCase {
         return (em, rcm)
     }
 
-    private let docPath = "orgs/o/apps/a/config/experiment_variants/exp-1/variants/treatment"
+    // Even-segment document path the backend actually writes (config/experiment_variants/{expId}/{variantId}).
+    private let docPath = "orgs/o/apps/a/config/experiment_variants/exp-1/treatment"
 
     /// Build a paywall experiment whose control points at `pw-live`. `treatmentWeight` controls which
     /// bucket every user lands in; `variantDoc`/`inlinePayload` configure the treatment's serving mode.

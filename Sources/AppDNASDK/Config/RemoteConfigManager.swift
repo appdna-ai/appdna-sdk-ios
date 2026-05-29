@@ -511,8 +511,13 @@ final class RemoteConfigManager {
                 .flatMap { ($0.variants ?? []) }
                 .compactMap { $0.variant_doc }
         }
+        // Prune cached variant docs no longer referenced by any current experiment (a re-materialized
+        // or ended experiment changes/drops its pointer), so the cache can't grow unbounded across TTL
+        // refetches. Unchanged paths are retained (no serving gap); new/changed paths are fetched below.
+        let pathSet = Set(paths)
+        queue.async { self.variantDocs = self.variantDocs.filter { pathSet.contains($0.key) } }
         // De-dupe; a path appears once per treatment variant.
-        for path in Set(paths) {
+        for path in pathSet {
             group.enter()
             db.document(path).getDocument { [weak self] snapshot, error in
                 defer { group.leave() }
@@ -892,7 +897,7 @@ public struct ExperimentVariant: Codable {
     var config_ref: String? = nil
     var is_control: Bool? = nil
     // SPEC-036-H — `per_item` serving: a POINTER (Firestore doc path) to this treatment's isolated,
-    // index-less variant doc (`config/experiment_variants/{expId}/variants/{variantId}`) instead of an
+    // index-less variant doc (`config/experiment_variants/{expId}/{variantId}`) instead of an
     // inline `payload`. The SDK prefetches the doc by this exact path (never via an index) and renders
     // its `config`. Absent in `inline` mode (036-F) where `payload` carries the config. Defaulted for
     // backward-compat with docs that predate the field + existing memberwise call sites.
