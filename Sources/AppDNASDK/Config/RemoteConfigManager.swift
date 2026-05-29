@@ -332,20 +332,17 @@ final class RemoteConfigManager {
             }
         }
 
-        // Flags — lightweight, keep mega-doc pattern
+        // Flags — SPEC-036-H: index → per-item docs (config/flag_index/flags/{key}), fallback → mega-doc.
         group.enter()
-        db.document("\(basePath)/flags").getDocument { [weak self] snapshot, error in
-            defer { group.leave() }
-            if let data = snapshot?.data() {
-                let unwrapped = (data["flags"] as? [String: Any]) ?? data
-                self?.queue.async { self?.flags = unwrapped }
-                if let jsonData = try? JSONSerialization.data(withJSONObject: unwrapped) {
-                    self?.configCache.storeFlags(jsonData)
-                }
-            } else if let error {
-                Log.error("Failed to fetch flags config: \(error.localizedDescription)")
-            }
-        }
+        self.fetchViaIndex(
+            db: db, basePath: basePath,
+            indexPath: "flag_index", indexKey: "flags",
+            itemCollection: "flag_index/flags",
+            megaDocPath: "flags",
+            parseItem: { [weak self] key, data in self?.parseSingleFlag(key: key, data: data) },
+            parseMegaDoc: { [weak self] data in self?.parseFlags(data) },
+            onComplete: { group.leave() }
+        )
 
         // Flows (legacy zero-code) — lightweight, keep mega-doc
         group.enter()
@@ -361,16 +358,18 @@ final class RemoteConfigManager {
             }
         }
 
-        // In-app messages — lightweight, keep mega-doc
+        // In-app messages — SPEC-036-H: index → per-item docs (config/message_index/messages/{id}),
+        // fallback → mega-doc.
         group.enter()
-        db.document("\(basePath)/messages").getDocument { [weak self] snapshot, error in
-            defer { group.leave() }
-            if let data = snapshot?.data() {
-                self?.parseMessages(data)
-            } else if let error {
-                Log.error("Failed to fetch messages config: \(error.localizedDescription)")
-            }
-        }
+        self.fetchViaIndex(
+            db: db, basePath: basePath,
+            indexPath: "message_index", indexKey: "messages",
+            itemCollection: "message_index/messages",
+            megaDocPath: "messages",
+            parseItem: { [weak self] id, data in self?.parseSingleMessage(id: id, data: data) },
+            parseMegaDoc: { [weak self] data in self?.parseMessages(data) },
+            onComplete: { group.leave() }
+        )
 
         // SPEC-089c: Screen index for server-driven UI
         group.enter()
@@ -682,6 +681,28 @@ final class RemoteConfigManager {
                     self.configCache.storeSurveys(jsonData)
                 }
             }
+
+            // SPEC-036-H — flags + messages now arrive via per-item index, so re-cache them here too
+            // (the old mega-doc handlers cached inline; the per-item parsers don't). Flags are stored as
+            // the bare map (loadCachedConfigs does `self.flags = dict`); messages wrapped under "messages"
+            // (loadCachedConfigs → parseMessages, which unwraps it).
+            if !self.flags.isEmpty {
+                if let jsonData = try? JSONSerialization.data(withJSONObject: self.flags) {
+                    self.configCache.storeFlags(jsonData)
+                }
+            }
+            if !self.messages.isEmpty {
+                var dict: [String: Any] = [:]
+                for (id, config) in self.messages {
+                    if let data = try? encoder.encode(config),
+                       let obj = try? JSONSerialization.jsonObject(with: data) {
+                        dict[id] = obj
+                    }
+                }
+                if let jsonData = try? JSONSerialization.data(withJSONObject: ["messages": dict]) {
+                    self.configCache.storeMessages(jsonData)
+                }
+            }
         }
     }
 
@@ -765,6 +786,31 @@ final class RemoteConfigManager {
             queue.async { self.onboardingFlows[id] = config }
         } catch {
             Log.error("Failed to decode individual onboarding flow '\(id)': \(error)")
+        }
+    }
+
+    /// SPEC-036-H — mega-doc flags fallback (unwrap `{flags:{key:{value,...}}}`).
+    private func parseFlags(_ data: [String: Any]) {
+        let unwrapped = (data["flags"] as? [String: Any]) ?? data
+        queue.async { self.flags = unwrapped }
+    }
+
+    /// SPEC-036-H — per-item flag doc `config/flag_index/flags/{key}` = `{key,value,type,description,updated_at}`.
+    /// Stored under `flags[key]` with the SAME shape the mega-doc produced (`{value,type,...}`), so the
+    /// FeatureFlagManager consumer is unchanged.
+    private func parseSingleFlag(key: String, data: [String: Any]) {
+        queue.async { self.flags[key] = data }
+    }
+
+    /// SPEC-036-H — per-item message doc `config/message_index/messages/{id}` (same shape the mega-doc
+    /// packed per id). Incremental (matches paywall/onboarding/survey per-item parsers).
+    private func parseSingleMessage(id: String, data: [String: Any]) {
+        do {
+            let jsonData = try Self.sanitizedJSONData(data)
+            let config = try Self.snakeCaseDecoder.decode(MessageConfig.self, from: jsonData)
+            queue.async { self.messages[id] = config }
+        } catch {
+            Log.error("Failed to decode individual message '\(id)': \(error)")
         }
     }
 
