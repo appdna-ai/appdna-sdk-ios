@@ -148,6 +148,25 @@ final class RemoteConfigManager {
         queue.sync { self.variantDocs[path] = config }
     }
 
+    /// Test-only — run the real per-item flag parser then block until applied (SPEC-036-H).
+    func _parseFlagDocForTesting(key: String, data: [String: Any]) {
+        parseSingleFlag(key: key, data: data); queue.sync {}
+    }
+
+    /// Test-only — run the real per-item message parser then block until applied.
+    func _parseMessageDocForTesting(id: String, data: [String: Any]) {
+        parseSingleMessage(id: id, data: data); queue.sync {}
+    }
+
+    /// Test-only — prune flags/messages to the given index keyset (as fetchViaIndex does).
+    func _pruneFlagsForTesting(_ keys: Set<String>) {
+        queue.sync { self.flags = self.flags.filter { keys.contains($0.key) } }
+    }
+    func _pruneMessagesForTesting(_ keys: Set<String>) {
+        queue.sync { self.messages = self.messages.filter { keys.contains($0.key) } }
+    }
+    func _getMessagesForTesting() -> [String: MessageConfig] { queue.sync { messages } }
+
     func getAllFlags() -> [String: Any] {
         queue.sync { flags }
     }
