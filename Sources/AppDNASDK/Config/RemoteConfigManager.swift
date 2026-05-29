@@ -49,6 +49,10 @@ final class RemoteConfigManager {
     // In-memory caches
     private var paywalls: [String: PaywallConfig] = [:]
     private var experiments: [String: ExperimentConfig] = [:]
+    // SPEC-036-H — prefetched per-item experiment variant configs, keyed by the variant's `variant_doc`
+    // path. Populated after the experiments doc parses so `resolveSurfacePresentation` (synchronous)
+    // can read the treatment config without an async fetch at present-time.
+    private var variantDocs: [String: [String: Any]] = [:]
     private var flags: [String: Any] = [:]
     private var flows: [String: Any] = [:]
     private var onboardingFlows: [String: OnboardingFlowConfig] = [:]
@@ -123,6 +127,25 @@ final class RemoteConfigManager {
 
     func getAllExperiments() -> [String: ExperimentConfig] {
         queue.sync { experiments }
+    }
+
+    /// SPEC-036-H — the prefetched `config` of a per-item experiment variant doc, by its `variant_doc`
+    /// pointer path. `nil` if not yet fetched / fetch failed → caller renders the active item (never
+    /// cross-cohort, never broken).
+    func getVariantDoc(path: String) -> [String: Any]? {
+        queue.sync { variantDocs[path] }
+    }
+
+    // MARK: - Test seams (internal; reachable only via @testable import)
+
+    /// Inject a parsed experiments map directly, bypassing the Firestore fetch. Test-only.
+    func _injectExperimentsForTesting(_ map: [String: ExperimentConfig]) {
+        queue.sync { self.experiments = map }
+    }
+
+    /// Inject a prefetched per-item variant doc `config` by its pointer path. Test-only.
+    func _injectVariantDocForTesting(path: String, config: [String: Any]) {
+        queue.sync { self.variantDocs[path] = config }
     }
 
     func getAllFlags() -> [String: Any] {
@@ -294,12 +317,16 @@ final class RemoteConfigManager {
             onComplete: { group.leave() }
         )
 
-        // Experiments — lightweight, keep mega-doc pattern
+        // Experiments — lightweight, keep mega-doc pattern. SPEC-036-H: after parsing, prefetch any
+        // per-item variant docs the experiments reference via `variant_doc` so synchronous
+        // presentation resolution can read the treatment config without an async fetch at present-time.
         group.enter()
         db.document("\(basePath)/experiments").getDocument { [weak self] snapshot, error in
             defer { group.leave() }
+            guard let self else { return }
             if let data = snapshot?.data() {
-                self?.parseExperiments(data)
+                self.parseExperiments(data)
+                self.prefetchVariantDocs(db: db, group: group)
             } else if let error {
                 Log.error("Failed to fetch experiments config: \(error.localizedDescription)")
             }
@@ -471,6 +498,31 @@ final class RemoteConfigManager {
 
         if let jsonData = try? JSONSerialization.data(withJSONObject: data) {
             configCache.storeExperiments(jsonData)
+        }
+    }
+
+    /// SPEC-036-H — fetch each `variant_doc`-referenced per-item variant doc by its EXACT path (never
+    /// via an index — that is the cohort-isolation guarantee) and cache its `config`. Enters `group`
+    /// once per doc so `fetchConfigs` waits for them before notifying. Runs only for `per_item` mode
+    /// docs; `inline`-mode experiments carry no `variant_doc` and skip this entirely.
+    private func prefetchVariantDocs(db: Firestore, group: DispatchGroup) {
+        let paths: [String] = queue.sync {
+            experiments.values
+                .flatMap { ($0.variants ?? []) }
+                .compactMap { $0.variant_doc }
+        }
+        // De-dupe; a path appears once per treatment variant.
+        for path in Set(paths) {
+            group.enter()
+            db.document(path).getDocument { [weak self] snapshot, error in
+                defer { group.leave() }
+                guard let self else { return }
+                if let config = snapshot?.data()?["config"] as? [String: Any] {
+                    self.queue.async { self.variantDocs[path] = config }
+                } else if let error {
+                    Log.error("Failed to fetch variant doc '\(path)': \(error.localizedDescription)")
+                }
+            }
         }
     }
 
@@ -839,4 +891,10 @@ public struct ExperimentVariant: Codable {
     // docs that predate the field-map fix and existing memberwise call sites.
     var config_ref: String? = nil
     var is_control: Bool? = nil
+    // SPEC-036-H — `per_item` serving: a POINTER (Firestore doc path) to this treatment's isolated,
+    // index-less variant doc (`config/experiment_variants/{expId}/variants/{variantId}`) instead of an
+    // inline `payload`. The SDK prefetches the doc by this exact path (never via an index) and renders
+    // its `config`. Absent in `inline` mode (036-F) where `payload` carries the config. Defaulted for
+    // backward-compat with docs that predate the field + existing memberwise call sites.
+    var variant_doc: String? = nil
 }

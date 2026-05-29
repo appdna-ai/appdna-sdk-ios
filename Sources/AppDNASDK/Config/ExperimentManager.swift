@@ -148,6 +148,16 @@ final class ExperimentManager {
             if (variant.is_control ?? false) {
                 return .renderActive
             }
+            // SPEC-036-H — `per_item` serving: the treatment config lives in an isolated variant doc
+            // pointed to by `variant_doc` (prefetched into the RemoteConfigManager cache). Prefer it;
+            // fall back to the `inline` 036-F `payload`. A not-yet-fetched / failed variant doc → render
+            // the active item (never broken, never cross-cohort).
+            if let docPath = variant.variant_doc {
+                guard let payload = remoteConfigManager.getVariantDoc(path: docPath) else {
+                    return .renderActive
+                }
+                return .renderTreatment(experimentId: experimentId, variantId: variantId, payload: payload)
+            }
             guard let payloadCodable = variant.payload else {
                 return .renderActive
             }
