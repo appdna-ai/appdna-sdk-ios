@@ -341,6 +341,7 @@ final class RemoteConfigManager {
             megaDocPath: "flags",
             parseItem: { [weak self] key, data in self?.parseSingleFlag(key: key, data: data) },
             parseMegaDoc: { [weak self] data in self?.parseFlags(data) },
+            pruneToKeys: { [weak self] keys in self?.queue.async { self?.flags = self?.flags.filter { keys.contains($0.key) } ?? [:] } },
             onComplete: { group.leave() }
         )
 
@@ -368,6 +369,7 @@ final class RemoteConfigManager {
             megaDocPath: "messages",
             parseItem: { [weak self] id, data in self?.parseSingleMessage(id: id, data: data) },
             parseMegaDoc: { [weak self] data in self?.parseMessages(data) },
+            pruneToKeys: { [weak self] keys in self?.queue.async { self?.messages = self?.messages.filter { keys.contains($0.key) } ?? [:] } },
             onComplete: { group.leave() }
         )
 
@@ -725,6 +727,12 @@ final class RemoteConfigManager {
         parseItem: @escaping (String, [String: Any]) -> Void,
         parseMegaDoc: @escaping ([String: Any]) -> Void,
         extraIndexParse: (([String: Any]) -> Void)? = nil,
+        // SPEC-036-H — when provided, the index is AUTHORITATIVE: in-memory entries whose key is not in
+        // the current index are pruned (so a removed item stops serving), and an EMPTY index takes the
+        // index branch (prune-to-empty) instead of falling back to the mega-doc. Surfaces that previously
+        // full-replaced via the mega-doc (flags, messages) pass this so per-item serving keeps the same
+        // removal semantics. Surfaces without it keep the legacy additive behavior.
+        pruneToKeys: ((Set<String>) -> Void)? = nil,
         onComplete: @escaping () -> Void
     ) {
         db.document("\(basePath)/\(indexPath)").getDocument { [weak self] snapshot, error in
@@ -732,10 +740,11 @@ final class RemoteConfigManager {
 
             if let indexData = snapshot?.data(),
                let itemsMap = indexData[indexKey] as? [String: Any],
-               !itemsMap.isEmpty {
-                // Index exists — fetch individual docs in parallel
+               (!itemsMap.isEmpty || pruneToKeys != nil) {
+                // Index exists — fetch individual docs in parallel. Prune stale in-memory entries first.
                 Log.debug("[\(indexPath)] Found index with \(itemsMap.count) items, fetching individually")
                 extraIndexParse?(indexData)
+                pruneToKeys?(Set(itemsMap.keys))
 
                 let itemGroup = DispatchGroup()
                 for itemId in itemsMap.keys {
