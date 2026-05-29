@@ -789,17 +789,29 @@ final class RemoteConfigManager {
         }
     }
 
-    /// SPEC-036-H — mega-doc flags fallback (unwrap `{flags:{key:{value,...}}}`).
+    /// Unwrap a served flag entry to its RAW value. The server serves each flag as
+    /// `{value, type, description, updated_at}`; `FeatureFlagManager`/`getConfig` expect the raw value
+    /// (Bool/Number/String/json), so store `flags[key] = entry.value`. Defensive: if an entry is already
+    /// a raw scalar (legacy / future flat shape), keep it as-is.
+    private static func flagRawValue(_ entry: Any) -> Any {
+        if let dict = entry as? [String: Any], dict["value"] != nil {
+            return dict["value"] as Any
+        }
+        return entry
+    }
+
+    /// SPEC-036-H — mega-doc flags fallback (`{flags:{key:{value,...}}}`), normalized to raw values.
     private func parseFlags(_ data: [String: Any]) {
         let unwrapped = (data["flags"] as? [String: Any]) ?? data
-        queue.async { self.flags = unwrapped }
+        let normalized = unwrapped.mapValues { Self.flagRawValue($0) }
+        queue.async { self.flags = normalized }
     }
 
     /// SPEC-036-H — per-item flag doc `config/flag_index/flags/{key}` = `{key,value,type,description,updated_at}`.
-    /// Stored under `flags[key]` with the SAME shape the mega-doc produced (`{value,type,...}`), so the
-    /// FeatureFlagManager consumer is unchanged.
+    /// Stored as the RAW value under `flags[key]` (what FeatureFlagManager.isEnabled/getValue consume).
     private func parseSingleFlag(key: String, data: [String: Any]) {
-        queue.async { self.flags[key] = data }
+        let value = Self.flagRawValue(data)
+        queue.async { self.flags[key] = value }
     }
 
     /// SPEC-036-H — per-item message doc `config/message_index/messages/{id}` (same shape the mega-doc
