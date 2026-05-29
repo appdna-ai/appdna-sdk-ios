@@ -506,6 +506,23 @@ final class SharedFixtureTests: XCTestCase {
             spy.setState("presented_config_id", activeEntityId)
             return
         }
+        // SPEC-036-H — `per_item` serving: a treatment with a `variant_doc` pointer renders the config
+        // from the prefetched variant doc (the fixture's `setup.config.variant_docs[path].config`
+        // stands in for the RemoteConfigManager prefetch cache). A missing entry = a not-yet-fetched /
+        // failed variant doc → render active (failure degradation).
+        if let docPath = variant.variant_doc {
+            if case let .object(vdocs)? = config["variant_docs"],
+               case let .object(docWrap)? = vdocs[docPath],
+               case let .object(docConfig)? = docWrap["config"],
+               let docId = stringValue(docConfig["id"]) {
+                spy.setState("resolution", "treatment")
+                spy.setState("presented_config_id", docId)
+            } else {
+                spy.setState("resolution", "control")
+                spy.setState("presented_config_id", activeEntityId)
+            }
+            return
+        }
         guard let payload = variant.payload else {
             spy.setState("resolution", "control")
             spy.setState("presented_config_id", activeEntityId)
