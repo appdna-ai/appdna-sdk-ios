@@ -48,7 +48,7 @@ dependencies: [
 ### CocoaPods
 
 ```ruby
-pod 'AppDNASDK', '~> 1.0.63'
+pod 'AppDNASDK', '~> 1.0.66'
 ```
 
 ## Quick start
