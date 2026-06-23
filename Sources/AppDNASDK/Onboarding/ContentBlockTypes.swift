@@ -351,6 +351,18 @@ public struct InputOption: Codable, Identifiable {
     // the block-level `grid_cell_alignment` when nil so existing flows
     // inherit the overall layout.
     public let cell_alignment: String?  // "leading" | "center" | "trailing"
+    // SPEC-070 EPIC-1 — per-option additions
+    public let text_alignment: String?  // "leading" | "center" | "trailing" (stacked rows)
+    public let leading_text: String?    // small label at the START of the row
+    public let trailing_text: String?   // small label at the END of the row (e.g. "Casual")
+    public let badge: OptionBadge?      // e.g. a RECOMMENDED chip on the option
+
+    public struct OptionBadge: Codable {
+        public let text: String?
+        public let bg_color: String?
+        public let text_color: String?
+        public let position: String?    // top_trailing | top_leading | trailing | leading | bottom_*
+    }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -379,6 +391,10 @@ public struct InputOption: Codable, Identifiable {
         self.selected_bg_color = try container.decodeIfPresent(String.self, forKey: .selected_bg_color)
         self.selected_text_color = try container.decodeIfPresent(String.self, forKey: .selected_text_color)
         self.cell_alignment = try container.decodeIfPresent(String.self, forKey: .cell_alignment)
+        self.text_alignment = try container.decodeIfPresent(String.self, forKey: .text_alignment)
+        self.leading_text = try container.decodeIfPresent(String.self, forKey: .leading_text)
+        self.trailing_text = try container.decodeIfPresent(String.self, forKey: .trailing_text)
+        self.badge = try container.decodeIfPresent(OptionBadge.self, forKey: .badge)
     }
 
     /// Non-optional value — falls back to id if value is nil.
@@ -394,6 +410,7 @@ public struct InputOption: Codable, Identifiable {
         case border_color, selected_border_color
         case bg_color, selected_bg_color, selected_text_color
         case cell_alignment
+        case text_alignment, leading_text, trailing_text, badge
     }
 
     /// Resolve which image URL to show for the given selection state.

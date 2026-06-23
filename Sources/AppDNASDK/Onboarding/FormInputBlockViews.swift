@@ -573,8 +573,14 @@ struct FormInputSelectBlock: View {
                         if let icon = option.icon, !icon.isEmpty {
                             Text(icon)
                         }
+                        // SPEC-070 EPIC-1 — leading label at the START of the row
+                        if let lt = option.leading_text, !lt.isEmpty {
+                            Text(lt)
+                                .font(.system(size: optSubtitleSize, weight: .semibold))
+                                .foregroundColor(optTitleColor)
+                        }
                         // Title + subtitle — fixedSize vertical so text wraps fully
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: (option.text_alignment == "center" ? .center : .leading), spacing: 2) {
                             Text(option.label ?? "")
                                 .font(.system(size: optTitleSize, weight: optTitleWeight))
                                 .foregroundColor(optTitleColor)
@@ -588,6 +594,12 @@ struct FormInputSelectBlock: View {
                         }
                         .layoutPriority(1)
                         Spacer(minLength: 0)
+                        // SPEC-070 EPIC-1 — trailing label at the END of the row (e.g. "Casual")
+                        if let tt = option.trailing_text, !tt.isEmpty {
+                            Text(tt)
+                                .font(.system(size: optSubtitleSize))
+                                .foregroundColor(optSubtitleColor)
+                        }
                         // Radio on right
                         if showRadio && !radioOnLeft {
                             radioIndicator(isSelected: isSelected, fillCol: fillCol, radioFill: radioFill)
@@ -612,6 +624,18 @@ struct FormInputSelectBlock: View {
                             }
                         }
                     }
+                    // SPEC-070 EPIC-1 — per-option badge (e.g. a RECOMMENDED chip)
+                    .overlay(alignment: badgeAlignment(option.badge?.position)) {
+                        if let badge = option.badge, let bText = badge.text, !bText.isEmpty {
+                            Text(bText)
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(badge.text_color.map { Color(hex: $0) } ?? .white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(badge.bg_color.map { Color(hex: $0) } ?? Color.green))
+                                .padding(6)
+                        }
+                    }
                     // Whole rectangle is tappable, not just the text + radio.
                     // Without this, empty space between the radio and the
                     // trailing edge falls through to the parent scroll view.
@@ -619,6 +643,19 @@ struct FormInputSelectBlock: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
+
+    // MARK: - Badge alignment helper (SPEC-070 EPIC-1)
+
+    private func badgeAlignment(_ pos: String?) -> Alignment {
+        switch pos {
+        case "top_leading": return .topLeading
+        case "bottom_leading": return .bottomLeading
+        case "bottom_trailing": return .bottomTrailing
+        case "leading": return .leading
+        case "trailing": return .trailing
+        default: return .topTrailing
         }
     }
 
