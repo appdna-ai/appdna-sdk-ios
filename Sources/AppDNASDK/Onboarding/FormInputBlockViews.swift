@@ -546,8 +546,14 @@ struct FormInputSelectBlock: View {
                 let optTitleColor: Color = isSelected
                     ? optSelectedText
                     : (option.title_color.map { Color(hex: $0) } ?? textCol)
-                let optSubtitleColor: Color = option.subtitle_color.map { Color(hex: $0) }
-                    ?? defaultSubtitleColor
+                // SPEC-419 D1 legibility rule — when selected, the subtitle adopts the option's
+                // selected text color so it stays readable on the selected background (fixes the
+                // "subtitle invisible on the green selected row" bug). Matches the console preview.
+                let optSubtitleColor: Color = isSelected
+                    ? (option.selected_text_color.map { Color(hex: $0) }
+                        ?? option.subtitle_color.map { Color(hex: $0) }
+                        ?? defaultSubtitleColor)
+                    : (option.subtitle_color.map { Color(hex: $0) } ?? defaultSubtitleColor)
                 let optTitleSize: CGFloat = CGFloat(option.title_font_size ?? defaultTitleSize)
                 let optSubtitleSize: CGFloat = CGFloat(option.subtitle_font_size ?? defaultSubtitleSize)
                 let optTitleWeight: Font.Weight = fontWeight(option.title_font_weight)
@@ -624,16 +630,19 @@ struct FormInputSelectBlock: View {
                             }
                         }
                     }
-                    // SPEC-070 EPIC-1 — per-option badge (e.g. a RECOMMENDED chip)
+                    // SPEC-419 D5 — per-option badge (e.g. RECOMMENDED) STRADDLING the option's
+                    // top border: vertical center on the border line (half above / half below),
+                    // inset 12pt from the trailing edge — the premium "notch on the card edge" look.
                     .overlay(alignment: badgeAlignment(option.badge?.position)) {
                         if let badge = option.badge, let bText = badge.text, !bText.isEmpty {
                             Text(bText)
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(badge.text_color.map { Color(hex: $0) } ?? .white)
-                                .padding(.horizontal, 6)
+                                .padding(.horizontal, 8)
                                 .padding(.vertical, 2)
                                 .background(Capsule().fill(badge.bg_color.map { Color(hex: $0) } ?? Color.green))
-                                .padding(6)
+                                .offset(x: badgeOffsetX(option.badge?.position), y: -9)
+                                .accessibilityIdentifier("option.badge")
                         }
                     }
                     // Whole rectangle is tappable, not just the text + radio.
@@ -656,6 +665,15 @@ struct FormInputSelectBlock: View {
         case "leading": return .leading
         case "trailing": return .trailing
         default: return .topTrailing
+        }
+    }
+
+    // SPEC-419 D5 — horizontal inset for the straddling badge: 12pt in from the trailing
+    // edge (trailing/default), or 12pt in from the leading edge for leading positions.
+    private func badgeOffsetX(_ pos: String?) -> CGFloat {
+        switch pos {
+        case "top_leading", "bottom_leading", "leading": return 12
+        default: return -12
         }
     }
 
