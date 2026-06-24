@@ -530,7 +530,9 @@ struct FormInputSelectBlock: View {
         let stackedImageSize = CGFloat((cfgDouble(cfg?["option_image_size"])) ?? 32)
 
         VStack(spacing: optionSpacing) {
-            ForEach(options) { option in
+            ForEach(Array(options.enumerated()), id: \.offset) { pair in
+                let oi = pair.offset                 // SPEC-419 — per-index parity node key
+                let option = pair.element
                 let isSelected = isMultiSelect
                     ? selectedValues.contains(option.resolvedValue)
                     : selectedValue == option.resolvedValue
@@ -584,6 +586,7 @@ struct FormInputSelectBlock: View {
                             Text(lt)
                                 .font(.system(size: optSubtitleSize, weight: .semibold))
                                 .foregroundColor(optTitleColor)
+                                .accessibilityIdentifier("option.\(oi).leading_text")
                         }
                         // Title + subtitle — fixedSize vertical so text wraps fully
                         VStack(alignment: (option.text_alignment == "center" ? .center : .leading), spacing: 2) {
@@ -591,11 +594,13 @@ struct FormInputSelectBlock: View {
                                 .font(.system(size: optTitleSize, weight: optTitleWeight))
                                 .foregroundColor(optTitleColor)
                                 .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("option.\(oi).title")
                             if let sub = option.subtitle, !sub.isEmpty {
                                 Text(sub)
                                     .font(.system(size: optSubtitleSize))
                                     .foregroundColor(optSubtitleColor)
                                     .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("option.\(oi).subtitle")
                             }
                         }
                         .layoutPriority(1)
@@ -605,6 +610,7 @@ struct FormInputSelectBlock: View {
                             Text(tt)
                                 .font(.system(size: optSubtitleSize))
                                 .foregroundColor(optSubtitleColor)
+                                .accessibilityIdentifier("option.\(oi).trailing_text")
                         }
                         // Radio on right
                         if showRadio && !radioOnLeft {
@@ -630,6 +636,18 @@ struct FormInputSelectBlock: View {
                             }
                         }
                     }
+                    // SPEC-419 — row.bg parity node: a dedicated, non-propagating accessibility
+                    // element behind the row content (a bare identifier on the content propagates
+                    // to every child and overrides their ids). This clear overlay carries ONLY the
+                    // row.bg id + the full row frame, so the harness reads the row box + samples the
+                    // selected-bg colour from the screenshot at it.
+                    .overlay {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .allowsHitTesting(false)
+                            .accessibilityElement()
+                            .accessibilityIdentifier("option.\(oi).row.bg")
+                    }
                     // SPEC-419 D5 — per-option badge (e.g. RECOMMENDED) STRADDLING the option's
                     // top border: vertical center on the border line (half above / half below),
                     // inset 12pt from the trailing edge — the premium "notch on the card edge" look.
@@ -642,7 +660,7 @@ struct FormInputSelectBlock: View {
                                 .padding(.vertical, 2)
                                 .background(Capsule().fill(badge.bg_color.map { Color(hex: $0) } ?? Color.green))
                                 .offset(x: badgeOffsetX(option.badge?.position), y: -9)
-                                .accessibilityIdentifier("option.badge")
+                                .accessibilityIdentifier("option.\(oi).badge")
                         }
                     }
                     // Whole rectangle is tappable, not just the text + radio.
@@ -651,6 +669,10 @@ struct FormInputSelectBlock: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // SPEC-419 Principle 3 — expose each per-index parity node (row.bg/title/subtitle/
+                // leading_text/trailing_text/badge) as a discrete accessibility element so the
+                // structural parity harness can read each box, instead of the Button merging them.
+                .accessibilityElement(children: .contain)
             }
         }
     }
