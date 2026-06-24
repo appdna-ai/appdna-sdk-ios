@@ -498,6 +498,15 @@ public final class AppDNA: @unchecked Sendable {
     public static func previewScreen(json: String, completion: ((ScreenResult) -> Void)? = nil) {
         ScreenManager.shared.previewScreen(json: json, completion: completion)
     }
+
+    /// SPEC-419 D6 — the applied (fetched + parsed) onboarding config version, for the
+    /// structural parity harness's readiness poll. The host app surfaces this into a hidden
+    /// `accessibilityIdentifier("adn.appliedConfigVersion")` label that the harness polls
+    /// until it equals the just-published version. Debug builds ONLY — release SDK builds do
+    /// not contain this symbol (verified by the D6 acceptance predicate).
+    public static func debugAppliedConfigVersion(flowId: String? = nil) -> Int? {
+        shared.remoteConfigManager?.debugAppliedOnboardingVersion(flowId: flowId)
+    }
     #endif
 
     /// Check if analytics consent is granted. Used by zero-code mechanisms.

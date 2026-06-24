@@ -91,6 +91,20 @@ final class RemoteConfigManager {
         queue.sync { experiments[id] }
     }
 
+    #if DEBUG
+    /// SPEC-419 D6 — the applied (fetched + parsed) onboarding flow version, for the
+    /// structural parity harness's readiness poll ("poll until the device reports the
+    /// just-published version, then screenshot"). Debug builds ONLY — gated by `#if DEBUG`
+    /// so the symbol is absent from release SDK builds.
+    func debugAppliedOnboardingVersion(flowId: String?) -> Int? {
+        queue.sync {
+            let id = flowId ?? activeOnboardingFlowId
+            guard let id else { return nil }
+            return onboardingFlows[id]?.version
+        }
+    }
+    #endif
+
     // MARK: - SPEC-036-F §1.2 — typed-config decode for experiment treatment payloads
 
     /// Decode an experiment treatment `payload` dict into a typed `PaywallConfig`
