@@ -74,4 +74,23 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// Per-option image_overlay_color tint (parity with Android ContentBlockRenderer).
+    func testSelectStacked_imageOverlay() throws {
+        let view = try render("""
+        {
+          "id": "sel3", "type": "input_select",
+          "field_config": { "display_style": "stacked" },
+          "field_options": [
+            { "id": "i1", "label": "Sunset", "image_url": "https://example.com/a.png", "image_overlay_color": "#FF5722", "image_overlay_opacity": 0.85 },
+            { "id": "i2", "label": "Ocean", "image_url": "https://example.com/b.png", "image_overlay_color": "#2196F3", "image_overlay_opacity": 0.85 }
+          ]
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
