@@ -66,6 +66,15 @@ func fieldHeight(_ block: ContentBlock) -> CGFloat? {
     return cfgDouble(block.field_config?["field_height"]).map { CGFloat($0) }
 }
 
+/// SPEC-419 — effective field border width. When the block ALREADY draws a container
+/// border (block_style.border_width > 0 — e.g. the login input blocks author a capsule
+/// outline via applyBlockStyle), the field must NOT add its own or the two outlines stack
+/// into a double border. Parity with Android FormInput*Block.
+func fieldBorderWidth(_ block: ContentBlock) -> CGFloat {
+    if (block.block_style?.border_width ?? 0) > 0 { return 0 }
+    return CGFloat(block.field_style?.border_width ?? 1)
+}
+
 /// Generic text-based input (text, number, email, phone, url).
 struct FormInputTextBlock: View {
     let block: ContentBlock
@@ -102,7 +111,7 @@ struct FormInputTextBlock: View {
             .cornerRadius(cornerRadius)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(borderColor, lineWidth: CGFloat(block.field_style?.border_width ?? 1))
+                    .strokeBorder(borderColor, lineWidth: fieldBorderWidth(block))
             )
             .onChange(of: text) { newValue in
                 inputValues[fieldId] = newValue
@@ -136,7 +145,7 @@ struct FormInputTextAreaBlock: View {
                 .cornerRadius(cornerRadius)
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .strokeBorder(borderColor, lineWidth: CGFloat(block.field_style?.border_width ?? 1))
+                        .strokeBorder(borderColor, lineWidth: fieldBorderWidth(block))
                 )
                 .onChange(of: text) { newValue in
                     inputValues[fieldId] = newValue
@@ -193,7 +202,7 @@ struct FormInputPasswordBlock: View {
             .cornerRadius(cornerRadius)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(borderColor, lineWidth: CGFloat(block.field_style?.border_width ?? 1))
+                    .strokeBorder(borderColor, lineWidth: fieldBorderWidth(block))
             )
             .onChange(of: text) { newValue in
                 inputValues[fieldId] = newValue
@@ -456,7 +465,7 @@ struct FormInputSelectBlock: View {
         .cornerRadius(CGFloat(block.field_style?.corner_radius ?? 8))
         .overlay(
             RoundedRectangle(cornerRadius: CGFloat(block.field_style?.corner_radius ?? 8))
-                .stroke(Color(hex: block.field_style?.border_color ?? "#D1D5DB"), lineWidth: CGFloat(block.field_style?.border_width ?? 1))
+                .stroke(Color(hex: block.field_style?.border_color ?? "#D1D5DB"), lineWidth: fieldBorderWidth(block))
         )
         .onChange(of: selectedValue) { newValue in
             inputValues[fieldId] = newValue

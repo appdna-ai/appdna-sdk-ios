@@ -754,7 +754,12 @@ struct ContentBlockRendererView: View {
             }
         } label: {
             HStack(spacing: 10) {
-                socialLoginIcon(providerType, iconStyle: provider.icon_style)
+                // SPEC-419 — no glyph for the email provider (parity with Android): the
+                // envelope rendered awkwardly on the brand-tinted "Continue with Email"
+                // button and its reserved spacing offset the label. Plain centered CTA.
+                if providerType != "email" {
+                    socialLoginIcon(providerType, iconStyle: provider.icon_style)
+                }
                 Text(provider.label ?? socialLoginDefaultLabel(providerType))
                     .font(.body.weight(.semibold))
             }
