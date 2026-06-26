@@ -190,7 +190,15 @@ struct PlanCard: View {
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill({
-                        let unselBg = cardStyle.unselectedBgColor.map { Color(hex: $0) } ?? Color(.systemBackground)
+                        // SPEC-419 — default the UNSELECTED card to a subtle translucent overlay
+                        // (matches Android PaywallActivity `Color.White.copy(alpha = 0.1f)`), NOT
+                        // `Color(.systemBackground)`. systemBackground resolves to solid WHITE under a
+                        // light color scheme, so on a dark paywall the unselected card was a glaring
+                        // white box that also hid its (white, config-set) text — and made the selected
+                        // dark card look *less* prominent than the unselected one. A 10% white overlay
+                        // recedes on dark backgrounds and lets the selected card + its border stand out,
+                        // matching Android + the console preview. Explicit unselected_bg_color still wins.
+                        let unselBg = cardStyle.unselectedBgColor.map { Color(hex: $0) } ?? Color.white.opacity(0.1)
                         return isSelected ? (selectedBg ?? unselBg) : unselBg
                     }())
             )
