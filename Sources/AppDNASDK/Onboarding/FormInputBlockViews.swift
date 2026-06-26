@@ -431,6 +431,8 @@ struct FormInputSelectBlock: View {
                 stackedSelectView(options: options, fieldId: fieldId)
             case "grid":
                 gridSelectView(options: options, fieldId: fieldId)
+            case "image_tiles":
+                imageTilesSelectView(options: options, fieldId: fieldId)
             default: // "dropdown"
                 dropdownSelectView(options: options, fieldId: fieldId)
             }
@@ -443,6 +445,64 @@ struct FormInputSelectBlock: View {
             }
             if selectedValues.isEmpty, let saved = inputValues[fieldId] as? [String] {
                 selectedValues = Set(saved)
+            }
+        }
+    }
+
+    // MARK: - Image-fill tiles (EPIC-1)
+
+    @ViewBuilder
+    private func imageTilesSelectView(options: [InputOption], fieldId: String) -> some View {
+        let cfg = block.field_config
+        let accentHex = block.field_style?.fill_color ?? block.field_style?.focused_border_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1")
+        let fillCol = Color(hex: accentHex)
+        let cornerR = CGFloat(block.field_style?.corner_radius ?? 10)
+        let cfgOptBorder = (cfg?["border_color"]?.value as? String).map { Color(hex: $0) }
+        let unselectedBorderCol: Color = cfgOptBorder ?? block.field_style?.border_color.map { Color(hex: $0) } ?? Color(hex: "#D1D5DB")
+        let cols = max(Int((cfgDouble(cfg?["grid_columns"])) ?? 2), 1)
+        let tileHeight = CGFloat((cfgDouble(cfg?["tile_height"])) ?? 140)
+        let selectedBorderW = CGFloat((cfgDouble(cfg?["selected_border_width"])) ?? 2)
+        let unselectedBorderW = CGFloat((cfgDouble(cfg?["unselected_border_width"])) ?? 1)
+        let spacing = CGFloat((cfgDouble(cfg?["option_spacing"])) ?? 8)
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: spacing), count: cols), spacing: spacing) {
+            ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+                let isSelected = isMultiSelect ? selectedValues.contains(option.resolvedValue) : selectedValue == option.resolvedValue
+                let optBorderCol = option.selected_border_color.map { Color(hex: $0) } ?? fillCol
+                let optUnselBorderCol = option.border_color.map { Color(hex: $0) } ?? unselectedBorderCol
+                ZStack(alignment: .bottomLeading) {
+                    if let imgUrl = option.resolvedImageURL(isSelected: isSelected), let url = URL(string: imgUrl) {
+                        BundledAsyncImage(url: url) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            Color.gray.opacity(0.2)
+                        }
+                    }
+                    // Selected uses selected_image_overlay_* (falls back to base). Parity with Android.
+                    if let ovHex = (isSelected ? (option.selected_image_overlay_color ?? option.image_overlay_color) : option.image_overlay_color) {
+                        let ovOpacity = (isSelected ? (option.selected_image_overlay_opacity ?? option.image_overlay_opacity) : option.image_overlay_opacity) ?? 0.3
+                        Color(hex: ovHex).opacity(ovOpacity)
+                    }
+                    // Bottom scrim so the label stays legible over any image.
+                    LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(option.label ?? "")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                        if let sub = option.subtitle, !sub.isEmpty {
+                            Text(sub).font(.system(size: 12)).foregroundColor(.white.opacity(0.85))
+                        }
+                    }
+                    .padding(10)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: tileHeight)
+                .clipShape(RoundedRectangle(cornerRadius: cornerR))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerR)
+                        .stroke(isSelected ? optBorderCol : optUnselBorderCol, lineWidth: isSelected ? selectedBorderW : unselectedBorderW)
+                )
+                .contentShape(Rectangle())
+                .onTapGesture { toggleSelection(option: option, fieldId: fieldId) }
             }
         }
     }

@@ -136,4 +136,27 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// Image-fill tiles layout — 2×2 grid (image fills the tile, label overlaid over a scrim);
+    /// "Lifting" selected with a yellow accent border. Parity with Android.
+    func testSelect_imageTiles() throws {
+        let view = try render("""
+        {
+          "id": "tiles1", "type": "input_select",
+          "field_config": { "display_style": "image_tiles", "grid_columns": 2 },
+          "field_style": { "fill_color": "#FACC15" },
+          "field_options": [
+            { "id": "run", "value": "run", "label": "Running", "image_url": "https://example.com/a.png", "image_overlay_color": "#E11D48", "image_overlay_opacity": 0.9 },
+            { "id": "lift", "value": "lift", "label": "Lifting", "image_url": "https://example.com/b.png", "image_overlay_color": "#2563EB", "image_overlay_opacity": 0.9 },
+            { "id": "yoga", "value": "yoga", "label": "Yoga", "image_url": "https://example.com/c.png", "image_overlay_color": "#7C3AED", "image_overlay_opacity": 0.9 },
+            { "id": "swim", "value": "swim", "label": "Swimming", "image_url": "https://example.com/d.png", "image_overlay_color": "#059669", "image_overlay_opacity": 0.9 }
+          ]
+        }
+        """, inputs: ["tiles1": "lift"])
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
