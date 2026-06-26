@@ -15,13 +15,13 @@ import XCTest
 /// Then commit Tests/__Snapshots__/. CI re-runs without RECORD_SNAPSHOTS and fails on pixel deltas.
 final class VisualSnapshotTests: XCTestCase {
 
-    private func render(_ json: String) throws -> some View {
+    private func render(_ json: String, inputs: [String: Any] = [:]) throws -> some View {
         let block = try JSONDecoder().decode(ContentBlock.self, from: Data(json.utf8))
         return ContentBlockRendererView(
             blocks: [block],
             onAction: { _, _ in },
             toggleValues: .constant([:]),
-            inputValues: .constant([:])
+            inputValues: .constant(inputs)
         )
             .padding(16)
             .frame(width: 390)
@@ -88,6 +88,28 @@ final class VisualSnapshotTests: XCTestCase {
           ]
         }
         """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
+
+    /// Selected-state styling — option "b" selected (green accent): selected gets the accent
+    /// border + tinted bg; unselected get the neutral gray border (no more purple-border bug).
+    func testSelectStacked_selectedState() throws {
+        let view = try render("""
+        {
+          "id": "sel4", "type": "input_select",
+          "field_config": { "display_style": "stacked" },
+          "field_style": { "fill_color": "#22C55E" },
+          "field_options": [
+            { "id": "a", "value": "a", "label": "Casual", "subtitle": "Easy pace" },
+            { "id": "b", "value": "b", "label": "Regular", "subtitle": "Recommended" },
+            { "id": "c", "value": "c", "label": "Serious", "subtitle": "Intense" }
+          ]
+        }
+        """, inputs: ["sel4": "b"])
         let recordMode: SnapshotTestingConfiguration.Record =
             ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
         withSnapshotTesting(record: recordMode) {

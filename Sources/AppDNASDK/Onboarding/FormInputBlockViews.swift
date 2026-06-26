@@ -503,7 +503,9 @@ struct FormInputSelectBlock: View {
         let selectedTextCol: Color = cfgSelectedText ?? textCol
         let unselectedBorderCol: Color = cfgOptBorder
             ?? block.field_style?.border_color.map { Color(hex: $0) }
-            ?? fillCol.opacity(0.3)
+            // EPIC-1 — neutral gray default (was accent fillCol@0.3 = the "purple-border bug").
+            // Matches the other iOS field borders (#D1D5DB). Selected stays accent.
+            ?? Color(hex: "#D1D5DB")
 
         // Selection indicator: "radio" (default), "border", "both", "none"
         let selectionIndicator = (cfg?["selection_indicator"]?.value as? String) ?? "radio"
@@ -841,7 +843,9 @@ struct FormInputSelectBlock: View {
         let selectedTextCol: Color = cfgSelectedText ?? textCol
         let unselectedBorderCol: Color = cfgOptBorder
             ?? block.field_style?.border_color.map { Color(hex: $0) }
-            ?? fillCol.opacity(0.3)
+            // EPIC-1 — neutral gray default (was accent fillCol@0.3 = the "purple-border bug").
+            // Matches the other iOS field borders (#D1D5DB). Selected stays accent.
+            ?? Color(hex: "#D1D5DB")
 
         // Grid configuration
         let colCount = max(Int((cfgDouble(cfg?["grid_columns"])) ?? 2), 1)
