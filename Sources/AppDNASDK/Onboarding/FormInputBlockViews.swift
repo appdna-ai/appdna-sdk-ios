@@ -433,6 +433,8 @@ struct FormInputSelectBlock: View {
                 gridSelectView(options: options, fieldId: fieldId)
             case "image_tiles":
                 imageTilesSelectView(options: options, fieldId: fieldId)
+            case "bubble":
+                bubbleSelectView(options: options, fieldId: fieldId)
             default: // "dropdown"
                 dropdownSelectView(options: options, fieldId: fieldId)
             }
@@ -447,6 +449,39 @@ struct FormInputSelectBlock: View {
                 selectedValues = Set(saved)
             }
         }
+    }
+
+    // MARK: - Bubble / chip (EPIC-1)
+
+    @ViewBuilder
+    private func bubbleSelectView(options: [InputOption], fieldId: String) -> some View {
+        let cfg = block.field_config
+        let accentHex = block.field_style?.fill_color ?? block.field_style?.focused_border_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1")
+        let fillCol = Color(hex: accentHex)
+        let cfgOptBorder = (cfg?["border_color"]?.value as? String).map { Color(hex: $0) }
+        let unselectedBorderCol: Color = cfgOptBorder ?? block.field_style?.border_color.map { Color(hex: $0) } ?? Color(hex: "#D1D5DB")
+        let textCol: Color = (cfg?["text_color"]?.value as? String).map { Color(hex: $0) } ?? block.field_style?.text_color.map { Color(hex: $0) } ?? .primary
+        let selectedTextCol: Color = (cfg?["selected_text_color"]?.value as? String).map { Color(hex: $0) } ?? textCol
+        let selectedBorderW = CGFloat((cfgDouble(cfg?["selected_border_width"])) ?? 2)
+        let unselectedBorderW = CGFloat((cfgDouble(cfg?["unselected_border_width"])) ?? 1)
+        let spacing = CGFloat((cfgDouble(cfg?["option_spacing"])) ?? 8)
+        ChipFlowLayout(spacing: spacing) {
+            ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+                let isSelected = isMultiSelect ? selectedValues.contains(option.resolvedValue) : selectedValue == option.resolvedValue
+                let chipBorder = isSelected ? (option.selected_border_color.map { Color(hex: $0) } ?? fillCol) : (option.border_color.map { Color(hex: $0) } ?? unselectedBorderCol)
+                Text(option.label ?? "")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(isSelected ? selectedTextCol : textCol)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .background(isSelected ? fillCol : Color.clear)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().strokeBorder(chipBorder, lineWidth: isSelected ? selectedBorderW : unselectedBorderW))
+                    .contentShape(Capsule())
+                    .onTapGesture { toggleSelection(option: option, fieldId: fieldId) }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Image-fill tiles (EPIC-1)
@@ -2001,6 +2036,36 @@ struct FormInputSignatureBlock: View {
 }
 
 // MARK: - Flow Layout (SPEC-089d Phase 3 -- for chips block)
+
+/// EPIC-1 — true content-hugging flow layout (chips wrap by their own width, left→right).
+/// iOS 16 Layout protocol; mirrors Android FlowRow so the bubble/chip select matches.
+struct ChipFlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxW = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0
+        for sv in subviews {
+            let sz = sv.sizeThatFits(.unspecified)
+            if x + sz.width > maxW, x > 0 { x = 0; y += rowH + spacing; rowH = 0 }
+            x += sz.width + spacing
+            rowH = max(rowH, sz.height)
+        }
+        return CGSize(width: maxW == .infinity ? max(0, x - spacing) : maxW, height: y + rowH)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, rowH: CGFloat = 0
+        for sv in subviews {
+            let sz = sv.sizeThatFits(.unspecified)
+            if x + sz.width > bounds.maxX, x > bounds.minX { x = bounds.minX; y += rowH + spacing; rowH = 0 }
+            // Place each chip at its natural content-hugging size (mirrors Android FlowRow).
+            sv.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: .unspecified)
+            x += sz.width + spacing
+            rowH = max(rowH, sz.height)
+        }
+    }
+}
 
 /// Simple flow layout approximation using LazyVGrid with adaptive columns.
 /// Wraps children to next line when they exceed available width.

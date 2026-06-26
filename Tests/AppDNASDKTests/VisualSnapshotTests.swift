@@ -159,4 +159,28 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// Bubble/chip layout — wrapping pill chips; "Running" selected (green fill), others bordered. Parity with Android.
+    func testSelect_bubbleChips() throws {
+        let view = try render("""
+        {
+          "id": "bubble1", "type": "input_select",
+          "field_config": { "display_style": "bubble" },
+          "field_style": { "fill_color": "#22C55E", "text_color": "#FFFFFF" },
+          "field_options": [
+            { "id": "running", "value": "running", "label": "Running" },
+            { "id": "yoga", "value": "yoga", "label": "Yoga" },
+            { "id": "cycling", "value": "cycling", "label": "Cycling" },
+            { "id": "swimming", "value": "swimming", "label": "Swimming" },
+            { "id": "boxing", "value": "boxing", "label": "Boxing" },
+            { "id": "pilates", "value": "pilates", "label": "Pilates" }
+          ]
+        }
+        """, inputs: ["bubble1": "running"])
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
