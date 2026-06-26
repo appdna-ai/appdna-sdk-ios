@@ -612,8 +612,16 @@ struct FormInputSelectBlock: View {
                                     .accessibilityIdentifier("option.\(oi).subtitle")
                             }
                         }
+                        // EPIC-1 — when centered, expand to fill the row so .center actually
+                        // centers the text (a content-sized VStack stays pinned left). Mirrors
+                        // Android's Column(weight 1f) + CenterHorizontally.
+                        .frame(maxWidth: option.text_alignment == "center" ? .infinity : nil)
                         .layoutPriority(1)
-                        Spacer(minLength: 0)
+                        // No trailing Spacer in the centered case — it would compete with the
+                        // VStack's maxWidth:.infinity and split the row (text drifts left).
+                        if option.text_alignment != "center" {
+                            Spacer(minLength: 0)
+                        }
                         // SPEC-070 EPIC-1 — trailing label at the END of the row (e.g. "Casual")
                         if let tt = option.trailing_text, !tt.isEmpty {
                             Text(tt)

@@ -17,7 +17,12 @@ final class VisualSnapshotTests: XCTestCase {
 
     private func render(_ json: String) throws -> some View {
         let block = try JSONDecoder().decode(ContentBlock.self, from: Data(json.utf8))
-        return ContentBlockRendererView(blocks: [block], onAction: { _, _ in })
+        return ContentBlockRendererView(
+            blocks: [block],
+            onAction: { _, _ in },
+            toggleValues: .constant([:]),
+            inputValues: .constant([:])
+        )
             .padding(16)
             .frame(width: 390)
             .background(Color(hex: "#0F1117"))
@@ -37,7 +42,14 @@ final class VisualSnapshotTests: XCTestCase {
           ]
         }
         """)
-        assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        // Compare by default (CI fails on pixel drift); record only when the bridge/env asks.
+        // The bridge passes TEST_RUNNER_RECORD_SNAPSHOTS, which xcodebuild forwards to the sim
+        // test process as RECORD_SNAPSHOTS (plain env vars don't reach the test runner).
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
     }
 
     /// Per-option center alignment (title + subtitle centered).
@@ -53,6 +65,13 @@ final class VisualSnapshotTests: XCTestCase {
           ]
         }
         """)
-        assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        // Compare by default (CI fails on pixel drift); record only when the bridge/env asks.
+        // The bridge passes TEST_RUNNER_RECORD_SNAPSHOTS, which xcodebuild forwards to the sim
+        // test process as RECORD_SNAPSHOTS (plain env vars don't reach the test runner).
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
     }
 }
