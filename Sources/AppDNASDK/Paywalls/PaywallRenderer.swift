@@ -288,9 +288,13 @@ struct PaywallRenderer: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // Dismiss control — show by default when config.dismiss is nil (not in Firestore)
-            let dismissAllowed = config.dismiss?.isAllowed ?? true
-            if showDismiss && dismissAllowed {
+            // Dismiss control — show by default when config.dismiss is nil (not in Firestore).
+            // SPEC-419 — `delay_seconds > 0` REVEALS the dismiss after N seconds and must win
+            // even when allowed=false (the winback pattern: force engagement for N seconds, THEN
+            // let the user leave). Only a paywall that is BOTH disallowed AND has no delayed
+            // reveal is a true hard force-choice. `showDismiss` already flips true after the delay.
+            let neverDismissable = !(config.dismiss?.isAllowed ?? true) && (config.dismiss?.delaySeconds ?? 0) <= 0
+            if showDismiss && !neverDismissable {
                 let dismissStyle = config.dismiss?.style ?? "x_button"
                 switch dismissStyle {
                 case "text_link":
