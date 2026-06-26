@@ -751,10 +751,21 @@ struct FormInputSelectBlock: View {
         }
     }
 
-    // MARK: - Image with overlay circle helper
+    // MARK: - Image with overlay helper
+
+    /// EPIC-1 — corner radius for the option image clip + overlay, by image_shape.
+    /// circle (default) = size/2 → a true circle; rounded = 12; square = 0. Parity with Android.
+    private func optionImageCornerRadius(_ shape: String?, size: CGFloat) -> CGFloat {
+        switch shape {
+        case "rounded": return 12
+        case "square": return 0
+        default: return size / 2
+        }
+    }
 
     @ViewBuilder
     private func imageWithOverlay(url: URL, option: InputOption, isSelected: Bool, size: CGFloat) -> some View {
+        let radius = optionImageCornerRadius(option.image_shape, size: size)
         ZStack {
             BundledAsyncImage(url: url) { image in
                 image.resizable().scaledToFill()
@@ -762,12 +773,12 @@ struct FormInputSelectBlock: View {
                 Color.gray.opacity(0.2)
             }
             .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: radius))
 
-            // Optional colored overlay circle
+            // EPIC-1 — overlay tint follows the configured image_shape (parity with Android).
             if let overlayHex = option.image_overlay_color {
                 let overlayOpacity = option.image_overlay_opacity ?? 0.3
-                Circle()
+                RoundedRectangle(cornerRadius: radius)
                     .fill(Color(hex: overlayHex).opacity(overlayOpacity))
                     .frame(width: size, height: size)
             }

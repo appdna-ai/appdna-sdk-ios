@@ -82,8 +82,9 @@ final class VisualSnapshotTests: XCTestCase {
           "id": "sel3", "type": "input_select",
           "field_config": { "display_style": "stacked" },
           "field_options": [
-            { "id": "i1", "label": "Sunset", "image_url": "https://example.com/a.png", "image_overlay_color": "#FF5722", "image_overlay_opacity": 0.85 },
-            { "id": "i2", "label": "Ocean", "image_url": "https://example.com/b.png", "image_overlay_color": "#2196F3", "image_overlay_opacity": 0.85 }
+            { "id": "i1", "label": "Circle", "image_url": "https://example.com/a.png", "image_overlay_color": "#FF5722", "image_overlay_opacity": 0.85 },
+            { "id": "i2", "label": "Rounded", "image_url": "https://example.com/b.png", "image_shape": "rounded", "image_overlay_color": "#2196F3", "image_overlay_opacity": 0.85 },
+            { "id": "i3", "label": "Square", "image_url": "https://example.com/c.png", "image_shape": "square", "image_overlay_color": "#22C55E", "image_overlay_opacity": 0.85 }
           ]
         }
         """)
