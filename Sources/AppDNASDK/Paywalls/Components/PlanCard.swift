@@ -36,7 +36,7 @@ struct PlanCard: View {
 
     private var cornerRadius: CGFloat { cardStyle.cardCornerRadius ?? 12 }
     private var cardPadding: CGFloat { cardStyle.cardPadding ?? 16 }
-    private var selectedBorder: Color { Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") }
+    private var selectedBorder: Color { Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")) }
     private var selectedBg: Color? {
         cardStyle.selectedBgColor.map { Color(hex: $0) }
     }
@@ -62,7 +62,7 @@ struct PlanCard: View {
         return unselectedTextColor
     }
     private var selectedScaleValue: CGFloat { cardStyle.selectedScale ?? 1.0 }
-    private var badgeBg: Color { Color(hex: cardStyle.badgeBgColor ?? "#6366F1") }
+    private var badgeBg: Color { Color(hex: cardStyle.badgeBgColor ?? (AppDNA.brandAccentHex ?? "#6366F1")) }
     private var badgeFg: Color { Color(hex: cardStyle.badgeTextColor ?? "#FFFFFF") }
 
     var body: some View {
@@ -128,7 +128,7 @@ struct PlanCard: View {
                             } else {
                                 Text(loc?("plan.\(planIndex).trial", "\(trial) free trial") ?? "\(trial) free trial")
                                     .font(.caption)
-                                    .foregroundColor(isSelected ? effectiveTextColor : Color(hex: "#6366F1"))
+                                    .foregroundColor(isSelected ? effectiveTextColor : Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")))
                             }
                         }
 
@@ -159,7 +159,7 @@ struct PlanCard: View {
                                     HStack(spacing: 4) {
                                         Image(systemName: "checkmark")
                                             .font(.system(size: 9, weight: .bold))
-                                            .foregroundColor(isSelected && selectedTextColor != nil ? effectiveTextColor : Color(hex: "#6366F1"))
+                                            .foregroundColor(isSelected && selectedTextColor != nil ? effectiveTextColor : Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")))
                                         Text(feat)
                                             .font(.caption2)
                                             .foregroundColor(isSelected && selectedTextColor != nil ? effectiveTextColor.opacity(0.85) : .secondary)

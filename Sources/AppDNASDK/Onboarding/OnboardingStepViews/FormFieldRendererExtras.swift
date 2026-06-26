@@ -288,7 +288,7 @@ struct ColorFieldView: View {
     var body: some View {
         let cfg = field.config
         let showOpacity = cfg?.show_opacity ?? false
-        let initialHex = (value as? String) ?? cfg?.default_color ?? "#6366F1"
+        let initialHex = (value as? String) ?? cfg?.default_color ?? (AppDNA.brandAccentHex ?? "#6366F1")
 
         let colorBinding = Binding<Color>(
             get: { Color(hex: initialHex) },

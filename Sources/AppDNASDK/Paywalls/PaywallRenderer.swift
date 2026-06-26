@@ -685,15 +685,15 @@ struct PaywallRenderer: View {
                     .applyTextStyle(ts)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(Color(hex: "#6366F1").opacity(0.15))
+                    .background(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")).opacity(0.15))
                     .clipShape(Capsule()))
             } else {
                 return AnyView(Text(loc("social_proof.trial_badge", data?.text ?? "Free Trial"))
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(Color(hex: "#6366F1").opacity(0.15))
-                    .foregroundColor(Color(hex: "#6366F1"))
+                    .background(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")).opacity(0.15))
+                    .foregroundColor(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")))
                     .clipShape(Capsule()))
             }
         default: // app_rating
@@ -735,7 +735,7 @@ struct PaywallRenderer: View {
             if layout == "quote" {
                 Text("\u{201C}")
                     .font(.system(size: 40, weight: .bold))
-                    .foregroundColor(Color(hex: "#6366F1"))
+                    .foregroundColor(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")))
             }
 
             if let ts = quoteTextStyle {
@@ -761,12 +761,12 @@ struct PaywallRenderer: View {
                         .clipShape(Circle())
                     } else if let name = data?.authorName {
                         Circle()
-                            .fill(Color(hex: "#6366F1").opacity(0.2))
+                            .fill(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")).opacity(0.2))
                             .frame(width: 40, height: 40)
                             .overlay(
                                 Text(initials(name))
                                     .font(.caption.bold())
-                                    .foregroundColor(Color(hex: "#6366F1"))
+                                    .foregroundColor(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")))
                             )
                     }
 
@@ -917,7 +917,7 @@ struct PaywallRenderer: View {
     @ViewBuilder
     private func legalSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
         let textColor = Color(hex: data?.color ?? "#9CA3AF")
-        let linkColor = Color(hex: data?.accentColor ?? "#6366F1")
+        let linkColor = Color(hex: data?.accentColor ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         let size = data?.fontSize ?? 11
         let textAlignment: TextAlignment = {
             switch data?.alignment {
@@ -1082,7 +1082,7 @@ struct PaywallRenderer: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: data?.ctaHeight ?? 52)
-                .background(Color(hex: data?.ctaBgColor ?? "#6366F1"))
+                .background(Color(hex: data?.ctaBgColor ?? (AppDNA.brandAccentHex ?? "#6366F1")))
                 .clipShape(RoundedRectangle(cornerRadius: data?.ctaCornerRadius ?? 14))
                 .disabled(isPurchasing)
             }
@@ -1179,7 +1179,7 @@ struct PaywallRenderer: View {
                     .frame(height: 80).clipped()
             }
             if let icon = card.icon, !icon.isEmpty {
-                Image(systemName: icon).font(.title2).foregroundColor(Color(hex: "#6366F1"))
+                Image(systemName: icon).font(.title2).foregroundColor(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")))
             }
             if let title = card.title {
                 Text(title).font(.subheadline.weight(.semibold)).foregroundColor(Color(hex: card.text_color ?? "#1F2937"))
@@ -1191,7 +1191,7 @@ struct PaywallRenderer: View {
                 Text(text).font(.caption).foregroundColor(Color(hex: card.text_color ?? "#1F2937").opacity(0.7))
             }
             if let cta = card.cta_text, !cta.isEmpty {
-                Text(cta).font(.caption.bold()).foregroundColor(Color(hex: "#6366F1"))
+                Text(cta).font(.caption.bold()).foregroundColor(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")))
             }
         }
         .padding(12)
@@ -1238,7 +1238,7 @@ struct PaywallRenderer: View {
                             let statusColor = timelineStatusColor(
                                 status: item.status ?? "upcoming",
                                 completedColor: data?.completedColor ?? "#22C55E",
-                                currentColor: data?.currentColor ?? "#6366F1",
+                                currentColor: data?.currentColor ?? (AppDNA.brandAccentHex ?? "#6366F1"),
                                 upcomingColor: data?.upcomingColor ?? "#666666"
                             )
                             HStack(spacing: 0) {
@@ -1277,7 +1277,7 @@ struct PaywallRenderer: View {
                     let itemColor = item.color.map { Color(hex: $0) } ?? timelineStatusColor(
                         status: item.status ?? "upcoming",
                         completedColor: data?.completedColor ?? "#22C55E",
-                        currentColor: data?.currentColor ?? "#6366F1",
+                        currentColor: data?.currentColor ?? (AppDNA.brandAccentHex ?? "#6366F1"),
                         upcomingColor: data?.upcomingColor ?? "#666666"
                     )
 
@@ -1300,7 +1300,7 @@ struct PaywallRenderer: View {
                     let itemColor = item.color.map { Color(hex: $0) } ?? timelineStatusColor(
                         status: item.status ?? "upcoming",
                         completedColor: data?.completedColor ?? "#22C55E",
-                        currentColor: data?.currentColor ?? "#6366F1",
+                        currentColor: data?.currentColor ?? (AppDNA.brandAccentHex ?? "#6366F1"),
                         upcomingColor: data?.upcomingColor ?? "#666666"
                     )
 
@@ -1339,7 +1339,7 @@ struct PaywallRenderer: View {
         let columnCount = (data?.columns?.value as? Int) ?? 3
         let gridSpacing = data?.spacing ?? 16
         let iconSz = data?.iconSize ?? 32
-        let iconClr = data?.iconColor ?? "#6366F1"
+        let iconClr = data?.iconColor ?? (AppDNA.brandAccentHex ?? "#6366F1")
 
         let gridColumns = Array(repeating: GridItem(.flexible(), spacing: gridSpacing), count: columnCount)
 
@@ -1407,7 +1407,7 @@ struct PaywallRenderer: View {
         let rows = data?.tableRows ?? []
         let checkClr = Color(hex: data?.checkColor ?? "#22C55E")
         let crossClr = Color(hex: data?.crossColor ?? "#D1D5DB")
-        let highlightClr = Color(hex: data?.highlightColor ?? "#6366F1")
+        let highlightClr = Color(hex: data?.highlightColor ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         let borderClr = Color(hex: data?.borderColor ?? "#E5E7EB")
         let radius = data?.cornerRadius ?? 12
 
@@ -1524,7 +1524,7 @@ struct PaywallRenderer: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(Color(hex: data?.accentColor ?? "#6366F1"))
+            .background(Color(hex: data?.accentColor ?? (AppDNA.brandAccentHex ?? "#6366F1")))
             .cornerRadius(8)
             .disabled(promoState == .loading)
         }
@@ -1557,7 +1557,7 @@ struct PaywallRenderer: View {
         HStack(spacing: 12) {
             if let iconName = data?.icon {
                 Image(systemName: iconName)
-                    .foregroundColor(Color(hex: data?.accentColor ?? "#6366F1"))
+                    .foregroundColor(Color(hex: data?.accentColor ?? (AppDNA.brandAccentHex ?? "#6366F1")))
                     .font(.title3)
             }
 
@@ -1578,7 +1578,7 @@ struct PaywallRenderer: View {
 
             Toggle("", isOn: isOn)
                 .labelsHidden()
-                .tint(Color(hex: data?.onColor ?? "#6366F1"))
+                .tint(Color(hex: data?.onColor ?? (AppDNA.brandAccentHex ?? "#6366F1")))
         }
     }
 
@@ -1699,7 +1699,7 @@ struct PaywallRenderer: View {
                     Button { selectPlan(plan.id) } label: {
                         HStack(spacing: 12) {
                             Image(systemName: selectedPlanId == plan.id ? "largecircle.fill.circle" : "circle")
-                                .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : .secondary)
+                                .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")) : .secondary)
                                 .font(.title3)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(loc("plan.\(index).name", plan.displayName))
@@ -1719,7 +1719,7 @@ struct PaywallRenderer: View {
                                     .foregroundColor(Color(hex: cardStyle.badgeTextColor ?? "#FFFFFF"))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(Color(hex: cardStyle.badgeBgColor ?? "#6366F1"))
+                                    .background(Color(hex: cardStyle.badgeBgColor ?? (AppDNA.brandAccentHex ?? "#6366F1")))
                                     .clipShape(Capsule())
                             }
                         }
@@ -1748,7 +1748,7 @@ struct PaywallRenderer: View {
                             .padding(.vertical, 10)
                             .foregroundColor(selectedPlanId == plan.id ? .white : .primary)
                             .background(
-                                Capsule().fill(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.clear)
+                                Capsule().fill(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")) : Color.clear)
                             )
                         }
                         .contentShape(Rectangle())
@@ -1794,7 +1794,7 @@ struct PaywallRenderer: View {
                                 .foregroundColor(.primary)
                             Text(plan.displayPrice)
                                 .font(.subheadline.bold())
-                                .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : .primary)
+                                .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")) : .primary)
                             if let period = plan.period {
                                 Text("/ \(period)")
                                     .font(.caption2)
@@ -1806,7 +1806,7 @@ struct PaywallRenderer: View {
                         .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
                             .fill(selectedPlanId == plan.id ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color.clear) : Color.clear))
                         .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
-                            .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.clear, lineWidth: 2))
+                            .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")) : Color.clear, lineWidth: 2))
                     }
                     .contentShape(Rectangle())
                     .buttonStyle(.plain)
@@ -1825,7 +1825,7 @@ struct PaywallRenderer: View {
                         // Timeline dot + line (always show line as decorative element)
                         VStack(spacing: 0) {
                             Circle()
-                                .fill(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
+                                .fill(Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")))
                                 .frame(width: 12, height: 12)
                             Rectangle()
                                 .fill(Color.gray.opacity(0.2))
@@ -1842,7 +1842,7 @@ struct PaywallRenderer: View {
                                 if let trial = plan.trialLabel {
                                     Text(trial.uppercased())
                                         .font(.caption2.weight(.bold))
-                                        .foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
+                                        .foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")))
                                         .tracking(0.5)
                                 }
                                 // Name + Price horizontal
@@ -1862,7 +1862,7 @@ struct PaywallRenderer: View {
                                         .foregroundColor(Color(hex: cardStyle.badgeTextColor ?? "#FFFFFF"))
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 4)
-                                        .background(Color(hex: cardStyle.badgeBgColor ?? "#6366F1"))
+                                        .background(Color(hex: cardStyle.badgeBgColor ?? (AppDNA.brandAccentHex ?? "#6366F1")))
                                         .clipShape(Capsule())
                                 }
                                 // Description
@@ -1878,7 +1878,7 @@ struct PaywallRenderer: View {
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 12)
-                                    .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.gray.opacity(0.2), lineWidth: selectedPlanId == plan.id ? 2 : 1)
+                                    .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")) : Color.gray.opacity(0.2), lineWidth: selectedPlanId == plan.id ? 2 : 1)
                             )
                         }
                         .contentShape(Rectangle())
@@ -1900,7 +1900,7 @@ struct PaywallRenderer: View {
                         Button { selectPlan(plan.id) } label: {
                             Text(plan.displayName)
                                 .font(.caption.bold())
-                                .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : .primary)
+                                .foregroundColor(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")) : .primary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 8)
                         }
@@ -1936,7 +1936,7 @@ struct PaywallRenderer: View {
                         if let badge = plan.badge, !badge.isEmpty {
                             Text(badge).font(.caption2.bold()).foregroundColor(Color(hex: cardStyle.badgeTextColor ?? "#FFF"))
                                 .padding(.horizontal, 8).padding(.vertical, 3)
-                                .background(Color(hex: cardStyle.badgeBgColor ?? "#6366F1")).clipShape(Capsule())
+                                .background(Color(hex: cardStyle.badgeBgColor ?? (AppDNA.brandAccentHex ?? "#6366F1"))).clipShape(Capsule())
                                 .frame(maxWidth: .infinity)
                         } else {
                             Text("").frame(maxWidth: .infinity)
@@ -1961,7 +1961,7 @@ struct PaywallRenderer: View {
                     VStack(spacing: 12) {
                         if let trial = plan.trialLabel {
                             Text(trial.uppercased())
-                                .font(.caption.bold()).foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
+                                .font(.caption.bold()).foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")))
                                 .tracking(0.5)
                         }
                         Text(plan.displayName)
@@ -1969,11 +1969,11 @@ struct PaywallRenderer: View {
                             .foregroundColor(labelStyle?.color.map { Color(hex: $0) } ?? .primary)
                         Text(plan.displayPrice)
                             .font(priceStyle?.font_size.map { .system(size: CGFloat($0), weight: .bold) } ?? .title.bold())
-                            .foregroundColor(priceStyle?.color.map { Color(hex: $0) } ?? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
+                            .foregroundColor(priceStyle?.color.map { Color(hex: $0) } ?? Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")))
                         if let badge = plan.badge, !badge.isEmpty {
                             Text(badge).font(.caption.bold()).foregroundColor(Color(hex: cardStyle.badgeTextColor ?? "#FFF"))
                                 .padding(.horizontal, 14).padding(.vertical, 6)
-                                .background(Color(hex: cardStyle.badgeBgColor ?? "#6366F1")).clipShape(Capsule())
+                                .background(Color(hex: cardStyle.badgeBgColor ?? (AppDNA.brandAccentHex ?? "#6366F1"))).clipShape(Capsule())
                         }
                         if let desc = plan.description, !desc.isEmpty {
                             Text(desc).font(.subheadline).foregroundColor(.secondary).multilineTextAlignment(.center)
@@ -1982,7 +1982,7 @@ struct PaywallRenderer: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 ForEach(features, id: \.self) { f in
                                     HStack(spacing: 6) {
-                                        Image(systemName: "checkmark.circle.fill").font(.caption).foregroundColor(Color(hex: "#6366F1"))
+                                        Image(systemName: "checkmark.circle.fill").font(.caption).foregroundColor(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")))
                                         Text(f).font(.caption).foregroundColor(.secondary)
                                     }
                                 }
@@ -1994,7 +1994,7 @@ struct PaywallRenderer: View {
                     .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 16)
                         .fill(Color.clear))
                     .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 16)
-                        .stroke(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"), lineWidth: 2))
+                        .stroke(Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")), lineWidth: 2))
                 }
                 .contentShape(Rectangle())
                     .buttonStyle(.plain)
@@ -2019,7 +2019,7 @@ struct PaywallRenderer: View {
                         .padding(16)
                         .frame(maxWidth: .infinity)
                         .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 14)
-                            .fill(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1")))
+                            .fill(Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1"))))
                     }
                     .contentShape(Rectangle())
                     .buttonStyle(.plain)
@@ -2035,14 +2035,14 @@ struct PaywallRenderer: View {
                             VStack(spacing: 8) {
                                 if let trial = plan.trialLabel {
                                     Text(trial.uppercased()).font(.caption2.bold())
-                                        .foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
+                                        .foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")))
                                 }
                                 Text(plan.displayName).font(.headline).foregroundColor(.primary)
                                 Text(plan.displayPrice).font(.title3.bold()).foregroundColor(.primary)
                                 if let badge = plan.badge, !badge.isEmpty {
                                     Text(badge).font(.caption2.bold()).foregroundColor(Color(hex: cardStyle.badgeTextColor ?? "#FFF"))
                                         .padding(.horizontal, 10).padding(.vertical, 4)
-                                        .background(Color(hex: cardStyle.badgeBgColor ?? "#6366F1")).clipShape(Capsule())
+                                        .background(Color(hex: cardStyle.badgeBgColor ?? (AppDNA.brandAccentHex ?? "#6366F1"))).clipShape(Capsule())
                                 }
                                 if let desc = plan.description, !desc.isEmpty {
                                     Text(desc).font(.caption).foregroundColor(.secondary)
@@ -2053,7 +2053,7 @@ struct PaywallRenderer: View {
                             .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 16)
                                 .fill(selectedPlanId == plan.id ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color.clear) : Color.clear))
                             .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 16)
-                                .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.gray.opacity(0.2), lineWidth: selectedPlanId == plan.id ? 2 : 1))
+                                .stroke(selectedPlanId == plan.id ? Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")) : Color.gray.opacity(0.2), lineWidth: selectedPlanId == plan.id ? 2 : 1))
                             .padding(.horizontal, 8)
                         }
                         .contentShape(Rectangle())
@@ -2075,7 +2075,7 @@ struct PaywallRenderer: View {
                             HStack {
                                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                                     .font(.caption.bold())
-                                    .foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? "#6366F1"))
+                                    .foregroundColor(Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")))
                                     .frame(width: 16)
                                 Text(plan.displayName).font(.subheadline.weight(.semibold)).foregroundColor(.primary)
                                 Spacer()
@@ -2083,7 +2083,7 @@ struct PaywallRenderer: View {
                                 if let badge = plan.badge, !badge.isEmpty {
                                     Text(badge).font(.system(size: 9).bold()).foregroundColor(Color(hex: cardStyle.badgeTextColor ?? "#FFF"))
                                         .padding(.horizontal, 6).padding(.vertical, 2)
-                                        .background(Color(hex: cardStyle.badgeBgColor ?? "#6366F1")).clipShape(Capsule())
+                                        .background(Color(hex: cardStyle.badgeBgColor ?? (AppDNA.brandAccentHex ?? "#6366F1"))).clipShape(Capsule())
                                 }
                             }
                             .padding(12)
@@ -2093,8 +2093,8 @@ struct PaywallRenderer: View {
                                 VStack(alignment: .leading, spacing: 6) {
                                     if let trial = plan.trialLabel {
                                         HStack(spacing: 4) {
-                                            Image(systemName: "gift").font(.caption).foregroundColor(Color(hex: "#6366F1"))
-                                            Text(trial).font(.caption).foregroundColor(Color(hex: "#6366F1"))
+                                            Image(systemName: "gift").font(.caption).foregroundColor(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")))
+                                            Text(trial).font(.caption).foregroundColor(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")))
                                         }
                                     }
                                     if let desc = plan.description, !desc.isEmpty {
@@ -2106,7 +2106,7 @@ struct PaywallRenderer: View {
                                     if let features = plan.features, !features.isEmpty {
                                         ForEach(features, id: \.self) { f in
                                             HStack(spacing: 4) {
-                                                Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundColor(Color(hex: "#6366F1"))
+                                                Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundColor(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")))
                                                 Text(f).font(.caption).foregroundColor(.secondary)
                                             }
                                         }
@@ -2119,7 +2119,7 @@ struct PaywallRenderer: View {
                         .background(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
                             .fill(isExpanded ? (cardStyle.selectedBgColor.flatMap { Color(hex: $0) } ?? Color.clear) : Color.clear))
                         .overlay(RoundedRectangle(cornerRadius: cardStyle.cardCornerRadius ?? 10)
-                            .stroke(isExpanded ? Color(hex: cardStyle.selectedBorderColor ?? "#6366F1") : Color.gray.opacity(0.2), lineWidth: isExpanded ? 2 : 1))
+                            .stroke(isExpanded ? Color(hex: cardStyle.selectedBorderColor ?? (AppDNA.brandAccentHex ?? "#6366F1")) : Color.gray.opacity(0.2), lineWidth: isExpanded ? 2 : 1))
                     }
                     .contentShape(Rectangle())
                     .buttonStyle(.plain)

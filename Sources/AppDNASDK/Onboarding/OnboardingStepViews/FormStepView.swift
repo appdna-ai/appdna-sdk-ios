@@ -68,7 +68,7 @@ struct FormStepView: View {
             .ignoresSafeArea(.keyboard, edges: .bottom)
 
             // CTA — configurable styling via element_style
-            let ctaBg = config.element_style?.background?.color ?? "#6366F1"
+            let ctaBg = config.element_style?.background?.color ?? (AppDNA.brandAccentHex ?? "#6366F1")
             let ctaDisabledBg = config.element_style?.opacity != nil
                 ? ctaBg // Use main color with reduced opacity
                 : nil as String?

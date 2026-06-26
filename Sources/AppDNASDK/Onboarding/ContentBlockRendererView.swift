@@ -371,7 +371,7 @@ struct ContentBlockRendererView: View {
     private func buttonBlock(_ block: ContentBlock) -> some View {
         let btnVariant = block.variant ?? "primary"
         let radius = CGFloat(block.button_corner_radius ?? 12)
-        let bgColor = Color(hex: block.bg_color ?? "#6366F1")
+        let bgColor = Color(hex: block.bg_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         let txtColor = Color(hex: block.text_color ?? "#FFFFFF")
         let labelText = loc?("block.\(block.id).text", block.text ?? "Continue") ?? block.text ?? "Continue"
         let fgColor = btnVariant == "outline" ? bgColor : (btnVariant == "text" ? bgColor : txtColor)
@@ -460,7 +460,7 @@ struct ContentBlockRendererView: View {
         case "check":
             return AnyView(Image(systemName: "checkmark.circle.fill")
                 .font(.subheadline)
-                .foregroundColor(Color(hex: "#6366F1")))
+                .foregroundColor(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1"))))
         default:
             return AnyView(Circle()
                 .fill(Color.primary.opacity(0.5))
@@ -484,7 +484,7 @@ struct ContentBlockRendererView: View {
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
-            .background(Color(hex: block.badge_bg_color ?? "#6366F1"))
+            .background(Color(hex: block.badge_bg_color ?? (AppDNA.brandAccentHex ?? "#6366F1")))
             .foregroundColor(Color(hex: block.badge_text_color ?? "#FFFFFF"))
             .clipShape(RoundedRectangle(cornerRadius: CGFloat(block.badge_corner_radius ?? 999)))
     }
@@ -522,7 +522,7 @@ struct ContentBlockRendererView: View {
 
         return VStack(alignment: .leading, spacing: 4) {
             Toggle(loc?("block.\(block.id).label", block.toggle_label ?? "") ?? block.toggle_label ?? "", isOn: binding)
-                .tint(Color(hex: "#6366F1"))
+                .tint(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")))
             if let desc = block.toggle_description {
                 Text(loc?("block.\(block.id).description", desc) ?? desc)
                     .font(.caption)
@@ -640,7 +640,7 @@ struct ContentBlockRendererView: View {
         let dotSize = CGFloat(block.dot_size ?? 8)
         let dotSpacing = CGFloat(block.dot_spacing ?? 8)
         let activeW = block.active_dot_width.map { CGFloat($0) }
-        let activeColor = Color(hex: block.active_color ?? "#6366F1")
+        let activeColor = Color(hex: block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         let inactiveColor = Color(hex: block.inactive_color ?? "#D1D5DB")
 
         let align: Alignment = {
@@ -832,7 +832,7 @@ struct ContentBlockRendererView: View {
         case "google": return Color(hex: "#4285F4") // Google brand blue
         case "facebook": return Color(hex: "#1877F2")
         case "github": return Color(hex: "#24292E")
-        default: return Color(hex: "#6366F1")
+        default: return Color(hex: (AppDNA.brandAccentHex ?? "#6366F1"))
         }
     }
 
@@ -864,7 +864,7 @@ struct ContentBlockRendererView: View {
         let isCompact = block.compact ?? false
         let showConnector = block.show_line ?? true
         let completedCol = Color(hex: block.completed_color ?? "#22C55E")
-        let currentCol = Color(hex: block.current_color ?? "#6366F1")
+        let currentCol = Color(hex: block.current_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         let upcomingCol = Color(hex: block.upcoming_color ?? "#D1D5DB")
 
         return VStack(alignment: .leading, spacing: isCompact ? 0 : 8) {
@@ -931,7 +931,7 @@ struct ContentBlockRendererView: View {
     private func richTextBlock(_ block: ContentBlock) -> some View {
         let content = block.markdown_content ?? block.text ?? ""
         let isLegal = block.rich_text_variant == "legal"
-        let linkCol = Color(hex: block.link_color ?? "#6366F1")
+        let linkCol = Color(hex: block.link_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
 
         // SPEC-205 adjacent fix: honor `base_style.alignment` for rich_text.
         // Previously both `.multilineTextAlignment` and the outer frame alignment
@@ -1056,7 +1056,7 @@ struct ContentBlockRendererView: View {
         }()
         let barH = CGFloat(block.bar_height ?? 6)
         let barRadius = CGFloat(block.corner_radius ?? 3)
-        let fillColor = Color(hex: block.bar_color ?? "#6366F1")
+        let fillColor = Color(hex: block.bar_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         let trackCol = Color(hex: block.track_color ?? "#E5E7EB")
         let gap = CGFloat(block.segment_gap ?? 4)
 

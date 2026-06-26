@@ -117,7 +117,7 @@ struct FeatureList: View {
                 Text(emoji).font(.body)
             } else if let iconName = item?.icon, !iconName.isEmpty {
                 Image(systemName: iconName)
-                    .foregroundColor(iconColor ?? (isIncluded ? Color(hex: "#6366F1") : Color(hex: "#EF4444")))
+                    .foregroundColor(iconColor ?? (isIncluded ? Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")) : Color(hex: "#EF4444")))
                     .font(.body)
             } else if let imageUrl = item?.image_url, let url = URL(string: imageUrl) {
                 BundledAsyncImage(url: url) { img in
@@ -129,7 +129,7 @@ struct FeatureList: View {
                 .clipShape(RoundedRectangle(cornerRadius: 4))
             } else {
                 Image(systemName: isIncluded ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .foregroundColor(isIncluded ? (iconColor ?? Color(hex: "#6366F1")) : Color(hex: "#EF4444").opacity(0.5))
+                    .foregroundColor(isIncluded ? (iconColor ?? Color(hex: (AppDNA.brandAccentHex ?? "#6366F1"))) : Color(hex: "#EF4444").opacity(0.5))
                     .font(.body)
             }
         }

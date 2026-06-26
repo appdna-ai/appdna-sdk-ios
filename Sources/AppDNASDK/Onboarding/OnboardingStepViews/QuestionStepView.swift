@@ -17,7 +17,7 @@ struct QuestionStepView: View {
     private var accentColor: Color {
         if let hex = config.element_style?.border?.color { return Color(hex: hex) }
         if let hex = config.element_style?.background?.color { return Color(hex: hex) }
-        return Color(hex: "#6366F1")
+        return Color(hex: (AppDNA.brandAccentHex ?? "#6366F1"))
     }
 
     /// Background color for selected option cards — reads selection_style.background or falls back to accent at 15%.

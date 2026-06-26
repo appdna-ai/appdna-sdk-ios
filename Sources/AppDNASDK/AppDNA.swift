@@ -20,6 +20,13 @@ public final class AppDNA: @unchecked Sendable {
     /// (even writes), and Firestore.firestore() crashes if no default Firebase app exists.
     internal static var firestoreDB: Firestore?
 
+    /// SPEC-419 brand-threading — the app's brand accent hex (from `/settings/brand`,
+    /// served via Firestore `config/brand`). When set, SDK render defaults use it
+    /// instead of the hardcoded #6366F1 brand indigo for accent/link/badge/selected
+    /// colors. Per-element authored colors still take precedence over this.
+    /// nil until the brand config loads (then defaults fall back to #6366F1).
+    public internal(set) static var brandAccentHex: String?
+
     /// Notification posted when remote config is refreshed.
     public static let configUpdated = Notification.Name("AppDNA.configUpdated")
 

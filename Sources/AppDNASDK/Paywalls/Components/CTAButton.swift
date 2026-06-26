@@ -35,7 +35,7 @@ struct CTAButton: View {
         if let hex = buttonElement?.background?.color {
             return Color(hex: hex)
         }
-        return Color(hex: cta?.resolvedBgColor ?? "#6366F1")
+        return Color(hex: cta?.resolvedBgColor ?? (AppDNA.brandAccentHex ?? "#6366F1"))
     }
     private var buttonTextColor: Color {
         if let ts = buttonTextStyle, let hex = ts.color {

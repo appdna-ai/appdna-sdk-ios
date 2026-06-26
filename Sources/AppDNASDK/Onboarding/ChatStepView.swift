@@ -29,16 +29,16 @@ struct ChatStepView: View {
     // Colors — defaults MUST match console preview defaults exactly
     private var aiBubbleBg: Color { Color(hex: style?.ai_bubble_bg ?? "#1E293B") }
     private var aiBubbleText: Color { Color(hex: style?.ai_bubble_text ?? "#E2E8F0") }
-    private var userBubbleBg: Color { Color(hex: style?.user_bubble_bg ?? "#6366F1") }
+    private var userBubbleBg: Color { Color(hex: style?.user_bubble_bg ?? (AppDNA.brandAccentHex ?? "#6366F1")) }
     private var userBubbleText: Color { Color(hex: style?.user_bubble_text ?? "#FFFFFF") }
     private var inputBg: Color { Color(hex: style?.input_bg ?? "#1E293B") }
     private var inputTextColor: Color { Color(hex: style?.input_text ?? "#E2E8F0") }
     private var inputBorder: Color { Color(hex: style?.input_border ?? "#334155") }
-    private var sendBtnColor: Color { Color(hex: style?.send_button_color ?? "#6366F1") }
+    private var sendBtnColor: Color { Color(hex: style?.send_button_color ?? (AppDNA.brandAccentHex ?? "#6366F1")) }
     private var qrBg: Color { Color(hex: style?.quick_reply_bg ?? "#334155") }
     private var qrText: Color { Color(hex: style?.quick_reply_text ?? "#E2E8F0") }
     private var qrBorder: Color { Color(hex: style?.quick_reply_border ?? "#475569") }
-    private var typingColor: Color { Color(hex: style?.typing_indicator_color ?? "#6366F1") }
+    private var typingColor: Color { Color(hex: style?.typing_indicator_color ?? (AppDNA.brandAccentHex ?? "#6366F1")) }
 
     private var maxTurns: Int { chatConfig?.resolvedMaxTurns ?? 5 }
     private var minTurns: Int { chatConfig?.resolvedMinTurns ?? 1 }

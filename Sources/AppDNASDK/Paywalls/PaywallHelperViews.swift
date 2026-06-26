@@ -333,12 +333,12 @@ struct ReviewsCarouselView: View {
                                 // Colored circle with initial
                                 let initial = String(author.prefix(1)).uppercased()
                                 Circle()
-                                    .fill(Color(hex: "#6366F1").opacity(0.2))
+                                    .fill(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")).opacity(0.2))
                                     .frame(width: 28, height: 28)
                                     .overlay(
                                         Text(initial)
                                             .font(.caption.bold())
-                                            .foregroundColor(Color(hex: "#6366F1"))
+                                            .foregroundColor(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")))
                                     )
                             }
 

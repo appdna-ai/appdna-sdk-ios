@@ -235,6 +235,21 @@ final class RemoteConfigManager {
                 self.parseScreenIndex(data)
                 Log.debug("Loaded screen_index from bundled config")
             }
+            // SPEC-419 brand-threading
+            if let data = json["brand"] as? [String: Any], !data.isEmpty {
+                self.parseBrand(data)
+            }
+        }
+    }
+
+    /// SPEC-419 brand-threading — capture the app's brand accent so SDK render
+    /// defaults can use it instead of the hardcoded #6366F1. Doc/bundle shape:
+    /// `{ palette: { accent, primary, ... } }`.
+    private func parseBrand(_ data: [String: Any]) {
+        guard let palette = data["palette"] as? [String: Any] else { return }
+        if let accent = palette["accent"] as? String, !accent.isEmpty {
+            AppDNA.brandAccentHex = accent
+            Log.debug("Loaded brand accent \(accent)")
         }
     }
 
@@ -414,6 +429,19 @@ final class RemoteConfigManager {
                 self?.parseScreenIndex(data)
             } else if let error {
                 Log.debug("No screen_index config: \(error.localizedDescription)")
+            }
+        }
+
+        // SPEC-419 brand-threading: the app's brand palette. brand.palette.accent
+        // becomes the SDK-wide default for accent/link/badge/selected-border colors
+        // (replacing the hardcoded #6366F1) — per-element overrides still win.
+        group.enter()
+        db.document("\(basePath)/brand").getDocument { [weak self] snapshot, error in
+            defer { group.leave() }
+            if let data = snapshot?.data() {
+                self?.parseBrand(data)
+            } else if let error {
+                Log.debug("No brand config: \(error.localizedDescription)")
             }
         }
 

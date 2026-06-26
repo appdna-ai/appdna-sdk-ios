@@ -183,7 +183,7 @@ struct OnboardingFlowHost: View {
                 }
             }
             if let hex = flow.settings.progress_color { return Color(hex: hex) }
-            return Color(hex: "#6366F1")
+            return Color(hex: (AppDNA.brandAccentHex ?? "#6366F1"))
         }()
         let style = flow.settings.progress_style ?? "continuous_bar"
         let total = flow.steps.count

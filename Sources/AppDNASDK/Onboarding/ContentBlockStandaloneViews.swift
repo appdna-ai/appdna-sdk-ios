@@ -108,7 +108,7 @@ struct CountdownTimerBlockView: View {
     // Digital variant (default): HStack of time unit columns
     private var digitalTimerView: some View {
         let timeColor = Color(hex: block.text_color ?? "#000000")
-        let accentCol = Color(hex: block.accent_color ?? "#6366F1")
+        let accentCol = Color(hex: block.accent_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         let fontSize = CGFloat(block.font_size ?? 28)
         let lbls = block.labels
 
@@ -186,7 +186,7 @@ struct AnimatedLoadingBlockView: View {
     var body: some View {
         let variant = block.loading_variant ?? "checklist"
         let itemList = block.loading_items ?? []
-        let progressCol = Color(hex: block.progress_color ?? "#6366F1")
+        let progressCol = Color(hex: block.progress_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         let checkCol = Color(hex: block.check_color ?? "#22C55E")
         let totalMs = block.total_duration_ms ?? itemList.reduce(0) { $0 + ($1.duration_ms ?? 1000) }
 
@@ -687,7 +687,7 @@ struct CircularGaugeBlockView: View {
         // Enforce minimum size for speedometer to prevent tiny gauges
         let size = variant == "speedometer" ? max(rawSize, 240) : rawSize
         let strokeW = CGFloat(block.stroke_width ?? 14)
-        let fillCol = Color(hex: block.bar_color ?? block.active_color ?? "#6366F1")
+        let fillCol = Color(hex: block.bar_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         let trackCol = Color(hex: block.track_color ?? "#E5E7EB")
         let labelCol = Color(hex: block.label_color ?? block.text_color ?? "#000000")
         let labelFontSz = CGFloat(block.label_font_size ?? block.font_size ?? 24)
@@ -976,7 +976,7 @@ struct DateWheelPickerBlockView: View {
     }
 
     var body: some View {
-        let highlightCol = Color(hex: block.highlight_color ?? "#6366F1")
+        let highlightCol = Color(hex: block.highlight_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         let isFieldMode = block.picker_presentation == "field"
         // Read picker_mode from config (console saves "date" or "datetime")
         // Fall back to block type for legacy compatibility
@@ -1427,7 +1427,7 @@ struct WheelPickerBlockView: View {
         let defaultVal = block.default_picker_value ?? minVal
         let unitStr = block.unit ?? ""
         let unitPos = block.unit_position ?? "after"
-        let highlightCol = Color(hex: block.highlight_color ?? block.active_color ?? "#6366F1")
+        let highlightCol = Color(hex: block.highlight_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
 
         // Generate values
         let values: [Double] = {
@@ -1640,7 +1640,7 @@ struct PulsingAvatarBlockView: View {
 
     var body: some View {
         let avatarSize = CGFloat(block.icon_size ?? block.height ?? 80)
-        let pulseCol = Color(hex: block.pulse_color ?? "#6366F1")
+        let pulseCol = Color(hex: block.pulse_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         let ringCount = block.pulse_ring_count ?? 3
         let pulseDuration = block.pulse_speed ?? 1.5
         let borderW = CGFloat(block.border_width ?? 0)
@@ -1845,7 +1845,7 @@ struct PricingCardBlockView: View {
     var body: some View {
         let plans = block.pricing_plans ?? []
         let isSideBySide = block.pricing_layout == "side_by_side"
-        let accentCol = Color(hex: block.active_color ?? block.bg_color ?? "#6366F1")
+        let accentCol = Color(hex: block.active_color ?? block.bg_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
 
         Group {
             if isSideBySide {

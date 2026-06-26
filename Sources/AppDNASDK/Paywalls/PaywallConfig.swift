@@ -508,7 +508,7 @@ struct PaywallCTA: Codable {
     let padding_vertical: Double?
 
     /// Resolved bg_color — from style object, direct field, or default
-    var resolvedBgColor: String { styleObj?.bg_color ?? bg_color ?? "#6366F1" }
+    var resolvedBgColor: String { styleObj?.bg_color ?? bg_color ?? (AppDNA.brandAccentHex ?? "#6366F1") }
     /// Resolved text_color — from style object, direct field, or default
     var resolvedTextColor: String { styleObj?.text_color ?? text_color ?? "#FFFFFF" }
     /// Resolved corner_radius — from style object, direct field, or default

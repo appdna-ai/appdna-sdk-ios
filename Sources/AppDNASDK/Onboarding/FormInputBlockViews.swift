@@ -218,7 +218,7 @@ struct FormInputDateBlock: View {
 
     var body: some View {
         let fieldId = block.field_id ?? block.id
-        let accentColor = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
+        let accentColor = Color(hex: block.field_style?.fill_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         // Dark theme detection: explicit color_scheme override, else auto-detect
         // from text_color being a light color (onboarding flows with dark
         // backgrounds set white text, and the native date wheel popover must
@@ -471,7 +471,7 @@ struct FormInputSelectBlock: View {
         let accentHex = block.field_style?.fill_color
             ?? block.field_style?.focused_border_color
             ?? block.active_color
-            ?? "#6366F1"
+            ?? (AppDNA.brandAccentHex ?? "#6366F1")
         let fillCol = Color(hex: accentHex)
         let cornerR = CGFloat(block.field_style?.corner_radius ?? 10)
 
@@ -791,7 +791,7 @@ struct FormInputSelectBlock: View {
         let accentHex = block.field_style?.fill_color
             ?? block.field_style?.focused_border_color
             ?? block.active_color
-            ?? "#6366F1"
+            ?? (AppDNA.brandAccentHex ?? "#6366F1")
         let fillCol = Color(hex: accentHex)
         let cornerR = CGFloat(block.field_style?.corner_radius ?? 10)
 
@@ -1031,7 +1031,7 @@ struct FormInputSliderBlock: View {
         let showValue = (block.field_config?["show_value"]?.value as? Bool) ?? true
         let unitStr = block.unit ?? ""
         let trackCol = Color(hex: block.field_style?.track_color ?? block.track_color ?? "#E5E7EB")
-        let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
+        let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
 
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -1068,7 +1068,7 @@ struct FormInputToggleBlock: View {
 
     var body: some View {
         let fieldId = block.field_id ?? block.id
-        let onColor = Color(hex: block.field_style?.toggle_on_color ?? "#6366F1")
+        let onColor = Color(hex: block.field_style?.toggle_on_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         let label = block.field_label ?? block.toggle_label ?? ""
 
         HStack {
@@ -1209,7 +1209,7 @@ struct FormInputRangeSliderBlock: View {
         let minVal = block.min_value ?? 0
         let maxVal = block.max_value_picker ?? 100
         let unitStr = block.unit ?? ""
-        let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
+        let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
 
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -1269,7 +1269,7 @@ struct FormInputChipsBlock: View {
     var body: some View {
         let fieldId = block.field_id ?? block.id
         let options = block.field_options ?? []
-        let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? "#6366F1")
+        let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         let maxSelections = (block.field_config?["max_selections"]?.value as? Int)
 
         VStack(alignment: .leading, spacing: 6) {
@@ -1325,7 +1325,7 @@ struct FormInputColorBlock: View {
             if let colors = block.field_config?["preset_colors"]?.value as? [String] {
                 return colors
             }
-            return ["#EF4444", "#F97316", "#EAB308", "#22C55E", "#3B82F6", "#6366F1", "#A855F7", "#EC4899", "#000000", "#6B7280"]
+            return ["#EF4444", "#F97316", "#EAB308", "#22C55E", "#3B82F6", (AppDNA.brandAccentHex ?? "#6366F1"), "#A855F7", "#EC4899", "#000000", "#6B7280"]
         }()
 
         VStack(alignment: .leading, spacing: 6) {
