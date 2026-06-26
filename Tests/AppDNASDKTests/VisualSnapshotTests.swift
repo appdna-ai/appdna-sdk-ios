@@ -28,6 +28,19 @@ final class VisualSnapshotTests: XCTestCase {
             .background(Color(hex: "#0F1117"))
     }
 
+    private func renderMany(_ jsons: [String]) throws -> some View {
+        let blocks = try jsons.map { try JSONDecoder().decode(ContentBlock.self, from: Data($0.utf8)) }
+        return ContentBlockRendererView(
+            blocks: blocks,
+            onAction: { _, _ in },
+            toggleValues: .constant([:]),
+            inputValues: .constant([:])
+        )
+            .padding(16)
+            .frame(width: 390)
+            .background(Color(hex: "#0F1117"))
+    }
+
     /// leading_text + trailing_text on one row + positionable "RECOMMENDED" badge + subtitle.
     func testSelectStacked_leadingTrailingBadge() throws {
         let view = try render("""
@@ -199,6 +212,25 @@ final class VisualSnapshotTests: XCTestCase {
           ]
         }
         """, inputs: ["list1": "plus"])
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
+
+    /// Custom field border + fill — input_text (green border) + input_email (blue border), dark fill. Parity with Android.
+    func testField_customBorderFill() throws {
+        let view = try renderMany([
+            """
+            { "id": "name", "type": "input_text", "label": "Full name", "field_placeholder": "Jane Doe",
+              "field_style": { "border_color": "#22C55E", "background_color": "#1F2937", "text_color": "#FFFFFF", "placeholder_color": "#9CA3AF" } }
+            """,
+            """
+            { "id": "email", "type": "input_email", "label": "Email", "field_placeholder": "jane@example.com",
+              "field_style": { "border_color": "#3B82F6", "background_color": "#1F2937", "text_color": "#FFFFFF", "placeholder_color": "#9CA3AF" } }
+            """,
+        ])
         let recordMode: SnapshotTestingConfiguration.Record =
             ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
         withSnapshotTesting(record: recordMode) {
