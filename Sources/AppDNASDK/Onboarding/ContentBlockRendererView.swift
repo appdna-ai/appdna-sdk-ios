@@ -1248,12 +1248,21 @@ struct ContentBlockRendererView: View {
             }
             if UIImage(systemName: icon) != nil {
                 Image(systemName: icon)
-                    .font(.system(size: size * 0.6))
+                    // SPEC-419 — render the glyph at the CONFIGURED leading_icon_size (was
+                    // size * 0.6, which shrank a 24pt setting to a tiny 14pt glyph). Now the
+                    // console's leading_icon_size IS the glyph point size, so it scales
+                    // directly. .fixedSize() keeps it from being clipped/compressed when the
+                    // icon is enlarged.
+                    .font(.system(size: size))
                     .foregroundColor(color ?? .primary)
+                    .fixedSize()
             } else {
-                Text(icon).font(.system(size: size * 0.6))
+                Text(icon).font(.system(size: size)).fixedSize()
             }
         }
+        // Reserve at least the glyph's own footprint (and the bg circle when present) so a
+        // larger icon is never cut by a tight row/frame.
+        .frame(minWidth: bgColor != nil ? bgSize : size, minHeight: bgColor != nil ? bgSize : size)
     }
 
     /// Parse "1:2" or "1:1:2" into proportional CGFloat weights.
