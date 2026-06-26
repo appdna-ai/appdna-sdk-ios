@@ -435,6 +435,8 @@ struct FormInputSelectBlock: View {
                 imageTilesSelectView(options: options, fieldId: fieldId)
             case "bubble":
                 bubbleSelectView(options: options, fieldId: fieldId)
+            case "list":
+                listSelectView(options: options, fieldId: fieldId)
             default: // "dropdown"
                 dropdownSelectView(options: options, fieldId: fieldId)
             }
@@ -447,6 +449,45 @@ struct FormInputSelectBlock: View {
             }
             if selectedValues.isEmpty, let saved = inputValues[fieldId] as? [String] {
                 selectedValues = Set(saved)
+            }
+        }
+    }
+
+    // MARK: - List / separators (EPIC-1)
+
+    @ViewBuilder
+    private func listSelectView(options: [InputOption], fieldId: String) -> some View {
+        let cfg = block.field_config
+        let accentHex = block.field_style?.fill_color ?? block.field_style?.focused_border_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1")
+        let fillCol = Color(hex: accentHex)
+        let separatorCol = (cfg?["separator_color"]?.value as? String).map { Color(hex: $0) } ?? Color(hex: "#D1D5DB")
+        let textCol: Color = (cfg?["text_color"]?.value as? String).map { Color(hex: $0) } ?? block.field_style?.text_color.map { Color(hex: $0) } ?? .primary
+        let selectedTextCol: Color = (cfg?["selected_text_color"]?.value as? String).map { Color(hex: $0) } ?? textCol
+        let selectedBgCol = (cfg?["selected_bg_color"]?.value as? String).map { Color(hex: $0) } ?? fillCol.opacity(0.15)
+        VStack(spacing: 0) {
+            ForEach(Array(options.enumerated()), id: \.offset) { idx, option in
+                let isSelected = isMultiSelect ? selectedValues.contains(option.resolvedValue) : selectedValue == option.resolvedValue
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(option.label ?? "").font(.system(size: 16)).foregroundColor(isSelected ? selectedTextCol : textCol)
+                        if let sub = option.subtitle, !sub.isEmpty {
+                            Text(sub).font(.system(size: 13)).foregroundColor(isSelected ? selectedTextCol : textCol)
+                        }
+                    }
+                    Spacer()
+                    if isSelected {
+                        Text("✓").font(.system(size: 18, weight: .bold)).foregroundColor(fillCol)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity)
+                .background(isSelected ? selectedBgCol : Color.clear)
+                .contentShape(Rectangle())
+                .onTapGesture { toggleSelection(option: option, fieldId: fieldId) }
+                if idx < options.count - 1 {
+                    Rectangle().fill(separatorCol).frame(height: 1)
+                }
             }
         }
     }

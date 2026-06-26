@@ -183,4 +183,26 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// List / separators layout — borderless rows + hairline dividers; "Plus" selected (tint + ✓). Parity with Android.
+    func testSelect_listSeparators() throws {
+        let view = try render("""
+        {
+          "id": "list1", "type": "input_select",
+          "field_config": { "display_style": "list" },
+          "field_style": { "fill_color": "#3B82F6", "text_color": "#FFFFFF" },
+          "field_options": [
+            { "id": "free", "value": "free", "label": "Free", "subtitle": "Basic features" },
+            { "id": "plus", "value": "plus", "label": "Plus", "subtitle": "More storage + priority support" },
+            { "id": "pro", "value": "pro", "label": "Pro", "subtitle": "Everything, unlimited" },
+            { "id": "team", "value": "team", "label": "Team", "subtitle": "For your whole organization" }
+          ]
+        }
+        """, inputs: ["list1": "plus"])
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
