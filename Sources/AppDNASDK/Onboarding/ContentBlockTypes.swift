@@ -338,6 +338,9 @@ public struct InputOption: Codable, Identifiable {
     // Image overlay: colored circle with opacity rendered over the option image
     public let image_overlay_color: String?
     public let image_overlay_opacity: Double?
+    // EPIC-1 — selected-state image tint (falls back to image_overlay_* when unset)
+    public let selected_image_overlay_color: String?
+    public let selected_image_overlay_opacity: Double?
     // EPIC-1 — per-option image clip shape: "circle" (default) | "rounded" | "square"
     public let image_shape: String?
     // Per-option border overrides
@@ -387,6 +390,8 @@ public struct InputOption: Codable, Identifiable {
         self.unselected_icon = try container.decodeIfPresent(String.self, forKey: .unselected_icon)
         self.image_overlay_color = try container.decodeIfPresent(String.self, forKey: .image_overlay_color)
         self.image_overlay_opacity = try container.decodeIfPresent(Double.self, forKey: .image_overlay_opacity)
+        self.selected_image_overlay_color = try container.decodeIfPresent(String.self, forKey: .selected_image_overlay_color)
+        self.selected_image_overlay_opacity = try container.decodeIfPresent(Double.self, forKey: .selected_image_overlay_opacity)
         self.image_shape = try container.decodeIfPresent(String.self, forKey: .image_shape)
         self.border_color = try container.decodeIfPresent(String.self, forKey: .border_color)
         self.selected_border_color = try container.decodeIfPresent(String.self, forKey: .selected_border_color)
@@ -410,6 +415,7 @@ public struct InputOption: Codable, Identifiable {
         case title_font_size, subtitle_font_size, title_font_weight
         case selected_icon, unselected_icon
         case image_overlay_color, image_overlay_opacity, image_shape
+        case selected_image_overlay_color, selected_image_overlay_opacity
         case border_color, selected_border_color
         case bg_color, selected_bg_color, selected_text_color
         case cell_alignment

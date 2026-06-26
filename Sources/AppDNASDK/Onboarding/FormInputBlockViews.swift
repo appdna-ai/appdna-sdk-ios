@@ -777,11 +777,11 @@ struct FormInputSelectBlock: View {
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: radius))
 
-            // EPIC-1 — overlay tint follows the configured image_shape (parity with Android).
-            if let overlayHex = option.image_overlay_color {
-                let overlayOpacity = option.image_overlay_opacity ?? 0.3
+            // EPIC-1 — overlay tint follows image_shape; selected uses selected_image_overlay_* (falls back to base).
+            if let ovHex = (isSelected ? (option.selected_image_overlay_color ?? option.image_overlay_color) : option.image_overlay_color) {
+                let ovOpacity = (isSelected ? (option.selected_image_overlay_opacity ?? option.image_overlay_opacity) : option.image_overlay_opacity) ?? 0.3
                 RoundedRectangle(cornerRadius: radius)
-                    .fill(Color(hex: overlayHex).opacity(overlayOpacity))
+                    .fill(Color(hex: ovHex).opacity(ovOpacity))
                     .frame(width: size, height: size)
             }
         }

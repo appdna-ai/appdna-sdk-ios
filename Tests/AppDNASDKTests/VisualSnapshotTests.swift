@@ -116,4 +116,24 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// Selected-state image tint — "Picked" is selected → its image uses selected_image_overlay_color
+    /// (green); "Other" is unselected → it uses the base image_overlay_color (gray). Parity with Android.
+    func testSelectStacked_selectedImageTint() throws {
+        let view = try render("""
+        {
+          "id": "sel5", "type": "input_select",
+          "field_config": { "display_style": "stacked" },
+          "field_options": [
+            { "id": "p", "value": "p", "label": "Picked", "image_url": "https://example.com/a.png", "image_overlay_color": "#9CA3AF", "selected_image_overlay_color": "#22C55E", "image_overlay_opacity": 0.85, "selected_image_overlay_opacity": 0.85 },
+            { "id": "q", "value": "q", "label": "Other", "image_url": "https://example.com/b.png", "image_overlay_color": "#9CA3AF", "image_overlay_opacity": 0.85 }
+          ]
+        }
+        """, inputs: ["sel5": "p"])
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
