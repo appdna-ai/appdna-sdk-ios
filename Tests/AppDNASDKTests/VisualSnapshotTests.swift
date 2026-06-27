@@ -313,4 +313,27 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-2 — skip-beside-bar: progress fills the row, "Skip" beside it. Parity with Android.
+    func testProgress_skipBeside() throws {
+        let view = HStack(spacing: 0) {
+            ContinuousProgressBar(progress: 0.5, color: Color(hex: "#6366F1"), trackColor: Color(hex: "#374151"), height: 6)
+                .frame(maxWidth: .infinity)
+                .padding(.leading, 16)
+            Text("Skip")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(Color(hex: "#9CA3AF"))
+                .padding(.leading, 12)
+                .padding(.trailing, 16)
+        }
+        .frame(width: 390)
+        .padding(.vertical, 20)
+        .background(Color(hex: "#0F1117"))
+
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }

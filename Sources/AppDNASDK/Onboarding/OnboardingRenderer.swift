@@ -191,8 +191,12 @@ struct OnboardingFlowHost: View {
         // EPIC-2 — thin sizing (custom height) + multiple colors at once (gradient), flow-level progress.
         let barHeight = CGFloat(flow.settings.progress_height ?? 4)
         let gradCols = (flow.settings.progress_gradient_colors ?? []).map { Color(hex: $0) }
+        let progressSkipLabel = flow.settings.progress_skip_label
 
-        switch style {
+        // EPIC-2 — optional "Skip" link beside the progress (Flo): Group(progress).frame(maxWidth:.infinity) | Skip.
+        HStack(spacing: 0) {
+            Group {
+            switch style {
         case "dots":
             HStack(spacing: 8) {
                 ForEach(0..<total, id: \.self) { i in
@@ -238,6 +242,18 @@ struct OnboardingFlowHost: View {
             )
             .animation(.easeInOut(duration: 0.3), value: currentIndex)
             .padding(.horizontal)
+        }
+            }
+            .frame(maxWidth: .infinity)
+            if let skip = progressSkipLabel {
+                Button { advanceOrComplete() } label: {
+                    Text(skip)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(fillColor)
+                }
+                .padding(.leading, 12)
+                .padding(.trailing, 16)
+            }
         }
     }
 
