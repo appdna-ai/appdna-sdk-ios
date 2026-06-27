@@ -82,6 +82,8 @@ public struct OnboardingSettings: Codable {
     public let progress_gradient_colors: [String]?
     // EPIC-2 — optional "Skip" link beside the progress bar (Flo).
     public let progress_skip_label: String?
+    // EPIC-2 — dynamic color flash on step-advance (the progress fill briefly animates to this color).
+    public let progress_flash_color: String?
     public let back_button_style: BackButtonStyle?
     public let dismiss_allowed: Bool?
     /// Global horizontal content padding in points. Default 24.
@@ -92,7 +94,7 @@ public struct OnboardingSettings: Codable {
     public init(show_progress: Bool = true, allow_back: Bool = true, skip_to_step: String? = nil,
                 progress_style: String? = nil, progress_color: String? = nil, progress_track_color: String? = nil,
                 progress_height: CGFloat? = nil, progress_gradient_colors: [String]? = nil,
-                progress_skip_label: String? = nil,
+                progress_skip_label: String? = nil, progress_flash_color: String? = nil,
                 back_button_style: BackButtonStyle? = nil, dismiss_allowed: Bool? = nil,
                 content_padding: CGFloat? = nil, block_spacing: CGFloat? = nil) {
         self.show_progress = show_progress
@@ -104,6 +106,7 @@ public struct OnboardingSettings: Codable {
         self.progress_height = progress_height
         self.progress_gradient_colors = progress_gradient_colors
         self.progress_skip_label = progress_skip_label
+        self.progress_flash_color = progress_flash_color
         self.back_button_style = back_button_style
         self.dismiss_allowed = dismiss_allowed
         self.content_padding = content_padding
@@ -121,6 +124,7 @@ public struct OnboardingSettings: Codable {
         self.progress_height = try c.decodeIfPresent(CGFloat.self, forKey: .progress_height)
         self.progress_gradient_colors = try c.decodeIfPresent([String].self, forKey: .progress_gradient_colors)
         self.progress_skip_label = try c.decodeIfPresent(String.self, forKey: .progress_skip_label)
+        self.progress_flash_color = try c.decodeIfPresent(String.self, forKey: .progress_flash_color)
         self.back_button_style = try c.decodeIfPresent(BackButtonStyle.self, forKey: .back_button_style)
         self.dismiss_allowed = try c.decodeIfPresent(Bool.self, forKey: .dismiss_allowed)
         self.content_padding = try c.decodeIfPresent(CGFloat.self, forKey: .content_padding)
@@ -129,7 +133,7 @@ public struct OnboardingSettings: Codable {
 
     enum CodingKeys: String, CodingKey {
         case show_progress, allow_back, skip_to_step, progress_style
-        case progress_color, progress_track_color, progress_height, progress_gradient_colors, progress_skip_label, back_button_style, dismiss_allowed
+        case progress_color, progress_track_color, progress_height, progress_gradient_colors, progress_skip_label, progress_flash_color, back_button_style, dismiss_allowed
         case content_padding, block_spacing
     }
 }

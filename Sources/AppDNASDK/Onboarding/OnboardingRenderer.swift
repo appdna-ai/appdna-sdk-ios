@@ -35,6 +35,8 @@ struct OnboardingFlowHost: View {
     /// in the URL cache. Prevents the "one-frame flash with no background"
     /// effect when the onboarding is first presented.
     @State private var isInitialLoading = true
+    // EPIC-2 — dynamic color flash on step-advance (the progress fill briefly animates to flash_color).
+    @State private var progressFlashing = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -172,7 +174,7 @@ struct OnboardingFlowHost: View {
             return Color.gray.opacity(0.2)
         }()
         // Per-step progress color override: step.config.progress_color > element_style.background.color > flow.settings.progress_color
-        let fillColor: Color = {
+        let normalFill: Color = {
             if currentIndex < flow.steps.count {
                 let step = flow.steps[currentIndex]
                 if let stepColor = step.config.progress_color, !stepColor.isEmpty {
@@ -185,6 +187,9 @@ struct OnboardingFlowHost: View {
             if let hex = flow.settings.progress_color { return Color(hex: hex) }
             return Color(hex: (AppDNA.brandAccentHex ?? "#6366F1"))
         }()
+        // EPIC-2 — flash overrides the fill while progressFlashing (animated via .animation below).
+        let flashCol = flow.settings.progress_flash_color.map { Color(hex: $0) }
+        let fillColor: Color = (progressFlashing && flashCol != nil) ? flashCol! : normalFill
         let style = flow.settings.progress_style ?? "continuous_bar"
         let total = flow.steps.count
         let current = currentIndex
@@ -255,6 +260,12 @@ struct OnboardingFlowHost: View {
                 .padding(.trailing, 16)
             }
         }
+        .onChange(of: currentIndex) { _ in
+            guard flow.settings.progress_flash_color != nil else { return }
+            progressFlashing = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { progressFlashing = false }
+        }
+        .animation(.easeInOut(duration: 0.35), value: progressFlashing)
     }
 
     private var progress: CGFloat {
