@@ -336,4 +336,31 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-3 — phone-mockup frame (image_frame:"phone"): bezel + dynamic-island notch. Parity with Android.
+    func testImage_phoneMockup() throws {
+        let json = """
+        {
+          "id": "img1", "type": "image",
+          "image_url": "https://example.com/screen.png",
+          "image_frame": "phone", "height": 420
+        }
+        """
+        let block = try JSONDecoder().decode(ContentBlock.self, from: Data(json.utf8))
+        let view = ContentBlockRendererView(
+            blocks: [block],
+            onAction: { _, _ in },
+            toggleValues: .constant([:]),
+            inputValues: .constant([:])
+        )
+            .padding(40)
+            .frame(width: 390)
+            .background(Color(hex: "#E5E7EB"))
+
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }

@@ -900,6 +900,8 @@ public struct ContentBlock: Codable, Identifiable {
     public let corner_radius: Double?
     public let height: Double?
     public let image_fit: String?  // "contain" | "fill" | "cover" — default fill
+    // EPIC-3 — wrap the image in a device frame: "phone" = bezel + dynamic-island notch.
+    public let image_frame: String?
     // Button
     public let variant: String?
     public let action: String?     // next, skip, link, permission
@@ -1172,7 +1174,7 @@ public struct ContentBlock: Codable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id, type, text, style, level
-        case image_url, alt, corner_radius, height, image_fit
+        case image_url, alt, corner_radius, height, image_fit, image_frame
         case variant, action, action_value, bg_color, text_color, button_corner_radius
         case spacer_height, items, list_style
         case divider_color, divider_thickness, divider_margin_y
@@ -1244,6 +1246,7 @@ public struct ContentBlock: Codable, Identifiable {
         self.corner_radius = try c.decodeIfPresent(Double.self, forKey: .corner_radius)
         self.height = try c.decodeIfPresent(Double.self, forKey: .height)
         self.image_fit = try c.decodeIfPresent(String.self, forKey: .image_fit)
+        self.image_frame = try c.decodeIfPresent(String.self, forKey: .image_frame)
         self.variant = try c.decodeIfPresent(String.self, forKey: .variant)
         self.action = try c.decodeIfPresent(String.self, forKey: .action)
         self.action_value = try c.decodeIfPresent(String.self, forKey: .action_value)

@@ -328,7 +328,9 @@ struct ContentBlockRendererView: View {
         let imgHeight = CGFloat(block.height ?? 200)
 
         return Group {
-            if let urlString = block.image_url, let url = URL(string: urlString) {
+            if block.image_frame == "phone", let urlString = block.image_url, let url = URL(string: urlString) {
+                phoneMockup(url: url, height: imgHeight, alt: block.alt)
+            } else if let urlString = block.image_url, let url = URL(string: urlString) {
                 BundledAsyncPhaseImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -357,6 +359,31 @@ struct ContentBlockRendererView: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// EPIC-3 — phone mockup: device bezel + dynamic-island notch, image as the "screen".
+    private func phoneMockup(url: URL, height: CGFloat, alt: String?) -> some View {
+        ZStack(alignment: .top) {
+            BundledAsyncPhaseImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fill)
+                default:
+                    Color(hex: "#2A2A2E")
+                }
+            }
+            .frame(height: height)
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 30))
+            Capsule()
+                .fill(Color.black)
+                .frame(width: 96, height: 26)
+                .padding(.top, 8)
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 40).fill(Color(hex: "#101012")))
+        .frame(maxWidth: 260)
+        .accessibilityLabel(alt ?? "Image")
     }
 
     private var imagePlaceholder: some View {
