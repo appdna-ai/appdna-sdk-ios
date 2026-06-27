@@ -647,6 +647,7 @@ struct FormInputSelectBlock: View {
         let selectionIndicator = (cfg?["selection_indicator"]?.value as? String) ?? "radio"
         let showRadio = selectionIndicator == "radio" || selectionIndicator == "both"
         let showBorderHighlight = selectionIndicator == "border" || selectionIndicator == "both"
+        let selectionAnimation = (cfg?["selection_animation"]?.value as? String) ?? "none"
         // Radio fill: "circle" (default), "checkmark", or any emoji/SF Symbol
         let radioFill = (cfg?["radio_fill"]?.value as? String) ?? "circle"
         // Radio position
@@ -791,6 +792,10 @@ struct FormInputSelectBlock: View {
                             }
                         }
                     }
+                    // EPIC-1 — selection_animation glow: accent halo on the selected option (static
+                    // glow now; pulse/sparkle motion is a future dynamic layer). Parity with Android.
+                    .shadow(color: isSelected && selectionAnimation != "none" ? fillCol.opacity(0.4) : .clear,
+                            radius: isSelected && selectionAnimation != "none" ? 6 : 0)
                     // SPEC-419 — row.bg parity node: a dedicated, non-propagating accessibility
                     // element behind the row content (a bare identifier on the content propagates
                     // to every child and overrides their ids). This clear overlay carries ONLY the

@@ -237,4 +237,25 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// Selection animation glow — "Focused" selected with selection_animation:glow → accent glow halo. Parity with Android.
+    func testSelect_selectionGlow() throws {
+        let view = try render("""
+        {
+          "id": "glow1", "type": "input_select",
+          "field_config": { "display_style": "stacked", "selection_animation": "glow" },
+          "field_style": { "fill_color": "#22C55E" },
+          "field_options": [
+            { "id": "a", "value": "a", "label": "Calm", "subtitle": "Relaxing pace" },
+            { "id": "b", "value": "b", "label": "Focused", "subtitle": "Steady progress" },
+            { "id": "c", "value": "c", "label": "Intense", "subtitle": "Push hard" }
+          ]
+        }
+        """, inputs: ["glow1": "b"])
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
