@@ -18,6 +18,8 @@ public enum ContentBlockType: String, Codable {
     case pricing_card
     // EPIC-3 — media gallery (horizontal row of image tiles)
     case media_gallery
+    // EPIC-4b — section background (vertical color zones behind overlaid content)
+    case section_background
     // SPEC-089d Phase 3: Form input block types (22 types)
     case input_text, input_textarea, input_number, input_email, input_phone
     case input_password, input_date, input_time, input_datetime

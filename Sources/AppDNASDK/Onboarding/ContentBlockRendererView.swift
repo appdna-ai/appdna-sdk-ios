@@ -164,6 +164,7 @@ struct ContentBlockRendererView: View {
         case .text: return AnyView(textBlock(block))
         case .image: return AnyView(imageBlock(block))
         case .media_gallery: return AnyView(mediaGalleryBlock(block))
+        case .section_background: return AnyView(sectionBackgroundBlock(block))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
         case .list: return AnyView(listBlock(block))
@@ -321,6 +322,45 @@ struct ContentBlockRendererView: View {
     }
 
     // MARK: - Image
+
+    // EPIC-4b — section_background: vertical proportional color zones painted behind overlaid content.
+    // Zones + arrangement come through field_config (parity with Android, which is at the JVM arg limit).
+    @ViewBuilder
+    private func sectionBackgroundBlock(_ block: ContentBlock) -> some View {
+        let zonesRaw = (block.field_config?["background_zones"]?.value as? [Any]) ?? []
+        let zones: [(CGFloat, Color)] = zonesRaw.compactMap { item in
+            guard let m = item as? [String: Any] else { return nil }
+            let w = (m["weight"] as? Double) ?? Double((m["weight"] as? Int) ?? 1)
+            return (CGFloat(w), Color(hex: (m["color"] as? String) ?? "#000000"))
+        }
+        let totalW = max(zones.reduce(0) { $0 + $1.0 }, 0.0001)
+        let children = block.children ?? block.stack_children ?? []
+        let arrangement = (block.field_config?["content_arrangement"]?.value as? String) ?? "space_between"
+        let height = CGFloat(block.height ?? 480)
+        ZStack {
+            // Background: vertical weighted color zones.
+            GeometryReader { geo in
+                VStack(spacing: 0) {
+                    ForEach(Array(zones.enumerated()), id: \.offset) { _, zone in
+                        zone.1.frame(maxWidth: .infinity).frame(height: geo.size.height * zone.0 / totalW)
+                    }
+                }
+            }
+            // Foreground: content overlaid on the zones.
+            VStack(spacing: 12) {
+                if arrangement == "center" || arrangement == "bottom" { Spacer() }
+                ForEach(Array(children.enumerated()), id: \.offset) { idx, child in
+                    if arrangement == "space_between" && idx > 0 { Spacer() }
+                    renderBlock(child)
+                }
+                if arrangement == "center" || arrangement == "top" { Spacer() }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(20)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
+    }
 
     // EPIC-3 — media_gallery: horizontal scrollable row of image tiles (rounded, fixed size, placeholder bg).
     @ViewBuilder

@@ -15,7 +15,7 @@ import XCTest
 /// Then commit Tests/__Snapshots__/. CI re-runs without RECORD_SNAPSHOTS and fails on pixel deltas.
 final class VisualSnapshotTests: XCTestCase {
 
-    private func render(_ json: String, inputs: [String: Any] = [:]) throws -> some View {
+    private func render(_ json: String, inputs: [String: Any] = [:], pad: CGFloat = 16) throws -> some View {
         let block = try JSONDecoder().decode(ContentBlock.self, from: Data(json.utf8))
         return ContentBlockRendererView(
             blocks: [block],
@@ -23,7 +23,7 @@ final class VisualSnapshotTests: XCTestCase {
             toggleValues: .constant([:]),
             inputValues: .constant(inputs)
         )
-            .padding(16)
+            .padding(pad)
             .frame(width: 390)
             .background(Color(hex: "#0F1117"))
     }
@@ -456,6 +456,31 @@ final class VisualSnapshotTests: XCTestCase {
           ]
         }
         """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
+
+    /// EPIC-4b — sectioned/zone background with overlaid content. Parity with Android.
+    func testLayout_sectionBackground() throws {
+        let view = try render("""
+        {
+          "id": "sec1", "type": "section_background", "height": 420,
+          "field_config": {
+            "content_arrangement": "space_between",
+            "background_zones": [
+              {"weight": 2, "color": "#1E1B4B"},
+              {"weight": 1, "color": "#6366F1"}
+            ]
+          },
+          "children": [
+            {"id": "t1", "type": "text", "text": "Welcome to AppDNA", "style": {"font_size": 26, "font_weight": 700, "color": "#FFFFFF"}},
+            {"id": "b1", "type": "button", "text": "Get Started", "bg_color": "#FFFFFF", "text_color": "#1E1B4B", "button_corner_radius": 14, "element_width": "fill"}
+          ]
+        }
+        """, pad: 0)
         let recordMode: SnapshotTestingConfiguration.Record =
             ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
         withSnapshotTesting(record: recordMode) {
