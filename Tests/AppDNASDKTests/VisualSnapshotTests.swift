@@ -275,4 +275,24 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-2 — flow-level progress: thin (2pt) solid + thick (12pt) multi-color gradient. Parity with Android.
+    func testProgress_flowThinGradient() throws {
+        let view = VStack(spacing: 22) {
+            ContinuousProgressBar(progress: 0.6, color: Color(hex: "#6366F1"), trackColor: Color(hex: "#374151"), height: 2)
+            ContinuousProgressBar(
+                progress: 0.8, color: Color(hex: "#22C55E"), trackColor: Color(hex: "#374151"), height: 12,
+                gradientColors: [Color(hex: "#22C55E"), Color(hex: "#EAB308"), Color(hex: "#EF4444")]
+            )
+        }
+        .padding(24)
+        .frame(width: 390)
+        .background(Color(hex: "#0F1117"))
+
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }

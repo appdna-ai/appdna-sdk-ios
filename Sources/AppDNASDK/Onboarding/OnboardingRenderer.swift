@@ -188,6 +188,9 @@ struct OnboardingFlowHost: View {
         let style = flow.settings.progress_style ?? "continuous_bar"
         let total = flow.steps.count
         let current = currentIndex
+        // EPIC-2 — thin sizing (custom height) + multiple colors at once (gradient), flow-level progress.
+        let barHeight = CGFloat(flow.settings.progress_height ?? 4)
+        let gradCols = (flow.settings.progress_gradient_colors ?? []).map { Color(hex: $0) }
 
         switch style {
         case "dots":
@@ -207,11 +210,11 @@ struct OnboardingFlowHost: View {
                 ForEach(0..<total, id: \.self) { i in
                     RoundedRectangle(cornerRadius: 2)
                         .fill(i <= current ? fillColor : trackColor)
-                        .frame(height: 4)
+                        .frame(height: barHeight)
                         .animation(.easeInOut(duration: 0.2), value: currentIndex)
                 }
             }
-            .frame(height: 4)
+            .frame(height: barHeight)
             .padding(.horizontal)
 
         case "fraction":
@@ -224,18 +227,16 @@ struct OnboardingFlowHost: View {
             EmptyView()
 
         default: // continuous_bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(trackColor)
-                        .frame(height: 4)
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(fillColor)
-                        .frame(width: geo.size.width * progress, height: 4)
-                        .animation(.easeInOut(duration: 0.3), value: currentIndex)
-                }
-            }
-            .frame(height: 4)
+            // EPIC-2 — height-honoring custom bar (progress_height) + optional multi-color gradient
+            // (progress_gradient_colors). Mirrors Android ContinuousProgressBar; snapshot-tested.
+            ContinuousProgressBar(
+                progress: progress,
+                color: fillColor,
+                trackColor: trackColor,
+                height: barHeight,
+                gradientColors: gradCols.count >= 2 ? gradCols : nil
+            )
+            .animation(.easeInOut(duration: 0.3), value: currentIndex)
             .padding(.horizontal)
         }
     }
@@ -1877,5 +1878,38 @@ private class OnboardingPaywallBridge: AppDNAPaywallDelegate {
                 if let host = AppDNA.paywall.delegate { block(host) }
             }
         }
+    }
+}
+
+// EPIC-2 — flow-level continuous progress bar. A custom bar (replaces the fixed 4pt rectangle) so
+// progress_height honours any thickness, plus an optional multi-color gradient fill
+// (progress_gradient_colors). Mirrors Android ContinuousProgressBar; rendered standalone so the
+// SPEC-419 visual-snapshot harness can capture it.
+struct ContinuousProgressBar: View {
+    let progress: CGFloat
+    let color: Color
+    let trackColor: Color
+    let height: CGFloat
+    var gradientColors: [Color]? = nil
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: height / 2)
+                    .fill(trackColor)
+                    .frame(height: height)
+                RoundedRectangle(cornerRadius: height / 2)
+                    .fill(fillStyle)
+                    .frame(width: geo.size.width * min(max(progress, 0), 1), height: height)
+            }
+        }
+        .frame(height: height)
+    }
+
+    private var fillStyle: AnyShapeStyle {
+        if let g = gradientColors, g.count >= 2 {
+            return AnyShapeStyle(LinearGradient(colors: g, startPoint: .leading, endPoint: .trailing))
+        }
+        return AnyShapeStyle(color)
     }
 }
