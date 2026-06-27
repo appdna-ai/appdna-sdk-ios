@@ -163,6 +163,7 @@ struct ContentBlockRendererView: View {
         case .heading: return AnyView(headingBlock(block))
         case .text: return AnyView(textBlock(block))
         case .image: return AnyView(imageBlock(block))
+        case .media_gallery: return AnyView(mediaGalleryBlock(block))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
         case .list: return AnyView(listBlock(block))
@@ -320,6 +321,41 @@ struct ContentBlockRendererView: View {
     }
 
     // MARK: - Image
+
+    // EPIC-3 — media_gallery: horizontal scrollable row of image tiles (rounded, fixed size, placeholder bg).
+    @ViewBuilder
+    private func mediaGalleryBlock(_ block: ContentBlock) -> some View {
+        let images = block.gallery_images ?? []
+        let itemW = CGFloat(block.gallery_item_width ?? 140)
+        let itemH = CGFloat(block.gallery_item_height ?? 180)
+        let cr = CGFloat(block.gallery_corner_radius ?? 12)
+        let spacing = CGFloat(block.gallery_spacing ?? 10)
+        let galleryAlignment: Alignment = block.gallery_align == "start" ? .leading : (block.gallery_align == "end" ? .trailing : .center)
+        GeometryReader { geo in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: spacing) {
+                    ForEach(Array(images.enumerated()), id: \.offset) { _, urlString in
+                        ZStack {
+                            Color(hex: "#2A2A2E")
+                            if let url = URL(string: urlString) {
+                                BundledAsyncPhaseImage(url: url) { phase in
+                                    if case .success(let image) = phase {
+                                        image.resizable().aspectRatio(contentMode: .fill)
+                                    }
+                                }
+                            }
+                        }
+                        .frame(width: itemW, height: itemH)
+                        .clipShape(RoundedRectangle(cornerRadius: cr))
+                    }
+                }
+                .padding(.horizontal, 2)
+                // EPIC-3 — settable align (start/center/end) when tiles fit; scrolls when they overflow.
+                .frame(minWidth: geo.size.width, alignment: galleryAlignment)
+            }
+        }
+        .frame(height: itemH)
+    }
 
     private func imageBlock(_ block: ContentBlock) -> some View {
         let cr = CGFloat(block.corner_radius ?? 0)

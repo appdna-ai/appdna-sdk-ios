@@ -427,4 +427,21 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-3 — media gallery (horizontal row of image tiles). Parity with Android.
+    func testMedia_gallery() throws {
+        let view = try render("""
+        {
+          "id": "mg1", "type": "media_gallery",
+          "gallery_images": ["https://example.com/1.jpg", "https://example.com/2.jpg", "https://example.com/3.jpg"],
+          "gallery_item_width": 105, "gallery_item_height": 160,
+          "gallery_corner_radius": 14, "gallery_spacing": 10
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
