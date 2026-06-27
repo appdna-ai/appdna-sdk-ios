@@ -363,4 +363,20 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-3 — large radial % ring loading variant (progress_value static). Parity with Android.
+    func testLoading_radialRing() throws {
+        let view = try render("""
+        {
+          "id": "ld1", "type": "animated_loading",
+          "loading_variant": "ring", "progress_value": 0.65,
+          "show_percentage": true, "progress_color": "#6366F1"
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }

@@ -197,7 +197,12 @@ struct AnimatedLoadingBlockView: View {
             loadingVariantView(variant: variant, itemList: itemList, progressCol: progressCol, checkCol: checkCol)
         }
         .onAppear {
-            startSequentialTimer(items: itemList, totalMs: totalMs)
+            // EPIC-3 — static progress_value override (snapshot/preview): hold the value, no timer.
+            if let pv = block.progress_value {
+                overallProgress = CGFloat(pv > 1 ? pv / 100 : pv)
+            } else {
+                startSequentialTimer(items: itemList, totalMs: totalMs)
+            }
         }
         .onDisappear {
             timerCancellable?.invalidate()
@@ -247,6 +252,25 @@ struct AnimatedLoadingBlockView: View {
                             .animation(.easeInOut, value: completedCount)
                     }
                 }
+                .frame(maxWidth: .infinity)
+            )
+
+        case "ring":
+            // EPIC-3 — large radial % ring (Duolingo/Flo "loading N%"): big ring + prominent %.
+            let ringProgress = block.progress_value.map { CGFloat($0 > 1 ? $0 / 100 : $0) } ?? overallProgress
+            return AnyView(
+                ZStack {
+                    Circle().stroke(progressCol.opacity(0.2), lineWidth: 12)
+                    Circle()
+                        .trim(from: 0, to: max(0.0, min(1.0, ringProgress)))
+                        .stroke(progressCol, style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    Text("\(Int(ringProgress * 100))%")
+                        .font(.system(size: 40, weight: .bold))
+                        .foregroundColor(progressCol)
+                }
+                .frame(width: 160, height: 160)
+                .padding(8)
                 .frame(maxWidth: .infinity)
             )
 
