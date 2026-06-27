@@ -274,6 +274,34 @@ struct AnimatedLoadingBlockView: View {
                 .frame(maxWidth: .infinity)
             )
 
+        case "cog":
+            // EPIC-3 — cog/gear spinner (Asana settings-style loader): thick ring + 8 flat teeth, rotating.
+            return AnyView(
+                Canvas { ctx, size in
+                    let cx = size.width / 2
+                    let cy = size.height / 2
+                    let outerR = min(size.width, size.height) / 2
+                    let ringR = outerR * 0.60
+                    let ringStroke = outerR * 0.22
+                    let teethCount = 8
+                    let toothW = outerR * 0.20
+                    let toothH = outerR * 0.28
+                    for i in 0..<teethCount {
+                        var t = ctx
+                        t.translateBy(x: cx, y: cy)
+                        t.rotate(by: .degrees(Double(i) * 360 / Double(teethCount)))
+                        let rect = CGRect(x: -toothW / 2, y: -ringR - toothH * 0.55, width: toothW, height: toothH)
+                        t.fill(Path(roundedRect: rect, cornerRadius: toothW * 0.25), with: .color(progressCol))
+                    }
+                    let ringRect = CGRect(x: cx - ringR, y: cy - ringR, width: ringR * 2, height: ringR * 2)
+                    ctx.stroke(Path(ellipseIn: ringRect), with: .color(progressCol), lineWidth: ringStroke)
+                }
+                .frame(width: 80, height: 80)
+                .rotationEffect(.degrees(spinAngle))
+                .onAppear { withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) { spinAngle = 360 } }
+                .frame(maxWidth: .infinity)
+            )
+
         case "linear":
             return AnyView(
                 GeometryReader { geometry in

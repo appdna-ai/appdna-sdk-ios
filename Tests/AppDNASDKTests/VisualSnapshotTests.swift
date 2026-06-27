@@ -379,4 +379,19 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-3 — cog/gear spinner loading variant. Parity with Android.
+    func testLoading_cogSpinner() throws {
+        let view = try render("""
+        {
+          "id": "ld2", "type": "animated_loading",
+          "loading_variant": "cog", "progress_color": "#6366F1"
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
