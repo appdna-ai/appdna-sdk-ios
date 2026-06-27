@@ -487,4 +487,25 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-1 — multi-column grid select (display_style "grid", grid_columns 2). Parity with Android.
+    func testSelect_gridMultiColumn() throws {
+        let view = try render("""
+        {
+          "id": "selg", "type": "input_select",
+          "field_config": { "display_style": "grid", "grid_columns": 2 },
+          "field_options": [
+            {"id": "a", "value": "sleep", "label": "Sleep", "subtitle": "Better rest"},
+            {"id": "b", "value": "focus", "label": "Focus", "subtitle": "Deep work"},
+            {"id": "c", "value": "calm", "label": "Calm", "subtitle": "Less stress"},
+            {"id": "d", "value": "energy", "label": "Energy", "subtitle": "More drive"}
+          ]
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
