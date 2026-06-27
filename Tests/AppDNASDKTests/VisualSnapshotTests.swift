@@ -409,4 +409,22 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-3 — loading text styling (message above the ring, custom size/color). Parity with Android.
+    func testLoading_textStyling() throws {
+        let view = try render("""
+        {
+          "id": "ld4", "type": "animated_loading",
+          "loading_variant": "ring", "progress_value": 0.6,
+          "loading_text": "Almost there", "loading_text_position": "above",
+          "loading_text_size": 24, "loading_text_color": "#A5B4FC",
+          "progress_color": "#6366F1"
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }

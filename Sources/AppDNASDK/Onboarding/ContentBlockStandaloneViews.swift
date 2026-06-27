@@ -190,11 +190,29 @@ struct AnimatedLoadingBlockView: View {
         let checkCol = Color(hex: block.check_color ?? "#22C55E")
         let totalMs = block.total_duration_ms ?? itemList.reduce(0) { $0 + ($1.duration_ms ?? 1000) }
 
+        let loadingMsg = block.loading_text
+        let loadingMsgPos = block.loading_text_position ?? "below"
+        let loadingMsgSize = CGFloat(block.loading_text_size ?? 15)
+        let loadingMsgColor = block.loading_text_color.map { Color(hex: $0) } ?? Color(hex: block.text_color ?? "#9CA3AF")
+
         VStack(spacing: 16) {
             // Percentage is rendered inside each variant (circular ring center, linear bar, etc.)
             // to avoid duplicate display. See loadingVariantView for per-variant rendering.
 
+            // EPIC-3 — configurable loading message with independent position/size/color.
+            if let loadingMsg, loadingMsgPos == "above" {
+                Text(loadingMsg)
+                    .font(.system(size: loadingMsgSize))
+                    .foregroundColor(loadingMsgColor)
+                    .multilineTextAlignment(.center)
+            }
             loadingVariantView(variant: variant, itemList: itemList, progressCol: progressCol, checkCol: checkCol)
+            if let loadingMsg, loadingMsgPos == "below" {
+                Text(loadingMsg)
+                    .font(.system(size: loadingMsgSize))
+                    .foregroundColor(loadingMsgColor)
+                    .multilineTextAlignment(.center)
+            }
         }
         .onAppear {
             // EPIC-3 — static progress_value override (snapshot/preview): hold the value, no timer.

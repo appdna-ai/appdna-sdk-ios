@@ -1047,6 +1047,11 @@ public struct ContentBlock: Codable, Identifiable {
 
     // SPEC-089d Phase A: animated_loading fields
     public let loading_variant: String?    // circular, linear, checklist
+    // EPIC-3 — configurable loading message + independent position (above/below), size, color.
+    public let loading_text: String?
+    public let loading_text_position: String?  // "above" | "below" (default "below")
+    public let loading_text_size: Double?
+    public let loading_text_color: String?
     public let loading_items: [LoadingItemConfig]?
     public let progress_color: String?
     public let check_color: String?
@@ -1208,7 +1213,7 @@ public struct ContentBlock: Codable, Identifiable {
         case bar_height, bar_color, bar_gradient_colors, track_color, show_label, segment_gap
         case timeline_items, line_color, completed_color, current_color
         case upcoming_color, show_line, compact, title_style, subtitle_style
-        case loading_variant, loading_items, progress_color, check_color
+        case loading_variant, loading_text, loading_text_position, loading_text_size, loading_text_color, loading_items, progress_color, check_color
         case total_duration_ms, auto_advance, show_percentage
         // SPEC-089d Phase F: new block fields
         case gauge_variant, gauge_value, max_value, sublabel, stroke_width, min_label, max_label, min_max_font_size
@@ -1357,6 +1362,10 @@ public struct ContentBlock: Codable, Identifiable {
         self.title_style = try c.decodeIfPresent(TextStyleConfig.self, forKey: .title_style)
         self.subtitle_style = try c.decodeIfPresent(TextStyleConfig.self, forKey: .subtitle_style)
         self.loading_variant = try c.decodeIfPresent(String.self, forKey: .loading_variant)
+        self.loading_text = try c.decodeIfPresent(String.self, forKey: .loading_text)
+        self.loading_text_position = try c.decodeIfPresent(String.self, forKey: .loading_text_position)
+        self.loading_text_size = try c.decodeIfPresent(Double.self, forKey: .loading_text_size)
+        self.loading_text_color = try c.decodeIfPresent(String.self, forKey: .loading_text_color)
         self.loading_items = try c.decodeIfPresent([LoadingItemConfig].self, forKey: .loading_items)
         self.progress_color = try c.decodeIfPresent(String.self, forKey: .progress_color)
         self.check_color = try c.decodeIfPresent(String.self, forKey: .check_color)
