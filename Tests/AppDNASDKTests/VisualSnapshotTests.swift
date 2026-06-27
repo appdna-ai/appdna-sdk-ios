@@ -258,4 +258,21 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-2 — progress bar multi-color gradient fill (~80% filled, green→yellow→red). Parity with Android.
+    func testProgress_gradient() throws {
+        let view = try render("""
+        {
+          "id": "pb1", "type": "progress_bar",
+          "progress_variant": "continuous", "total_segments": 5, "filled_segments": 4,
+          "bar_height": 14, "corner_radius": 7, "track_color": "#374151",
+          "bar_gradient_colors": ["#22C55E", "#EAB308", "#EF4444"]
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }

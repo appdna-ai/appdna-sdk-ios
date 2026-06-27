@@ -1062,6 +1062,11 @@ struct ContentBlockRendererView: View {
         let barH = CGFloat(block.bar_height ?? 6)
         let barRadius = CGFloat(block.corner_radius ?? 3)
         let fillColor = Color(hex: block.bar_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
+        // EPIC-2 — multiple progress colors at once (horizontal gradient across the fill).
+        let gradCols = (block.bar_gradient_colors ?? []).map { Color(hex: $0) }
+        let fillStyle: AnyShapeStyle = gradCols.count >= 2
+            ? AnyShapeStyle(LinearGradient(colors: gradCols, startPoint: .leading, endPoint: .trailing))
+            : AnyShapeStyle(fillColor)
         let trackCol = Color(hex: block.track_color ?? "#E5E7EB")
         let gap = CGFloat(block.segment_gap ?? 4)
 
@@ -1092,7 +1097,7 @@ struct ContentBlockRendererView: View {
 
                         let fraction = totalSegs > 0 ? CGFloat(filledSegs) / CGFloat(totalSegs) : 0
                         RoundedRectangle(cornerRadius: barRadius)
-                            .fill(fillColor)
+                            .fill(fillStyle)
                             .frame(width: geometry.size.width * min(fraction, 1.0), height: barH)
                     }
                 }

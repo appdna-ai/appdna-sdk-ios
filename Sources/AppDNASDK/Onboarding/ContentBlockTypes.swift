@@ -1026,6 +1026,8 @@ public struct ContentBlock: Codable, Identifiable {
     public let filled_segments: Int?
     public let bar_height: Double?
     public let bar_color: String?
+    // EPIC-2 — multiple progress colors at once (horizontal gradient across the fill).
+    public let bar_gradient_colors: [String]?
     public let track_color: String?
     public let show_label: Bool?
     public let segment_gap: Double?
@@ -1201,7 +1203,7 @@ public struct ContentBlock: Codable, Identifiable {
         case allow_half, field_id, rating_label
         case markdown_content, rich_text_variant, base_style, link_color
         case progress_variant, progress_value, total_segments, filled_segments
-        case bar_height, bar_color, track_color, show_label, segment_gap
+        case bar_height, bar_color, bar_gradient_colors, track_color, show_label, segment_gap
         case timeline_items, line_color, completed_color, current_color
         case upcoming_color, show_line, compact, title_style, subtitle_style
         case loading_variant, loading_items, progress_color, check_color
@@ -1338,6 +1340,7 @@ public struct ContentBlock: Codable, Identifiable {
         self.filled_segments = try c.decodeIfPresent(Int.self, forKey: .filled_segments)
         self.bar_height = try c.decodeIfPresent(Double.self, forKey: .bar_height)
         self.bar_color = try c.decodeIfPresent(String.self, forKey: .bar_color)
+        self.bar_gradient_colors = try c.decodeIfPresent([String].self, forKey: .bar_gradient_colors)
         self.track_color = try c.decodeIfPresent(String.self, forKey: .track_color)
         self.show_label = try c.decodeIfPresent(Bool.self, forKey: .show_label)
         self.segment_gap = try c.decodeIfPresent(Double.self, forKey: .segment_gap)
