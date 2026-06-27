@@ -444,4 +444,22 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-4a — side-by-side equal-width buttons via the row block. Parity with Android.
+    func testLayout_sideBySide() throws {
+        let view = try render("""
+        {
+          "id": "row1", "type": "row", "row_child_fill": true, "gap": 12,
+          "children": [
+            {"id": "b1", "type": "button", "text": "Skip", "bg_color": "#2A2A2E", "text_color": "#FFFFFF", "button_corner_radius": 14, "element_width": "fill"},
+            {"id": "b2", "type": "button", "text": "Continue", "bg_color": "#6366F1", "text_color": "#FFFFFF", "button_corner_radius": 14, "element_width": "fill"}
+          ]
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
