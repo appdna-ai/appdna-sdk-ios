@@ -302,6 +302,23 @@ struct AnimatedLoadingBlockView: View {
                 .frame(maxWidth: .infinity)
             )
 
+        case "splash_bottom":
+            // EPIC-3 — splash-screen loader: a small spinner anchored to the BOTTOM of the area.
+            return AnyView(
+                VStack {
+                    Spacer()
+                    Circle()
+                        .trim(from: 0, to: 0.30)
+                        .stroke(progressCol, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                        .rotationEffect(.degrees(-90 + spinAngle))
+                        .frame(width: 32, height: 32)
+                        .padding(.bottom, 24)
+                        .onAppear { withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) { spinAngle = 360 } }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: CGFloat(block.height ?? 360))
+            )
+
         case "linear":
             return AnyView(
                 GeometryReader { geometry in

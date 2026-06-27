@@ -394,4 +394,19 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-3 — splash-bottom spinner (small spinner anchored to the bottom). Parity with Android.
+    func testLoading_splashBottom() throws {
+        let view = try render("""
+        {
+          "id": "ld3", "type": "animated_loading",
+          "loading_variant": "splash_bottom", "height": 360, "progress_color": "#6366F1"
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
