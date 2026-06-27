@@ -295,4 +295,22 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-2 — nav glyphs: custom chevron + default arrow + back⇄X close. Parity with Android.
+    func testNav_glyphs() throws {
+        let view = VStack(alignment: .leading, spacing: 20) {
+            NavGlyph(glyph: "‹", color: Color(hex: "#6366F1"), size: 28)
+            NavGlyph(glyph: "←", color: Color(hex: "#E5E7EB"), size: 20)
+            NavGlyph(glyph: "✕", color: Color(hex: "#EF4444"), size: 20)
+        }
+        .padding(24)
+        .frame(width: 390, alignment: .leading)
+        .background(Color(hex: "#0F1117"))
+
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }

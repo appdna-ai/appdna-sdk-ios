@@ -252,17 +252,41 @@ struct OnboardingFlowHost: View {
         let backStyle = flow.settings.back_button_style
         let backSize = backStyle?.icon_size ?? 16
         let backColor: Color = backStyle?.icon_color.flatMap { Color(hex: $0) } ?? Color(hex: "#6B7280")
+        let hasBack = flow.settings.allow_back && !navigationHistory.isEmpty
+        let dismissAllowed = flow.settings.dismiss_allowed ?? true
+        // EPIC-2 — back⇄X switch: show the dismiss in the leading slot on the first/no-history step.
+        let leadingIsClose = !hasBack && dismissAllowed && (backStyle?.close_on_first == true)
 
         return HStack {
             let _ = Log.debug("[Onboarding] Nav bar: allow_back=\(flow.settings.allow_back), currentIndex=\(currentIndex), isProcessing=\(isProcessing)")
-            if flow.settings.allow_back && !navigationHistory.isEmpty {
+            if hasBack {
                 Button {
                     let previousIndex = navigationHistory.last ?? max(currentIndex - 1, 0)
                     Log.debug("[Onboarding] Back button tapped, going from \(currentIndex) to \(previousIndex)")
                     navigationHistory.removeLast()
                     withAnimation(.easeInOut(duration: 0.25)) { currentIndex = previousIndex }
                 } label: {
-                    Image(systemName: "chevron.left")
+                    Group {
+                        // EPIC-2 — custom back glyph (any char) when set, else the SF chevron.
+                        if let glyph = backStyle?.icon, !glyph.isEmpty {
+                            NavGlyph(glyph: glyph, color: backColor, size: backSize)
+                        } else {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: backSize, weight: .semibold))
+                                .foregroundColor(backColor)
+                        }
+                    }
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+                }
+                .disabled(isProcessing)
+            } else if leadingIsClose {
+                // EPIC-2 — back⇄X switch: dismiss in the leading slot on the first step.
+                Button {
+                    let step = flow.steps[currentIndex]
+                    onFlowDismissed(step.id, currentIndex)
+                } label: {
+                    Image(systemName: "xmark")
                         .font(.system(size: backSize, weight: .semibold))
                         .foregroundColor(backColor)
                         .frame(width: 44, height: 44)
@@ -276,7 +300,7 @@ struct OnboardingFlowHost: View {
             Spacer()
 
             // Dismiss button
-            if flow.settings.dismiss_allowed ?? true {
+            if dismissAllowed && !leadingIsClose {
                 Button {
                     let step = flow.steps[currentIndex]
                     onFlowDismissed(step.id, currentIndex)
@@ -1911,5 +1935,19 @@ struct ContinuousProgressBar: View {
             return AnyShapeStyle(LinearGradient(colors: g, startPoint: .leading, endPoint: .trailing))
         }
         return AnyShapeStyle(color)
+    }
+}
+
+// EPIC-2 — nav-bar glyph (custom back arrow / close ✕) as a single Text. Mirrors Android NavGlyph;
+// rendered standalone so the custom-glyph + back⇄X switch render is snapshot-testable.
+struct NavGlyph: View {
+    let glyph: String
+    let color: Color
+    let size: CGFloat
+
+    var body: some View {
+        Text(glyph)
+            .font(.system(size: size, weight: .semibold))
+            .foregroundColor(color)
     }
 }

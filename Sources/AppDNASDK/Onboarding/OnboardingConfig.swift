@@ -64,6 +64,10 @@ public struct BackButtonStyle: Codable {
     public let icon_size: CGFloat?
     public let icon_color: String?
     public let position: String?  // "left" | "right"
+    // EPIC-2 — custom back glyph (any char, default SF chevron) + back-arrow⇄X switch
+    // (close_on_first: show the dismiss "✕" in the leading slot on the first/no-history step).
+    public let icon: String?
+    public let close_on_first: Bool?
 }
 
 public struct OnboardingSettings: Codable {
