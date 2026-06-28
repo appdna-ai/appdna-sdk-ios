@@ -170,6 +170,7 @@ struct ContentBlockRendererView: View {
         case .warning_banner: return AnyView(warningBannerBlock(block))
         case .password_strength: return AnyView(passwordStrengthBlock(block))
         case .speech_bubble: return AnyView(speechBubbleBlock(block))
+        case .feedback_panel: return AnyView(feedbackPanelBlock(block))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
         case .list: return AnyView(listBlock(block))
@@ -669,6 +670,39 @@ struct ContentBlockRendererView: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // EPIC-11 — quiz feedback panel (Duolingo correct/wrong): tinted panel + circled icon + headline + detail.
+    private func feedbackPanelBlock(_ block: ContentBlock) -> some View {
+        let state = (block.field_config?["feedback_state"]?.value as? String) ?? "correct"
+        let accentHex: String
+        let icon: String
+        let defHead: String
+        switch state {
+        case "wrong": accentHex = "#EF4444"; icon = "✗"; defHead = "Not quite"
+        case "info": accentHex = "#3B82F6"; icon = "ℹ"; defHead = "Heads up"
+        default: accentHex = "#10B981"; icon = "✓"; defHead = "Great job!"
+        }
+        let accent = Color(hex: block.active_color ?? accentHex)
+        let headline = loc?("block.\(block.id).text", block.text ?? defHead) ?? block.text ?? defHead
+        let detail = block.field_config?["feedback_detail"]?.value as? String
+        return HStack(spacing: 14) {
+            ZStack {
+                Circle().fill(accent).frame(width: 40, height: 40)
+                Text(icon).font(.system(size: 20, weight: .bold)).foregroundColor(.white)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(headline).font(.system(size: 17, weight: .bold)).foregroundColor(accent)
+                if let detail = detail, !detail.isEmpty {
+                    Text(detail).font(.system(size: 14)).foregroundColor(.white.opacity(0.85))
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(accent.opacity(0.15))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: - List

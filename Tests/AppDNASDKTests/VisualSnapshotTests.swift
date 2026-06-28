@@ -698,4 +698,21 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-11 — quiz feedback panel: correct (green ✓) + wrong (red ✗), headline + detail. Parity w/ Android.
+    func testEpic11_feedbackPanel() throws {
+        let view = try renderMany([
+            """
+            {"id": "fc", "type": "feedback_panel", "text": "Great job!", "field_config": {"feedback_state": "correct", "feedback_detail": "10-day streak kept 🔥"}}
+            """,
+            """
+            {"id": "fw", "type": "feedback_panel", "text": "Not quite", "field_config": {"feedback_state": "wrong", "feedback_detail": "Correct answer: Tokyo"}}
+            """,
+        ])
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
