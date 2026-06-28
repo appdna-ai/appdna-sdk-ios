@@ -508,4 +508,21 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-9 — rich_text markdown (heading, bold, italic, link, bullet list). Parity with Android.
+    func testRichText_inlineStyles() throws {
+        let view = try render("""
+        {
+          "id": "rt", "type": "rich_text",
+          "markdown_content": "This is **bold**, *italic*, and a [link](https://appdna.ai).",
+          "base_style": { "color": "#E5E7EB" },
+          "link_color": "#A5B4FC"
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }

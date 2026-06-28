@@ -1068,7 +1068,8 @@ struct ContentBlockRendererView: View {
 
         return Group {
             if #available(iOS 15.0, *) {
-                let attributed = parseMarkdownToAttributedString(content, linkColor: linkCol)
+                let textCol: Color? = block.base_style?.color.map { Color(hex: $0) }
+                let attributed = parseMarkdownToAttributedString(content, linkColor: linkCol, textColor: textCol)
                 Text(attributed)
                     .font(isLegal ? .caption : .body)
                     .foregroundColor(isLegal ? .secondary : .primary)
@@ -1094,22 +1095,33 @@ struct ContentBlockRendererView: View {
     /// CommonMark has no underline syntax, but the parser leaves `++`
     /// pairs verbatim so we can post-process them here.
     @available(iOS 15.0, *)
-    private func parseMarkdownToAttributedString(_ markdown: String, linkColor: Color) -> AttributedString {
-        // Try native markdown parsing first (iOS 15+)
-        if var result = try? AttributedString(markdown: markdown, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
-            // Override link color
-            for run in result.runs {
-                if run.link != nil {
-                    let range = run.range
-                    result[range].foregroundColor = UIColor(linkColor)
+    private func parseMarkdownToAttributedString(_ markdown: String, linkColor: Color, textColor: Color? = nil) -> AttributedString {
+        // EPIC-9 two fixes: (1) `.inlineOnlyPreservingWhitespace` STOPS at the first paragraph
+        // break (\n\n), so multi-paragraph content previously rendered only its first line — parse
+        // each line separately and rejoin with newlines. (2) `Text(AttributedString)` ignores the
+        // `.foregroundColor` view modifier because the markdown runs carry their own label color —
+        // so force the authored `base_style.color` onto every non-link run (matches Android).
+        let lines = markdown.components(separatedBy: "\n")
+        var result = AttributedString()
+        for (index, line) in lines.enumerated() {
+            if index > 0 { result.append(AttributedString("\n")) }
+            if var parsed = try? AttributedString(markdown: line, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+                for run in parsed.runs {
+                    if run.link != nil {
+                        parsed[run.range].foregroundColor = UIColor(linkColor)
+                        parsed[run.range].underlineStyle = .single  // match Android's underlined links
+                    } else if let textColor {
+                        parsed[run.range].foregroundColor = UIColor(textColor)
+                    }
                 }
+                result.append(parsed)
+            } else {
+                result.append(AttributedString(line))
             }
-            // Apply AppDNA-specific `++underline++` after native parsing.
-            applyUnderlineMarkers(&result)
-            return result
         }
-        // Fallback: plain text
-        return AttributedString(markdown)
+        // Apply AppDNA-specific `++underline++` after native parsing.
+        applyUnderlineMarkers(&result)
+        return result
     }
 
     /// Post-process `++text++` markers in the parsed AttributedString:
