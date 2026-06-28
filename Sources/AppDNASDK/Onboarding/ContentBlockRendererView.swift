@@ -166,6 +166,7 @@ struct ContentBlockRendererView: View {
         case .media_gallery: return AnyView(mediaGalleryBlock(block))
         case .section_background: return AnyView(sectionBackgroundBlock(block))
         case .carousel: return AnyView(CarouselBlockView(block: block, onAction: onAction, toggleValues: $toggleValues, inputValues: $inputValues))
+        case .otp_input: return AnyView(otpInputBlock(block))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
         case .list: return AnyView(listBlock(block))
@@ -540,6 +541,40 @@ struct ContentBlockRendererView: View {
     private func gradientEndPointForButton(angle: Double) -> UnitPoint {
         let rads = angle * .pi / 180
         return UnitPoint(x: 0.5 + sin(rads) / 2, y: 0.5 - cos(rads) / 2)
+    }
+
+    // EPIC-11 — OTP / code-input: a row of N single-character boxes (verification codes). Value from
+    // inputValues[field_id] or field_config.otp_value (snapshot/preview seed). Parity with Android.
+    private func otpInputBlock(_ block: ContentBlock) -> some View {
+        let rawLen = (block.field_config?["otp_length"]?.value as? Int)
+            ?? cfgDouble(block.field_config?["otp_length"]).map { Int($0) } ?? 6
+        let length = min(max(rawLen, 2), 10)
+        let fieldId = block.field_id ?? block.id
+        let value = (inputValues[fieldId] as? String)
+            ?? (block.field_config?["otp_value"]?.value as? String) ?? ""
+        let accent = Color(hex: block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
+        let boxBg = Color(hex: block.bg_color ?? "#1F2937")
+        let chars = Array(value)
+        return HStack(spacing: 8) {
+            ForEach(0..<length, id: \.self) { i in
+                let ch: Character? = i < chars.count ? chars[i] : nil
+                let isActive = i == chars.count
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10).fill(boxBg)
+                    if let ch = ch {
+                        Text(String(ch)).font(.system(size: 22, weight: .semibold)).foregroundColor(.white)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(isActive ? accent : (ch != nil ? accent.opacity(0.5) : Color.gray.opacity(0.35)),
+                                lineWidth: (isActive || ch != nil) ? 2 : 1)
+                )
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - List
