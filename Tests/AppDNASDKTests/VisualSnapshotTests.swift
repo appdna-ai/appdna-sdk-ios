@@ -41,6 +41,21 @@ final class VisualSnapshotTests: XCTestCase {
             .background(Color(hex: "#0F1117"))
     }
 
+    /// Like renderMany but feeds a `responses` context (for EPIC-5 variable bindings + visibility conditions).
+    private func renderConditional(_ jsons: [String], responses: [String: Any]) throws -> some View {
+        let blocks = try jsons.map { try JSONDecoder().decode(ContentBlock.self, from: Data($0.utf8)) }
+        return ContentBlockRendererView(
+            blocks: blocks,
+            onAction: { _, _ in },
+            toggleValues: .constant([:]),
+            responses: responses,
+            inputValues: .constant([:])
+        )
+            .padding(16)
+            .frame(width: 390)
+            .background(Color(hex: "#0F1117"))
+    }
+
     /// leading_text + trailing_text on one row + positionable "RECOMMENDED" badge + subtitle.
     func testSelectStacked_leadingTrailingBadge() throws {
         let view = try render("""
@@ -574,6 +589,28 @@ final class VisualSnapshotTests: XCTestCase {
           ]
         }
         """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
+
+    /// EPIC-5 — variables + conditional logic. Heading uses a `{{responses.user_name}}` template (value
+    /// carried over from a prior step); two blocks are gated by an age condition — the "verified" block
+    /// shows (age 25 > 18), the "too young" block is hidden. Parity with Android.
+    func testEpic5_variablesConditional() throws {
+        let view = try renderConditional([
+            """
+            {"id": "h", "type": "heading", "horizontal_align": "center", "text": "Welcome back, {{responses.user_name}}!", "style": {"font_size": 26, "font_weight": 700, "color": "#FFFFFF", "alignment": "center"}}
+            """,
+            """
+            {"id": "ok", "type": "text", "horizontal_align": "center", "text": "✓ Age verified — you're all set", "visibility_condition": {"type": "when_gt", "variable": "responses.age", "value": "18"}, "style": {"font_size": 16, "font_weight": 600, "color": "#34D399", "alignment": "center"}}
+            """,
+            """
+            {"id": "no", "type": "text", "horizontal_align": "center", "text": "✗ You must be 18 or older", "visibility_condition": {"type": "when_lt", "variable": "responses.age", "value": "18"}, "style": {"font_size": 16, "font_weight": 600, "color": "#F87171", "alignment": "center"}}
+            """,
+        ], responses: ["user_name": "Alex", "age": "25"])
         let recordMode: SnapshotTestingConfiguration.Record =
             ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
         withSnapshotTesting(record: recordMode) {
