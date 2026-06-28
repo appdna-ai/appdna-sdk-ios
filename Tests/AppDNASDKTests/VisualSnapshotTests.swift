@@ -686,4 +686,16 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-11 — speech bubble (mascot dialogue): white bubble + downward left tail. Parity with Android.
+    func testEpic11_speechBubble() throws {
+        let view = try render("""
+        {"id": "sb", "type": "speech_bubble", "text": "Great job! You're on a 7-day streak 🔥", "bg_color": "#FFFFFF", "text_color": "#111827", "field_config": {"bubble_tail": "left"}}
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }

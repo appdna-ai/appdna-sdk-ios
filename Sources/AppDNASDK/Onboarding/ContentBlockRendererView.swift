@@ -169,6 +169,7 @@ struct ContentBlockRendererView: View {
         case .otp_input: return AnyView(otpInputBlock(block))
         case .warning_banner: return AnyView(warningBannerBlock(block))
         case .password_strength: return AnyView(passwordStrengthBlock(block))
+        case .speech_bubble: return AnyView(speechBubbleBlock(block))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
         case .list: return AnyView(listBlock(block))
@@ -635,6 +636,39 @@ struct ContentBlockRendererView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // EPIC-11 — speech bubble (mascot dialogue): rounded card + downward tail triangle. Parity with Android.
+    private func speechBubbleBlock(_ block: ContentBlock) -> some View {
+        let bubbleColor = Color(hex: block.bg_color ?? "#FFFFFF")
+        let textColor = Color(hex: block.text_color ?? "#111827")
+        let tailPos = (block.field_config?["bubble_tail"]?.value as? String) ?? "left"
+        let text = loc?("block.\(block.id).text", block.text ?? "") ?? block.text ?? ""
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(text)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(textColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(bubbleColor)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+            HStack(spacing: 0) {
+                if tailPos == "left" { Spacer().frame(width: 24) }
+                if tailPos == "center" || tailPos == "right" { Spacer() }
+                Path { p in
+                    p.move(to: CGPoint(x: 0, y: 0))
+                    p.addLine(to: CGPoint(x: 18, y: 0))
+                    p.addLine(to: CGPoint(x: 9, y: 9))
+                    p.closeSubpath()
+                }
+                .fill(bubbleColor)
+                .frame(width: 18, height: 9)
+                if tailPos == "right" { Spacer().frame(width: 24) }
+                if tailPos == "center" || tailPos == "left" { Spacer() }
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - List
