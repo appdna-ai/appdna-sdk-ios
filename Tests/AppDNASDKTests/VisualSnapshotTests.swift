@@ -525,4 +525,22 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-7 — social login provider buttons (Apple / Google / Email) brand defaults. Parity with Android.
+    func testSocial_providers() throws {
+        let view = try render("""
+        {
+          "id": "sl", "type": "social_login",
+          "providers": [
+            {"type": "google", "label": "Continue with Google"},
+            {"type": "email", "label": "Continue with Email"}
+          ]
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
