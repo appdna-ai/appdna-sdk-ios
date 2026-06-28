@@ -798,4 +798,21 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-9 parity — heading + text centered via STYLE.alignment only (no horizontal_align). Was iOS-left; now centered (matches Android).
+    func testEpic9_styleAlignment() throws {
+        let view = try renderMany([
+            """
+            {"id": "h", "type": "heading", "text": "Centered Heading", "style": {"font_size": 24, "font_weight": 700, "color": "#FFFFFF", "alignment": "center"}}
+            """,
+            """
+            {"id": "t", "type": "text", "text": "This body is centered via style.alignment", "style": {"font_size": 15, "color": "#A5B4FC", "alignment": "center"}}
+            """,
+        ])
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }

@@ -260,17 +260,21 @@ struct ContentBlockRendererView: View {
         }()
 
         let text = block.text ?? ""
+        // EPIC-9 parity fix — honor style.alignment (what the console sets + Android reads via effectiveStyle)
+        // first, then fall back to the top-level horizontal_align. Was: read horizontal_align only → a heading
+        // authored with style.alignment:center rendered CENTER on Android but LEFT on iOS.
+        let alignSource = block.style?.alignment ?? block.horizontal_align
         let textAlignment: TextAlignment = {
-            switch block.horizontal_align {
+            switch alignSource {
             case "center": return .center
-            case "right": return .trailing
+            case "right", "trailing": return .trailing
             default: return .leading
             }
         }()
         let frameAlignment: Alignment = {
-            switch block.horizontal_align {
+            switch alignSource {
             case "center": return .center
-            case "right": return .trailing
+            case "right", "trailing": return .trailing
             default: return .leading
             }
         }()
@@ -302,17 +306,21 @@ struct ContentBlockRendererView: View {
 
     private func textBlock(_ block: ContentBlock) -> some View {
         let text = block.text ?? ""
+        // EPIC-9 parity fix — honor style.alignment (what the console sets + Android reads via effectiveStyle)
+        // first, then fall back to the top-level horizontal_align. Was: read horizontal_align only → a heading
+        // authored with style.alignment:center rendered CENTER on Android but LEFT on iOS.
+        let alignSource = block.style?.alignment ?? block.horizontal_align
         let textAlignment: TextAlignment = {
-            switch block.horizontal_align {
+            switch alignSource {
             case "center": return .center
-            case "right": return .trailing
+            case "right", "trailing": return .trailing
             default: return .leading
             }
         }()
         let frameAlignment: Alignment = {
-            switch block.horizontal_align {
+            switch alignSource {
             case "center": return .center
-            case "right": return .trailing
+            case "right", "trailing": return .trailing
             default: return .leading
             }
         }()
