@@ -176,6 +176,7 @@ struct ContentBlockRendererView: View {
         case .health_connect: return AnyView(healthConnectBlock(block))
         case .settings_footer: return AnyView(settingsFooterBlock(block))
         case .memory_match: return AnyView(memoryMatchBlock(block))
+        case .calendar_month: return AnyView(calendarMonthBlock(block))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
         case .list: return AnyView(listBlock(block))
@@ -865,6 +866,48 @@ struct ContentBlockRendererView: View {
                 }
                 .aspectRatio(1, contentMode: .fit)
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(border, lineWidth: 2))
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // EPIC-11 — month calendar (Flo): header + weekday row + day grid (selected = accent fill, today = ring).
+    // Multi-month scroll is host-driven; this renders one month. Parity with Android.
+    private func calendarMonthBlock(_ block: ContentBlock) -> some View {
+        let cfg = block.field_config
+        let monthLabel = (cfg?["month_label"]?.value as? String) ?? "June 2026"
+        let daysInMonth = (cfg?["days_in_month"]?.value as? Int) ?? Int(cfgDouble(cfg?["days_in_month"]) ?? 30)
+        let startOffset = min(max((cfg?["start_offset"]?.value as? Int) ?? Int(cfgDouble(cfg?["start_offset"]) ?? 0), 0), 6)
+        let selectedDays = ((cfg?["selected_days"]?.value as? [Any]) ?? []).compactMap { ($0 as? Int) ?? ($0 as? Double).map { Int($0) } }
+        let today = (cfg?["today"]?.value as? Int) ?? Int(cfgDouble(cfg?["today"]) ?? -1)
+        let accent = Color(hex: block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
+        let weekdays = ["S", "M", "T", "W", "T", "F", "S"]
+        let cells = (0..<(startOffset + daysInMonth)).map { $0 - startOffset + 1 }
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
+        return VStack(spacing: 8) {
+            Text(monthLabel).font(.system(size: 20, weight: .bold)).foregroundColor(.white).frame(maxWidth: .infinity)
+            HStack(spacing: 0) {
+                ForEach(0..<7, id: \.self) { i in
+                    Text(weekdays[i]).font(.system(size: 12, weight: .medium)).foregroundColor(.white.opacity(0.5)).frame(maxWidth: .infinity)
+                }
+            }
+            LazyVGrid(columns: columns, spacing: 0) {
+                ForEach(Array(cells.enumerated()), id: \.offset) { _, day in
+                    ZStack {
+                        if day >= 1 && day <= daysInMonth {
+                            let isSelected = selectedDays.contains(day)
+                            let isToday = day == today
+                            Circle().fill(isSelected ? accent : Color.clear).frame(width: 34, height: 34)
+                            if isToday && !isSelected {
+                                Circle().stroke(accent, lineWidth: 1.5).frame(width: 34, height: 34)
+                            }
+                            Text("\(day)")
+                                .font(.system(size: 15, weight: (isToday || isSelected) ? .bold : .regular))
+                                .foregroundColor(isSelected ? .white : .white.opacity(0.9))
+                        }
+                    }
+                    .frame(height: 42)
+                }
             }
         }
         .frame(maxWidth: .infinity)
