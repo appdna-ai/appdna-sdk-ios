@@ -167,6 +167,7 @@ struct ContentBlockRendererView: View {
         case .section_background: return AnyView(sectionBackgroundBlock(block))
         case .carousel: return AnyView(CarouselBlockView(block: block, onAction: onAction, toggleValues: $toggleValues, inputValues: $inputValues))
         case .otp_input: return AnyView(otpInputBlock(block))
+        case .warning_banner: return AnyView(warningBannerBlock(block))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
         case .list: return AnyView(listBlock(block))
@@ -575,6 +576,33 @@ struct ContentBlockRendererView: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // EPIC-11 — warning/info banner: tinted rounded card + leading icon + message. Parity with Android.
+    private func warningBannerBlock(_ block: ContentBlock) -> some View {
+        let variant = (block.field_config?["banner_variant"]?.value as? String) ?? "warning"
+        let accentHex: String
+        let defaultIcon: String
+        switch variant {
+        case "error": accentHex = "#EF4444"; defaultIcon = "⛔"
+        case "info": accentHex = "#3B82F6"; defaultIcon = "ℹ️"
+        case "success": accentHex = "#10B981"; defaultIcon = "✓"
+        default: accentHex = "#F59E0B"; defaultIcon = "⚠️"
+        }
+        let accent = Color(hex: block.active_color ?? accentHex)
+        let icon = (block.field_config?["banner_icon"]?.value as? String) ?? defaultIcon
+        let text = loc?("block.\(block.id).text", block.text ?? "") ?? block.text ?? ""
+        return HStack(spacing: 10) {
+            Text(icon).font(.system(size: 18))
+            Text(text).font(.system(size: 14, weight: .medium)).foregroundColor(.white)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(accent.opacity(0.14))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(accent.opacity(0.45), lineWidth: 1))
     }
 
     // MARK: - List

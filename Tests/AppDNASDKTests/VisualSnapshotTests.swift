@@ -646,4 +646,24 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-11 — warning/info banner variants: warning (amber) / error (red) / success (green). Parity w/ Android.
+    func testEpic11_warningBanner() throws {
+        let view = try renderMany([
+            """
+            {"id": "w", "type": "warning_banner", "text": "Your session is about to expire", "field_config": {"banner_variant": "warning"}}
+            """,
+            """
+            {"id": "e", "type": "warning_banner", "text": "Passwords do not match", "field_config": {"banner_variant": "error"}}
+            """,
+            """
+            {"id": "s", "type": "warning_banner", "text": "Email verified successfully", "field_config": {"banner_variant": "success"}}
+            """,
+        ])
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
