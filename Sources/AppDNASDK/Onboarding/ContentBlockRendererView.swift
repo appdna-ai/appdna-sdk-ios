@@ -168,6 +168,7 @@ struct ContentBlockRendererView: View {
         case .carousel: return AnyView(CarouselBlockView(block: block, onAction: onAction, toggleValues: $toggleValues, inputValues: $inputValues))
         case .otp_input: return AnyView(otpInputBlock(block))
         case .warning_banner: return AnyView(warningBannerBlock(block))
+        case .password_strength: return AnyView(passwordStrengthBlock(block))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
         case .list: return AnyView(listBlock(block))
@@ -603,6 +604,37 @@ struct ContentBlockRendererView: View {
         .background(accent.opacity(0.14))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(accent.opacity(0.45), lineWidth: 1))
+    }
+
+    // EPIC-11 — password-strength meter: 4 segment bars + label, red→amber→yellow→green ramp. Parity w/ Android.
+    private func passwordStrengthBlock(_ block: ContentBlock) -> some View {
+        let rawLevel = (block.field_config?["strength_level"]?.value as? Int)
+            ?? cfgDouble(block.field_config?["strength_level"]).map { Int($0) } ?? 0
+        let level = min(max(rawLevel, 0), 4)
+        let colorHex: String
+        let defLabel: String
+        switch level {
+        case 1: colorHex = "#EF4444"; defLabel = "Weak"
+        case 2: colorHex = "#F59E0B"; defLabel = "Fair"
+        case 3: colorHex = "#EAB308"; defLabel = "Good"
+        case 4: colorHex = "#10B981"; defLabel = "Strong"
+        default: colorHex = "#6B7280"; defLabel = ""
+        }
+        let accent = Color(hex: block.active_color ?? colorHex)
+        let label = (block.field_config?["strength_label"]?.value as? String) ?? defLabel
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                ForEach(0..<4, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(i < level ? accent : Color(hex: "#374151"))
+                        .frame(height: 6)
+                }
+            }
+            if !label.isEmpty {
+                Text(label).font(.system(size: 13, weight: .medium)).foregroundColor(accent)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - List

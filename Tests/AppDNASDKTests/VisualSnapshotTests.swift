@@ -666,4 +666,24 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-11 — password-strength meter: weak (1/4) / good (3/4) / strong (4/4). Parity with Android.
+    func testEpic11_passwordStrength() throws {
+        let view = try renderMany([
+            """
+            {"id": "p1", "type": "password_strength", "field_config": {"strength_level": 1}}
+            """,
+            """
+            {"id": "p2", "type": "password_strength", "field_config": {"strength_level": 3}}
+            """,
+            """
+            {"id": "p3", "type": "password_strength", "field_config": {"strength_level": 4}}
+            """,
+        ])
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
