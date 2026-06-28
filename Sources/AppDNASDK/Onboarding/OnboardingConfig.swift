@@ -625,6 +625,29 @@ public struct ElementInteractionResult {
     }
 }
 
+/// The merged result of applying an `ElementInteractionResult` to a step's live state.
+public struct AppliedInteraction {
+    public let inputValues: [String: Any]
+    public let fieldConfigOverrides: [String: [String: Any]]
+    public let advance: Bool
+}
+
+/// SPEC-419 EPIC-11 — pure application of an `ElementInteractionResult` to a step's live state. Merges
+/// `inputValuePatches` over `inputValues` and exposes per-block `fieldConfigPatches` as overrides the renderer
+/// layers at READ TIME (ContentBlock is immutable — the override layer keeps Android/iOS at parity). The caller
+/// acts on `AppliedInteraction.advance`. Pure + unit-tested.
+public func applyInteractionResult(_ result: ElementInteractionResult, inputValues: [String: Any]) -> AppliedInteraction {
+    var iv = inputValues
+    if let patches = result.inputValuePatches {
+        for (k, v) in patches { iv[k] = v }
+    }
+    return AppliedInteraction(
+        inputValues: iv,
+        fieldConfigOverrides: result.fieldConfigPatches ?? [:],
+        advance: result.advance
+    )
+}
+
 // MARK: - Delegate protocol
 
 /// Delegate for receiving onboarding flow lifecycle events.
