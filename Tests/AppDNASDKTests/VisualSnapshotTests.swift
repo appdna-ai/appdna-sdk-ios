@@ -727,4 +727,16 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-11 — press-and-hold-to-confirm: pill 65% filled (left→right accent fill behind text). Parity w/ Android.
+    func testEpic11_pressHoldConfirm() throws {
+        let view = try render("""
+        {"id": "ph", "type": "press_hold_confirm", "text": "Hold to confirm", "active_color": "#6366F1", "field_config": {"hold_progress": 0.65}}
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }

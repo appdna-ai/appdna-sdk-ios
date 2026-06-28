@@ -28,6 +28,7 @@ public enum ContentBlockType: String, Codable {
     case speech_bubble
     case feedback_panel
     case summary_screen
+    case press_hold_confirm
     // SPEC-089d Phase 3: Form input block types (22 types)
     case input_text, input_textarea, input_number, input_email, input_phone
     case input_password, input_date, input_time, input_datetime

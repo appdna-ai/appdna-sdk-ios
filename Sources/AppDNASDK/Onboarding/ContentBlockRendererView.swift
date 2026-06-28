@@ -172,6 +172,7 @@ struct ContentBlockRendererView: View {
         case .speech_bubble: return AnyView(speechBubbleBlock(block))
         case .feedback_panel: return AnyView(feedbackPanelBlock(block))
         case .summary_screen: return AnyView(summaryScreenBlock(block))
+        case .press_hold_confirm: return AnyView(pressHoldConfirmBlock(block))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
         case .list: return AnyView(listBlock(block))
@@ -738,6 +739,26 @@ struct ContentBlockRendererView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity)
+    }
+
+    // EPIC-11 — press-and-hold-to-confirm: a pill that fills left→right as the user holds. Parity with Android.
+    private func pressHoldConfirmBlock(_ block: ContentBlock) -> some View {
+        let progress = min(max(cfgDouble(block.field_config?["hold_progress"]) ?? 0, 0), 1)
+        let accent = Color(hex: block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
+        let text = loc?("block.\(block.id).text", block.text ?? "Hold to confirm") ?? block.text ?? "Hold to confirm"
+        return GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Rectangle().fill(Color(hex: "#1F2937"))
+                Rectangle().fill(accent).frame(width: geo.size.width * CGFloat(progress))
+                Text(text)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 28))
+        }
+        .frame(height: 56)
         .frame(maxWidth: .infinity)
     }
 
