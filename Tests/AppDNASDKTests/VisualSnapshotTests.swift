@@ -740,14 +740,15 @@ final class VisualSnapshotTests: XCTestCase {
         }
     }
 
-    /// EPIC-11 — Health connect card: Apple Health (chevron) + Google Fit (connected ✓). Parity with Android.
+    /// EPIC-11 — Health connect card. Provider is PLATFORM-FIXED: iOS renders Apple Health (Google Fit is
+    /// Android-only), so this golden intentionally differs from the Android one. Two states: connect + connected.
     func testEpic11_healthConnect() throws {
         let view = try renderMany([
             """
-            {"id": "h1", "type": "health_connect", "field_config": {"health_provider": "apple"}}
+            {"id": "h1", "type": "health_connect"}
             """,
             """
-            {"id": "h2", "type": "health_connect", "field_config": {"health_provider": "google", "connected": true}}
+            {"id": "h2", "type": "health_connect", "field_config": {"connected": true}}
             """,
         ])
         let recordMode: SnapshotTestingConfiguration.Record =

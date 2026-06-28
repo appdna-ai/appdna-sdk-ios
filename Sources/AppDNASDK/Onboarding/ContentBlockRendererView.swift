@@ -766,15 +766,11 @@ struct ContentBlockRendererView: View {
     // EPIC-11 — Health/HealthKit connect: a tappable card (icon + title + subtitle + chevron/✓). Native connect
     // flow is host-driven via onAction("health_connect"). Parity with Android.
     private func healthConnectBlock(_ block: ContentBlock) -> some View {
-        let provider = (block.field_config?["health_provider"]?.value as? String) ?? "apple"
+        // EPIC-11 — provider is PLATFORM-FIXED: iOS always shows Apple Health (Google Fit is Android-only).
         let connected = (block.field_config?["connected"]?.value as? Bool) ?? false
-        let icon: String
-        let defLabel: String
-        let iconBgHex: String
-        switch provider {
-        case "google": icon = "🏃"; defLabel = "Connect Google Fit"; iconBgHex = "#34A853"
-        default: icon = "❤️"; defLabel = "Connect Apple Health"; iconBgHex = "#FF2D55"
-        }
+        let icon = "❤️"
+        let defLabel = "Connect Apple Health"
+        let iconBgHex = "#FF2D55"
         let label = loc?("block.\(block.id).text", block.text ?? defLabel) ?? block.text ?? defLabel
         let subtitle = (block.field_config?["health_subtitle"]?.value as? String) ?? "Sync steps, workouts & vitals"
         return Button {
