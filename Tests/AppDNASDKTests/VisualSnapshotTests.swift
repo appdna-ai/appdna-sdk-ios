@@ -757,4 +757,21 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-11 — interactive footer: dark-mode capsule toggle (off/on) + language switcher pill. Parity w/ Android.
+    func testEpic11_settingsFooter() throws {
+        let view = try renderMany([
+            """
+            {"id": "sf1", "type": "settings_footer", "field_config": {"dark_mode": false, "language": "English"}}
+            """,
+            """
+            {"id": "sf2", "type": "settings_footer", "active_color": "#6366F1", "field_config": {"dark_mode": true, "language": "Español"}}
+            """,
+        ])
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }

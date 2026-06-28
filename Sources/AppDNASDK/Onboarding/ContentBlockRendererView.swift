@@ -174,6 +174,7 @@ struct ContentBlockRendererView: View {
         case .summary_screen: return AnyView(summaryScreenBlock(block))
         case .press_hold_confirm: return AnyView(pressHoldConfirmBlock(block))
         case .health_connect: return AnyView(healthConnectBlock(block))
+        case .settings_footer: return AnyView(settingsFooterBlock(block))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
         case .list: return AnyView(listBlock(block))
@@ -798,6 +799,43 @@ struct ContentBlockRendererView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)
+    }
+
+    // EPIC-11 — interactive footer: dark-mode capsule toggle + language switcher pill. Custom capsule switch
+    // (not the native widget) so both platforms pixel-match. Parity with Android.
+    private func settingsFooterBlock(_ block: ContentBlock) -> some View {
+        let darkMode = (block.field_config?["dark_mode"]?.value as? Bool) ?? false
+        let language = (block.field_config?["language"]?.value as? String) ?? "English"
+        let accent = Color(hex: block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
+        return HStack {
+            HStack(spacing: 10) {
+                Text("🌙").font(.system(size: 18))
+                Button { onAction("toggle_dark_mode", nil) } label: {
+                    ZStack(alignment: darkMode ? .trailing : .leading) {
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(darkMode ? accent : Color.white.opacity(0.22))
+                            .frame(width: 46, height: 28)
+                        Circle().fill(Color.white).frame(width: 22, height: 22).padding(3)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+            Button { onAction("switch_language", nil) } label: {
+                HStack(spacing: 7) {
+                    Text("🌐").font(.system(size: 15))
+                    Text(language).font(.system(size: 14, weight: .medium)).foregroundColor(.white)
+                    Text("▾").font(.system(size: 13)).foregroundColor(.white.opacity(0.6))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Color(hex: "#1F2937"))
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - List
