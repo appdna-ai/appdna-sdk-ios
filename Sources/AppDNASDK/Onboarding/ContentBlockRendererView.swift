@@ -171,6 +171,7 @@ struct ContentBlockRendererView: View {
         case .password_strength: return AnyView(passwordStrengthBlock(block))
         case .speech_bubble: return AnyView(speechBubbleBlock(block))
         case .feedback_panel: return AnyView(feedbackPanelBlock(block))
+        case .summary_screen: return AnyView(summaryScreenBlock(block))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
         case .list: return AnyView(listBlock(block))
@@ -703,6 +704,41 @@ struct ContentBlockRendererView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(accent.opacity(0.15))
         .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    // EPIC-11 — session summary screen (Duolingo end-of-lesson): optional headline + 2-column stat-card grid.
+    private func summaryScreenBlock(_ block: ContentBlock) -> some View {
+        let statsRaw = (block.field_config?["summary_stats"]?.value as? [Any]) ?? []
+        let stats: [[String: Any]] = statsRaw.compactMap { $0 as? [String: Any] }
+        let headline = loc?("block.\(block.id).text", block.text ?? "") ?? block.text ?? ""
+        let defaultAccent = AppDNA.brandAccentHex ?? "#6366F1"
+        let rows: [[[String: Any]]] = stride(from: 0, to: stats.count, by: 2).map {
+            Array(stats[$0..<min($0 + 2, stats.count)])
+        }
+        return VStack(spacing: 12) {
+            if !headline.isEmpty {
+                Text(headline).font(.system(size: 22, weight: .bold)).foregroundColor(.white).frame(maxWidth: .infinity)
+            }
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, rowStats in
+                HStack(spacing: 12) {
+                    ForEach(Array(rowStats.enumerated()), id: \.offset) { _, m in
+                        let value = (m["value"] as? String) ?? ""
+                        let label = (m["label"] as? String) ?? ""
+                        let color = Color(hex: (m["color"] as? String) ?? defaultAccent)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(value).font(.system(size: 24, weight: .bold)).foregroundColor(color)
+                            Text(label).font(.system(size: 13)).foregroundColor(.white.opacity(0.7))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .background(Color(hex: "#1F2937"))
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    if rowStats.count == 1 { Spacer().frame(maxWidth: .infinity) }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - List

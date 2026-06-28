@@ -715,4 +715,16 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-11 — session summary: headline + 2x2 stat grid (Time / Accuracy / XP / Streak). Parity w/ Android.
+    func testEpic11_summaryScreen() throws {
+        let view = try render("""
+        {"id": "sum", "type": "summary_screen", "text": "Lesson complete!", "field_config": {"summary_stats": [{"value": "5:32", "label": "Time", "color": "#6366F1"}, {"value": "92%", "label": "Accuracy", "color": "#10B981"}, {"value": "+120", "label": "XP earned", "color": "#F59E0B"}, {"value": "7", "label": "Day streak", "color": "#EF4444"}]}}
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
