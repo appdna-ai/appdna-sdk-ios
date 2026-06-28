@@ -543,4 +543,23 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-8 — swipeable carousel: 3 pages + dot indicator (page 0). Parity with Android.
+    func testLayout_carousel() throws {
+        let view = try render("""
+        {
+          "id": "car", "type": "carousel", "height": 120,
+          "children": [
+            {"id": "p1", "type": "text", "text": "Welcome to AppDNA", "style": {"font_size": 24, "font_weight": 700, "color": "#FFFFFF"}},
+            {"id": "p2", "type": "text", "text": "Discover your insights", "style": {"font_size": 24, "font_weight": 700, "color": "#FFFFFF"}},
+            {"id": "p3", "type": "text", "text": "Get started today", "style": {"font_size": 24, "font_weight": 700, "color": "#FFFFFF"}}
+          ]
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }

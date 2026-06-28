@@ -2044,3 +2044,47 @@ private struct AvatarShapeBorder: ViewModifier {
         }
     }
 }
+
+/// EPIC-8 — swipeable carousel: each child block is a page. Uses a GeometryReader + offset
+/// pager (snapshot-reliable, unlike TabView's UIPageViewController) with a custom dot indicator
+/// (colors via field_config) tracking the page. Parity with Android's HorizontalPager + dots.
+struct CarouselBlockView: View {
+    let block: ContentBlock
+    let onAction: (_ action: String, _ actionValue: String?) -> Void
+    @Binding var toggleValues: [String: Bool]
+    @Binding var inputValues: [String: Any]
+    @State private var selection = 0
+
+    var body: some View {
+        let pages = block.children ?? block.stack_children ?? []
+        let height = CGFloat(block.height ?? 240)
+        let activeColor = (block.field_config?["indicator_active_color"]?.value as? String).map { Color(hex: $0) } ?? Color(hex: AppDNA.brandAccentHex ?? "#6366F1")
+        let inactiveColor = (block.field_config?["indicator_color"]?.value as? String).map { Color(hex: $0) } ?? Color(hex: "#4B5563")
+        return VStack(spacing: 12) {
+            GeometryReader { geo in
+                HStack(spacing: 0) {
+                    ForEach(Array(pages.enumerated()), id: \.offset) { _, page in
+                        ContentBlockRendererView(blocks: [page], onAction: onAction, toggleValues: $toggleValues, inputValues: $inputValues)
+                            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
+                    }
+                }
+                .offset(x: -CGFloat(selection) * geo.size.width)
+                .animation(.easeInOut, value: selection)
+                .gesture(
+                    DragGesture().onEnded { v in
+                        if v.translation.width < -50 { selection = min(selection + 1, max(pages.count - 1, 0)) }
+                        else if v.translation.width > 50 { selection = max(selection - 1, 0) }
+                    }
+                )
+            }
+            .frame(height: height)
+            .clipped()
+            HStack(spacing: 8) {
+                ForEach(0 ..< pages.count, id: \.self) { i in
+                    Circle().fill(i == selection ? activeColor : inactiveColor).frame(width: 8, height: 8)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+}

@@ -165,6 +165,7 @@ struct ContentBlockRendererView: View {
         case .image: return AnyView(imageBlock(block))
         case .media_gallery: return AnyView(mediaGalleryBlock(block))
         case .section_background: return AnyView(sectionBackgroundBlock(block))
+        case .carousel: return AnyView(CarouselBlockView(block: block, onAction: onAction, toggleValues: $toggleValues, inputValues: $inputValues))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
         case .list: return AnyView(listBlock(block))

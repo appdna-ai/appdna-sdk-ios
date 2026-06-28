@@ -20,6 +20,8 @@ public enum ContentBlockType: String, Codable {
     case media_gallery
     // EPIC-4b — section background (vertical color zones behind overlaid content)
     case section_background
+    // EPIC-8 — swipeable carousel (paged content + dot indicator)
+    case carousel
     // SPEC-089d Phase 3: Form input block types (22 types)
     case input_text, input_textarea, input_number, input_email, input_phone
     case input_password, input_date, input_time, input_datetime
