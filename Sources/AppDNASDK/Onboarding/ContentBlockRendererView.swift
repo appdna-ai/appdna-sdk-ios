@@ -173,6 +173,7 @@ struct ContentBlockRendererView: View {
         case .feedback_panel: return AnyView(feedbackPanelBlock(block))
         case .summary_screen: return AnyView(summaryScreenBlock(block))
         case .press_hold_confirm: return AnyView(pressHoldConfirmBlock(block))
+        case .health_connect: return AnyView(healthConnectBlock(block))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
         case .list: return AnyView(listBlock(block))
@@ -760,6 +761,47 @@ struct ContentBlockRendererView: View {
         }
         .frame(height: 56)
         .frame(maxWidth: .infinity)
+    }
+
+    // EPIC-11 — Health/HealthKit connect: a tappable card (icon + title + subtitle + chevron/✓). Native connect
+    // flow is host-driven via onAction("health_connect"). Parity with Android.
+    private func healthConnectBlock(_ block: ContentBlock) -> some View {
+        let provider = (block.field_config?["health_provider"]?.value as? String) ?? "apple"
+        let connected = (block.field_config?["connected"]?.value as? Bool) ?? false
+        let icon: String
+        let defLabel: String
+        let iconBgHex: String
+        switch provider {
+        case "google": icon = "🏃"; defLabel = "Connect Google Fit"; iconBgHex = "#34A853"
+        default: icon = "❤️"; defLabel = "Connect Apple Health"; iconBgHex = "#FF2D55"
+        }
+        let label = loc?("block.\(block.id).text", block.text ?? defLabel) ?? block.text ?? defLabel
+        let subtitle = (block.field_config?["health_subtitle"]?.value as? String) ?? "Sync steps, workouts & vitals"
+        return Button {
+            onAction("health_connect", nil)
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(Color(hex: iconBgHex).opacity(0.18)).frame(width: 44, height: 44)
+                    Text(icon).font(.system(size: 22))
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label).font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
+                    Text(subtitle).font(.system(size: 13)).foregroundColor(.white.opacity(0.6))
+                }
+                Spacer(minLength: 0)
+                if connected {
+                    Text("✓").font(.system(size: 20, weight: .bold)).foregroundColor(Color(hex: "#10B981"))
+                } else {
+                    Text("›").font(.system(size: 26)).foregroundColor(.white.opacity(0.5))
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(hex: "#1F2937"))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - List

@@ -739,4 +739,21 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-11 — Health connect card: Apple Health (chevron) + Google Fit (connected ✓). Parity with Android.
+    func testEpic11_healthConnect() throws {
+        let view = try renderMany([
+            """
+            {"id": "h1", "type": "health_connect", "field_config": {"health_provider": "apple"}}
+            """,
+            """
+            {"id": "h2", "type": "health_connect", "field_config": {"health_provider": "google", "connected": true}}
+            """,
+        ])
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
