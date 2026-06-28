@@ -602,6 +602,29 @@ public struct StepConfigOverride {
     }
 }
 
+// MARK: - Element interaction (SPEC-419 EPIC-11 — backend-interactive elements)
+
+/// Result of `onElementInteraction` — lets the host push state back into the live step from its backend
+/// (e.g. user taps a calendar day → backend confirms → update the rendered element without leaving the step).
+public struct ElementInteractionResult {
+    /// Per-block `field_config` patches to merge + re-render. Keyed by blockId → (key → value).
+    public var fieldConfigPatches: [String: [String: Any]]?
+    /// Patches to merge into the step's `inputValues` (keyed by field_id).
+    public var inputValuePatches: [String: Any]?
+    /// When true, advance to the next step after handling this interaction.
+    public var advance: Bool
+
+    public init(
+        fieldConfigPatches: [String: [String: Any]]? = nil,
+        inputValuePatches: [String: Any]? = nil,
+        advance: Bool = false
+    ) {
+        self.fieldConfigPatches = fieldConfigPatches
+        self.inputValuePatches = inputValuePatches
+        self.advance = advance
+    }
+}
+
 // MARK: - Delegate protocol
 
 /// Delegate for receiving onboarding flow lifecycle events.
@@ -630,6 +653,18 @@ public protocol AppDNAOnboardingDelegate: AnyObject {
         stepType: String,
         responses: [String: Any]
     ) async -> StepConfigOverride?
+
+    // SPEC-419 EPIC-11: Async hook fired DURING render when an interactive element acts (calendar day tap,
+    // otp digit, memory flip, dark-mode toggle, health connect…). Return a result to push backend state into
+    // the live step. `blockId`/`action`/`value` identify the interaction; `inputValues` is the live snapshot.
+    func onElementInteraction(
+        flowId: String,
+        stepId: String,
+        blockId: String,
+        action: String,
+        value: String?,
+        inputValues: [String: Any]
+    ) async -> ElementInteractionResult?
 }
 
 /// Default empty implementations so delegates can be partial.
@@ -657,6 +692,17 @@ public extension AppDNAOnboardingDelegate {
         stepType: String,
         responses: [String: Any]
     ) async -> StepConfigOverride? {
+        return nil
+    }
+
+    func onElementInteraction(
+        flowId: String,
+        stepId: String,
+        blockId: String,
+        action: String,
+        value: String?,
+        inputValues: [String: Any]
+    ) async -> ElementInteractionResult? {
         return nil
     }
 }
