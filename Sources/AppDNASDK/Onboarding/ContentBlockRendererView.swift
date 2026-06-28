@@ -175,6 +175,7 @@ struct ContentBlockRendererView: View {
         case .press_hold_confirm: return AnyView(pressHoldConfirmBlock(block))
         case .health_connect: return AnyView(healthConnectBlock(block))
         case .settings_footer: return AnyView(settingsFooterBlock(block))
+        case .memory_match: return AnyView(memoryMatchBlock(block))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
         case .list: return AnyView(listBlock(block))
@@ -835,6 +836,37 @@ struct ContentBlockRendererView: View {
             .buttonStyle(.plain)
         }
         .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+    }
+
+    // EPIC-11 — memory / pair-match grid (Duolingo): square cards (face-down "?" / face-up symbol / matched).
+    private func memoryMatchBlock(_ block: ContentBlock) -> some View {
+        let rawCols = (block.field_config?["match_columns"]?.value as? Int)
+            ?? cfgDouble(block.field_config?["match_columns"]).map { Int($0) } ?? 3
+        let cols = min(max(rawCols, 2), 5)
+        let cardsRaw = (block.field_config?["match_cards"]?.value as? [Any]) ?? []
+        let cards: [[String: Any]] = cardsRaw.compactMap { $0 as? [String: Any] }
+        let accent = Color(hex: block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
+        let matched = Color(hex: "#10B981")
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: cols)
+        return LazyVGrid(columns: columns, spacing: 10) {
+            ForEach(Array(cards.enumerated()), id: \.offset) { _, m in
+                let symbol = (m["symbol"] as? String) ?? ""
+                let state = (m["state"] as? String) ?? "down"
+                let bg: Color = state == "up" ? .white : (state == "matched" ? matched.opacity(0.18) : accent.opacity(0.16))
+                let border: Color = state == "up" ? accent : (state == "matched" ? matched : accent.opacity(0.4))
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12).fill(bg)
+                    if state == "down" {
+                        Text("?").font(.system(size: 26, weight: .bold)).foregroundColor(accent)
+                    } else {
+                        Text(symbol).font(.system(size: 28))
+                    }
+                }
+                .aspectRatio(1, contentMode: .fit)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(border, lineWidth: 2))
+            }
+        }
         .frame(maxWidth: .infinity)
     }
 
