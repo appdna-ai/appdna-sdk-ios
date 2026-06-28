@@ -562,4 +562,22 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-10 — pricing plan cards: Monthly + Yearly (highlighted "BEST VALUE"). Parity with Android.
+    func testPricing_card() throws {
+        let view = try render("""
+        {
+          "id": "pc", "type": "pricing_card", "active_color": "#6366F1",
+          "pricing_plans": [
+            {"id": "m", "label": "Monthly", "price": "$9.99", "period": "per month"},
+            {"id": "y", "label": "Yearly", "price": "$59.99", "period": "per year", "badge": "BEST VALUE", "is_highlighted": true}
+          ]
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }
