@@ -617,4 +617,21 @@ final class VisualSnapshotTests: XCTestCase {
             assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
         }
     }
+
+    /// EPIC-6 — authored button_height resizes the CTA itself (default ~52 vs tall 72). Parity with Android.
+    func testEpic6_buttonHeight() throws {
+        let view = try renderMany([
+            """
+            {"id": "b1", "type": "button", "text": "Continue", "bg_color": "#6366F1"}
+            """,
+            """
+            {"id": "b2", "type": "button", "text": "Get Started", "bg_color": "#10B981", "button_height": 72}
+            """,
+        ])
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
 }

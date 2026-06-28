@@ -501,8 +501,10 @@ struct ContentBlockRendererView: View {
                     .applyTextStyle(block.style)
             }
             .foregroundColor(fgColor)
+            // EPIC-6 — apply authored button_height (resize the button) instead of only intrinsic padding.
+            .padding(.vertical, block.button_height == nil ? 14 : 0)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .frame(height: block.button_height.map { CGFloat($0) })
             .background(buttonBackground(block: block, btnVariant: btnVariant, bgColor: bgColor))
             .clipShape(RoundedRectangle(cornerRadius: radius))
             .overlay(
