@@ -248,7 +248,9 @@ final class RemoteConfigManager {
     private func parseBrand(_ data: [String: Any]) {
         guard let palette = data["palette"] as? [String: Any] else { return }
         if let accent = palette["accent"] as? String, !accent.isEmpty {
-            AppDNA.brandAccentHex = accent
+            // Write on main — brandAccentHex is read on the main thread from every SwiftUI body; parseBrand
+            // runs on a background Firestore/group.notify queue, so an unsynchronized write was a data race.
+            DispatchQueue.main.async { AppDNA.brandAccentHex = accent }
             Log.debug("Loaded brand accent \(accent)")
         }
     }
