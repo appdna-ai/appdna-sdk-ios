@@ -1363,7 +1363,7 @@ struct FormInputRatingBlock: View {
             (cfg?[key]?.value as? Int) ?? (cfg?[key]?.value as? Double).map { Int($0) }
         }
         let fcStr: (String) -> String? = { key in cfg?[key]?.value as? String }
-        let maxStars = fcInt("max_stars") ?? block.max_stars ?? 5
+        let maxStars = max(1, fcInt("max_stars") ?? block.max_stars ?? 5)  // clamp ≥1 — a field_config 0/negative would trap ForEach(1...maxStars)
         let starSz = CGFloat(fcInt("star_size").map { Double($0) } ?? block.star_size ?? 32)
         let filledCol = Color(hex: fcStr("filled_color") ?? block.filled_color ?? block.field_style?.fill_color ?? "#FBBF24")
         let emptyCol = Color(hex: fcStr("empty_color") ?? block.empty_color ?? "#D1D5DB")

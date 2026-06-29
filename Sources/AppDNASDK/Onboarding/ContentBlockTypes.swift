@@ -1226,6 +1226,8 @@ public struct ContentBlock: Codable, Identifiable {
     public let overflow: String?
     // Sprint 7: Scroll-collapse — block fades out and shrinks to 0 height when scrolled
     public let collapse_on_scroll: Bool?
+    // SPEC-419 pass-15 #23 — max line count for text/rich_text truncation (parity with Android `max_lines`)
+    public let max_lines: Int?
 
     enum CodingKeys: String, CodingKey {
         case id, type, text, style, level
@@ -1289,7 +1291,7 @@ public struct ContentBlock: Codable, Identifiable {
         case field_label, field_placeholder, field_required, field_style, field_options, multi_select, field_config
         case visibility_condition, entrance_animation, pressed_style, bindings
         case element_width, element_height
-        case overflow, collapse_on_scroll
+        case overflow, collapse_on_scroll, max_lines
     }
 
     public init(from decoder: Decoder) throws {
@@ -1530,5 +1532,6 @@ public struct ContentBlock: Codable, Identifiable {
         self.element_height = try c.decodeIfPresent(String.self, forKey: .element_height)
         self.overflow = try c.decodeIfPresent(String.self, forKey: .overflow)
         self.collapse_on_scroll = try c.decodeIfPresent(Bool.self, forKey: .collapse_on_scroll)
+        self.max_lines = try c.decodeIfPresent(Int.self, forKey: .max_lines)
     }
 }
