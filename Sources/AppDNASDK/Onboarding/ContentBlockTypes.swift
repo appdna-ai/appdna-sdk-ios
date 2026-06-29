@@ -1155,6 +1155,9 @@ public struct ContentBlock: Codable, Identifiable {
     public let max_value_picker: Double?
     public let step_value: Double?
     public let default_picker_value: Double?
+    // SPEC-419 — the console editor writes top-level `default_value` (number) for wheel_picker;
+    // read it as a fallback for default_picker_value so authored defaults aren't lost on-device.
+    public let default_value: Double?
     public let unit: String?
     public let unit_position: String?
     public let visible_items: Int?
@@ -1251,7 +1254,7 @@ public struct ContentBlock: Codable, Identifiable {
         case row_direction, row_distribution, row_child_fill, column_ratios
         case view_key, custom_config, placeholder_image_url, placeholder_text
         case particle_type, density, speed, secondary_color, size_range, fullscreen
-        case min_value, max_value_picker, step_value, default_picker_value
+        case min_value, max_value_picker, step_value, default_picker_value, default_value
         case unit, unit_position, visible_items
         case pulse_color, pulse_ring_count, pulse_speed, border_width, border_color
         case pricing_plans, pricing_layout
@@ -1461,6 +1464,9 @@ public struct ContentBlock: Codable, Identifiable {
         self.max_value_picker = try c.decodeIfPresent(Double.self, forKey: .max_value_picker)
         self.step_value = try c.decodeIfPresent(Double.self, forKey: .step_value)
         self.default_picker_value = try c.decodeIfPresent(Double.self, forKey: .default_picker_value)
+        // SPEC-419 — `try?`: top-level default_value is a number for wheel_picker, but tolerate a
+        // stray non-number (e.g. an imported bool) without failing the whole block decode.
+        self.default_value = (try? c.decodeIfPresent(Double.self, forKey: .default_value)) ?? nil
         self.unit = try c.decodeIfPresent(String.self, forKey: .unit)
         self.unit_position = try c.decodeIfPresent(String.self, forKey: .unit_position)
         self.visible_items = try c.decodeIfPresent(Int.self, forKey: .visible_items)

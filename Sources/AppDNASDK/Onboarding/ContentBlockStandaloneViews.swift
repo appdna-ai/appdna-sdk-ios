@@ -1509,10 +1509,14 @@ struct WheelPickerBlockView: View {
 
     var body: some View {
         let minVal = block.min_value ?? 0
-        let maxVal = block.max_value_picker ?? 100
+        // SPEC-419 — the editor writes `max_value`/`default_value`; natives canonical keys are
+        // `max_value_picker`/`default_picker_value`. Read the picker key first, fall back to the
+        // editor key so authored ranges/defaults aren't silently lost on-device.
+        let maxVal = block.max_value_picker ?? block.max_value ?? 100
         let step = block.step_value ?? 1
-        let defaultVal = block.default_picker_value ?? minVal
+        let defaultVal = block.default_picker_value ?? block.default_value ?? minVal
         let unitStr = block.unit ?? ""
+        // SPEC-419 — accept the editor's prefix/suffix alongside before/after (prefix == before).
         let unitPos = block.unit_position ?? "after"
         let highlightCol = Color(hex: block.highlight_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
 
@@ -1550,7 +1554,7 @@ struct WheelPickerBlockView: View {
                     ForEach(0..<values.count, id: \.self) { idx in
                         let val = values[idx]
                         let formatted = val == val.rounded() ? String(Int(val)) : String(format: "%.1f", val)
-                        let display = unitPos == "before" ? "\(unitStr)\(formatted)" : "\(formatted)\(unitStr)"
+                        let display = (unitPos == "before" || unitPos == "prefix") ? "\(unitStr)\(formatted)" : "\(formatted)\(unitStr)"
                         Text(display).tag(idx)
                     }
                 }
@@ -1616,7 +1620,7 @@ struct WheelPickerBlockView: View {
                 ForEach(0..<values.count, id: \.self) { idx in
                     let val = values[idx]
                     let formatted = val == val.rounded() ? String(Int(val)) : String(format: "%.1f", val)
-                    let display = unitPos == "before" ? "\(unitStr)\(formatted)" : "\(formatted)\(unitStr)"
+                    let display = (unitPos == "before" || unitPos == "prefix") ? "\(unitStr)\(formatted)" : "\(formatted)\(unitStr)"
                     Text(display)
                         .font(.system(size: selectedIndex == idx ? 28 : 18, weight: selectedIndex == idx ? .bold : .regular))
                         .foregroundColor(selectedIndex == idx ? highlightCol : .gray)
@@ -1662,7 +1666,7 @@ struct WheelPickerBlockView: View {
                     ForEach(0..<values.count, id: \.self) { idx in
                         let val = values[idx]
                         let formatted = val == val.rounded() ? String(Int(val)) : String(format: "%.1f", val)
-                        let display = unitPos == "before" ? "\(unitStr)\(formatted)" : "\(formatted)\(unitStr)"
+                        let display = (unitPos == "before" || unitPos == "prefix") ? "\(unitStr)\(formatted)" : "\(formatted)\(unitStr)"
                         Text(display)
                             .font(.system(size: selectedIndex == idx ? 28 : 18, weight: selectedIndex == idx ? .bold : .regular))
                             .foregroundColor(selectedIndex == idx ? highlightCol : .gray)
