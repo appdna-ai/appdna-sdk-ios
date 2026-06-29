@@ -491,7 +491,11 @@ struct ContentBlockRendererView: View {
                 BundledAsyncPhaseImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
-                        if isCircle {
+                        // SPEC-419 pass-15 #24 — honor overflow="visible" (no clip), matching Android + preview.
+                        if block.overflow == "visible" {
+                            styledImage(image, fit: imageFit, aspect: aspectRatioValue, maxHeight: imgHeight, alignment: positionAlignment)
+                                .accessibilityLabel(block.alt ?? "Image")
+                        } else if isCircle {
                             styledImage(image, fit: imageFit, aspect: aspectRatioValue, maxHeight: imgHeight, alignment: positionAlignment)
                                 .clipShape(Circle())
                                 .accessibilityLabel(block.alt ?? "Image")

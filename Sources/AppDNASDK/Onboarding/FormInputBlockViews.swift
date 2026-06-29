@@ -134,22 +134,35 @@ struct FormInputTextAreaBlock: View {
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
         let minLines = (block.field_config?["min_lines"]?.value as? Int) ?? 3
+        // SPEC-419 pass-15 #14 — honor field_style.text_color + placeholder_color (Android + preview already do).
+        let textColor = block.field_style?.text_color.map { Color(hex: $0) }
+        let placeholderColor = Color(hex: block.field_style?.placeholder_color ?? "#9CA3AF")
 
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
 
-            TextEditor(text: $text)
-                .frame(minHeight: CGFloat(minLines * 22))
-                .padding(4)
-                .background(Color(hex: block.field_style?.background_color ?? "transparent"))
-                .cornerRadius(cornerRadius)
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .strokeBorder(borderColor, lineWidth: fieldBorderWidth(block))
-                )
-                .onChange(of: text) { newValue in
-                    inputValues[fieldId] = newValue
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $text)
+                    .foregroundColor(textColor)
+                    .frame(minHeight: CGFloat(minLines * 22))
+                    .padding(4)
+                    .background(Color(hex: block.field_style?.background_color ?? "transparent"))
+                    .cornerRadius(cornerRadius)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .strokeBorder(borderColor, lineWidth: fieldBorderWidth(block))
+                    )
+                    .onChange(of: text) { newValue in
+                        inputValues[fieldId] = newValue
+                    }
+                if text.isEmpty, let ph = block.field_placeholder, !ph.isEmpty {
+                    Text(ph)
+                        .foregroundColor(placeholderColor)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 12)
+                        .allowsHitTesting(false)
                 }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear { if text.isEmpty, let saved = inputValues[fieldId] as? String { text = saved } }
@@ -2031,6 +2044,8 @@ struct FormInputSignatureBlock: View {
         let fieldId = block.field_id ?? block.id
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
+        // SPEC-419 pass-15 #15 — honor field_config.stroke_color (editor + preview); was hardcoded .primary.
+        let strokeCol: Color = (block.field_config?["stroke_color"]?.value as? String).map { Color(hex: $0) } ?? .primary
 
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
@@ -2044,7 +2059,7 @@ struct FormInputSignatureBlock: View {
                         for point in line.dropFirst() {
                             path.addLine(to: point)
                         }
-                        context.stroke(path, with: .color(.primary), lineWidth: 2)
+                        context.stroke(path, with: .color(strokeCol), lineWidth: 2)
                     }
                 }
                 .frame(maxWidth: .infinity, minHeight: 120)
