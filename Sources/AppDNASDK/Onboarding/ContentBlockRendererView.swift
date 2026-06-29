@@ -986,7 +986,7 @@ struct ContentBlockRendererView: View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(Array((block.items ?? []).enumerated()), id: \.offset) { index, item in
                 HStack(spacing: 10) {
-                    listMarker(style: block.list_style ?? "bullet", index: index)
+                    listMarker(style: block.list_style ?? "bullet", index: index, checkColor: block.check_color)
                     // SPEC-084 Gap #9: localize each list item using block id + index key
                     Text(loc?("block.\(block.id).item.\(index)", item) ?? item)
                         .applyTextStyle(block.style)
@@ -995,16 +995,17 @@ struct ContentBlockRendererView: View {
         }
     }
 
-    private func listMarker(style: String, index: Int) -> AnyView {
+    private func listMarker(style: String, index: Int, checkColor: String? = nil) -> AnyView {
         switch style {
         case "numbered":
             return AnyView(Text("\(index + 1).")
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.secondary))
         case "check":
+            // SPEC-419 pass-15 #5 — honor authored check_color (editor default green #22C55E); was hardcoded brandAccent.
             return AnyView(Image(systemName: "checkmark.circle.fill")
                 .font(.subheadline)
-                .foregroundColor(Color(hex: (AppDNA.brandAccentHex ?? "#6366F1"))))
+                .foregroundColor(Color(hex: checkColor ?? "#22C55E")))
         default:
             return AnyView(Circle()
                 .fill(Color.primary.opacity(0.5))
@@ -1519,6 +1520,8 @@ struct ContentBlockRendererView: View {
                     .font(isLegal ? .caption : .body)
                     .foregroundColor(isLegal ? .secondary : .primary)
                     .applyTextStyle(block.base_style)
+                    // SPEC-419 pass-15 #23 — honor max_lines like Android (ClickableText maxLines)
+                    .lineLimit(block.max_lines)
                     // Apply AFTER applyTextStyle — its internal multilineTextAlignment
                     // would otherwise override ours when base_style.alignment is unset.
                     .multilineTextAlignment(textAlign)
@@ -1529,6 +1532,7 @@ struct ContentBlockRendererView: View {
                     .font(isLegal ? .caption : .body)
                     .foregroundColor(isLegal ? .secondary : .primary)
                     .applyTextStyle(block.base_style)
+                    .lineLimit(block.max_lines)
                     .multilineTextAlignment(textAlign)
                     .frame(maxWidth: .infinity, alignment: frameAlign)
             }
