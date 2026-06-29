@@ -426,6 +426,11 @@ struct ContentBlockRendererView: View {
             // No resize — keep intrinsic pixel size; frame clips/positions it (objectFit: none).
             image
                 .frame(maxHeight: maxHeight, alignment: alignment)
+        } else if fit == "fill" {
+            // True stretch — fill BOTH dimensions ignoring aspect ratio (objectFit: fill /
+            // Android ContentScale.FillBounds). NO aspectRatio (that would preserve ratio = cover).
+            image.resizable()
+                .frame(maxWidth: .infinity, maxHeight: maxHeight, alignment: alignment)
         } else if let aspect {
             image.resizable()
                 .aspectRatio(aspect, contentMode: fitMode)
@@ -1724,6 +1729,11 @@ struct ContentBlockRendererView: View {
             (distribution == "space_between" || distribution == "space_around" || distribution == "space_evenly")
         let edgeSpacers = applyDistribution &&
             (distribution == "space_around" || distribution == "space_evenly")
+        // space_around: edge gaps are HALF the between gaps. Double-spacer trick — between gaps get 2
+        // adjacent Spacers (2 units) while edges stay 1 Spacer (1 unit). space_evenly keeps all gaps
+        // equal (single); space_between has no edges. Matches Android SpaceAround + CSS space-around.
+        let doubleBetweenSpacer = applyDistribution && distribution == "space_around"
+        // Horizontal alignment for center/end (HStack) ...
         let distAlignment: Alignment = {
             switch distribution {
             case "center": return .center
@@ -1731,19 +1741,40 @@ struct ContentBlockRendererView: View {
             default: return .leading // start
             }
         }()
+        // ... and the vertical equivalent for direction == "vertical" (VStack).
+        let distAlignmentV: Alignment = {
+            switch distribution {
+            case "center": return .center
+            case "end": return .bottom
+            default: return .top // start
+            }
+        }()
 
         Group {
             if direction == "vertical" {
-                VStack(alignment: hAlign, spacing: rowGap) {
+                // SPEC-419 — apply row_distribution vertically too (Android applies vArrangement for
+                // Column; preview applies justifyContent regardless of direction). Inert without a
+                // bounded height (Spacers→0, maxHeight:.infinity→content) — matches Android/preview.
+                VStack(alignment: hAlign, spacing: useSpacers ? 0 : rowGap) {
+                    if edgeSpacers { Spacer(minLength: 0) }
                     if let icon = leadingIcon {
                         rowLeadingIconView(icon: icon, size: leadingIconSize, color: leadingIconColor, bgColor: leadingIconBgColor, bgSize: leadingIconBgSize)
+                        if useSpacers { Spacer(minLength: 0); if doubleBetweenSpacer { Spacer(minLength: 0) } }
                     }
-                    ForEach(childBlocks) { child in
+                    ForEach(Array(childBlocks.enumerated()), id: \.element.id) { idx, child in
                         renderBlock(child)
                             .applyRelativeSizing(width: child.element_width, height: child.element_height)
                             .frame(maxWidth: childFill ? .infinity : nil)
                             .zIndex(child.overflow == "visible" ? 1 : 0)
+                        if useSpacers && idx < childBlocks.count - 1 {
+                            Spacer(minLength: 0)
+                            if doubleBetweenSpacer { Spacer(minLength: 0) }
+                        }
                     }
+                    if edgeSpacers { Spacer(minLength: 0) }
+                }
+                .if(applyDistribution) { view in
+                    view.frame(maxHeight: .infinity, alignment: distAlignmentV)
                 }
             } else if !ratios.isEmpty {
                 // Ratio-driven horizontal row — explicit proportional
@@ -1771,14 +1802,18 @@ struct ContentBlockRendererView: View {
                     if edgeSpacers { Spacer(minLength: 0) }
                     if let icon = leadingIcon {
                         rowLeadingIconView(icon: icon, size: leadingIconSize, color: leadingIconColor, bgColor: leadingIconBgColor, bgSize: leadingIconBgSize)
-                        if useSpacers { Spacer(minLength: 0) }
+                        if useSpacers { Spacer(minLength: 0); if doubleBetweenSpacer { Spacer(minLength: 0) } }
                     }
                     ForEach(Array(childBlocks.enumerated()), id: \.element.id) { idx, child in
                         renderBlock(child)
                             .applyRelativeSizing(width: child.element_width, height: child.element_height)
                             .frame(maxWidth: childFill ? .infinity : nil)
                             .zIndex(child.overflow == "visible" ? 1 : 0)
-                        if useSpacers && idx < childBlocks.count - 1 { Spacer(minLength: 0) }
+                        // space_around → between gaps are 2 Spacers (= 2× the single-Spacer edge gap).
+                        if useSpacers && idx < childBlocks.count - 1 {
+                            Spacer(minLength: 0)
+                            if doubleBetweenSpacer { Spacer(minLength: 0) }
+                        }
                     }
                     if edgeSpacers { Spacer(minLength: 0) }
                 }
