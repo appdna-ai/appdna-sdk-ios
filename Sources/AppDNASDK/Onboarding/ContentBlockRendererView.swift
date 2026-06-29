@@ -350,7 +350,7 @@ struct ContentBlockRendererView: View {
         let zonesRaw = (block.field_config?["background_zones"]?.value as? [Any]) ?? []
         let zones: [(CGFloat, Color)] = zonesRaw.compactMap { item in
             guard let m = item as? [String: Any] else { return nil }
-            let w = (m["weight"] as? Double) ?? Double((m["weight"] as? Int) ?? 1)
+            let w = max((m["weight"] as? Double) ?? Double((m["weight"] as? Int) ?? 1), 0) // clamp ≥0 — negative gave a negative zone height (matches Android/preview)
             return (CGFloat(w), Color(hex: (m["color"] as? String) ?? "#000000"))
         }
         let totalW = max(zones.reduce(0) { $0 + $1.0 }, 0.0001)
