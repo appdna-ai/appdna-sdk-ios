@@ -11,7 +11,7 @@ struct RatingBlockView: View {
     @State private var selectedRating: Double = 0
 
     var body: some View {
-        let maxStars = block.max_stars ?? 5
+        let maxStars = max(1, block.max_stars ?? 5)  // clamp ≥1 — ForEach(1...maxStars) traps on 0/negative (mirrors FormInputRatingBlock)
         let starSz = CGFloat(block.star_size ?? 32)
         let filledCol = Color(hex: block.filled_color ?? "#FBBF24")
         let emptyCol = Color(hex: block.empty_color ?? "#D1D5DB")
@@ -1689,7 +1689,7 @@ struct WheelPickerBlockView: View {
         // `max_value_picker`/`default_picker_value`. Read the picker key first, fall back to the
         // editor key so authored ranges/defaults aren't silently lost on-device.
         let maxVal = block.max_value_picker ?? block.max_value ?? 100
-        let step = block.step_value ?? 1
+        let step = { let s = block.step_value ?? 1; return s > 0 ? s : 1 }()  // clamp >0 — a 0/negative step makes the value-gen loop non-terminating
         let defaultVal = block.default_picker_value ?? block.default_value ?? minVal
         let unitStr = block.unit ?? ""
         // SPEC-419 — accept the editor's prefix/suffix alongside before/after (prefix == before).
