@@ -379,7 +379,19 @@ struct AnimatedLoadingBlockView: View {
 
                             Text(item.label ?? "")
                                 .font(.subheadline)
-                                .foregroundColor(index <= completedCount ? .primary : .secondary)
+                                // SPEC-419 pass-14 #6/#7 — mirror the preview +
+                                // Android label-color logic: the ACTIVE (current)
+                                // item uses accent_color ("Active Text Color"),
+                                // and authored text_color is honored for the
+                                // completed/pending items instead of hardcoded
+                                // .primary/.secondary.
+                                .foregroundColor(
+                                    index == completedCount
+                                        ? (block.accent_color.map { Color(hex: $0) }
+                                            ?? block.text_color.map { Color(hex: $0) } ?? .primary)
+                                        : (block.text_color.map { Color(hex: $0) }
+                                            ?? (index < completedCount ? .primary : .secondary))
+                                )
                         }
                     }
                 }
