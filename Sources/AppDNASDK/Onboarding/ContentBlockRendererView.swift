@@ -1178,7 +1178,8 @@ struct ContentBlockRendererView: View {
     // MARK: - Page Indicator (SPEC-089d AC-012)
 
     private func pageIndicatorBlock(_ block: ContentBlock) -> some View {
-        let dotCount = block.dot_count ?? totalSteps
+        // SPEC-419 — clamp to a sane range; ForEach(0..<dotCount) crashes on a negative/huge count.
+        let dotCount = min(max(block.dot_count ?? totalSteps, 0), 50)
         // AC-012: Auto-bind active_index to current step index when not explicitly set
         let activeIdx = block.active_index ?? currentStepIndex
         let dotSize = CGFloat(block.dot_size ?? 8)
@@ -1608,7 +1609,8 @@ struct ContentBlockRendererView: View {
     private func progressBarBlock(_ block: ContentBlock) -> some View {
         let variant = block.progress_variant ?? "continuous"
         // AC-021: Auto-bind to step index when no explicit values set
-        let totalSegs = block.total_segments ?? totalSteps
+        // SPEC-419 — clamp; ForEach(0..<totalSegs) crashes on a negative/huge count.
+        let totalSegs = min(max(block.total_segments ?? totalSteps, 0), 50)
         let filledSegs: Int = {
             if let explicit = block.filled_segments { return explicit }
             if block.progress_value != nil { return block.filled_segments ?? 1 }
