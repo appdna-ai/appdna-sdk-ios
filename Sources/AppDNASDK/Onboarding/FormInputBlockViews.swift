@@ -1109,7 +1109,8 @@ struct FormInputSelectBlock: View {
                                         if let sub = option.subtitle, !sub.isEmpty {
                                             Text(sub)
                                                 .font(.caption)
-                                                .foregroundColor(textCol.opacity(0.65))
+                                                // EPIC-1 — honor per-option subtitle_color when set (was hardcoded 0.65 alpha).
+                                                .foregroundColor(option.subtitle_color.map { Color(hex: $0) } ?? textCol.opacity(0.65))
                                                 .multilineTextAlignment(cellTextAlign)
                                                 .fixedSize(horizontal: false, vertical: true)
                                         }
