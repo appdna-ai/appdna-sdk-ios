@@ -294,6 +294,15 @@ struct FormInputDateBlock: View {
         }()
         let compactHeight: CGFloat? = (numericHeight ?? semanticHeight).map { CGFloat($0) }
 
+        // SPEC-419 pass-16 #11/#12 — honor picker_border_color/_width/_corner_radius/_padding
+        // + wheel_text_color on ALL date variants (was standalone date_wheel_picker only).
+        // Mirrors editor field_config keys + preview OnboardingStepPreview.tsx:2576-2580.
+        let pickerCornerRadius = CGFloat((cfgDouble(block.field_config?["picker_corner_radius"])) ?? 12)
+        let wheelTextColorHex = block.field_config?["wheel_text_color"]?.value as? String
+        let pickerBorderColorHex = block.field_config?["picker_border_color"]?.value as? String
+        let pickerBorderWidth = CGFloat((cfgDouble(block.field_config?["picker_border_width"])) ?? (pickerBorderColorHex != nil ? 1 : 0))
+        let pickerPadding = CGFloat((cfgDouble(block.field_config?["picker_padding"])) ?? 0)
+
         VStack(alignment: .leading, spacing: 6) {
             // Pre-warm the iOS wheel subsystem behind a zero-size anchor.
             // Earlier .frame(200,150).offset(-10000,-10000) was wrong — the
@@ -321,6 +330,8 @@ struct FormInputDateBlock: View {
                         .labelsHidden()
                         .tint(accentColor)
                         .frame(maxWidth: .infinity)
+                        // #12 — wheel_text_color tints the spinning labels (.white = identity).
+                        .colorMultiply(wheelTextColorHex.map { Color(hex: $0) } ?? .white)
                         .background(Color(hex: wheelBgHex ?? fieldBgHex ?? "transparent").opacity(wheelOpacity))
                         .cornerRadius(cornerRadius)
                 case "graphical":
@@ -410,6 +421,12 @@ struct FormInputDateBlock: View {
                     }
                 }
             }
+            // #11 — opt-in picker border + padding around the whole picker (any variant).
+            .padding(pickerPadding)
+            .overlay(
+                RoundedRectangle(cornerRadius: pickerCornerRadius)
+                    .strokeBorder(Color(hex: pickerBorderColorHex ?? "#00000000"), lineWidth: pickerBorderWidth)
+            )
             .environment(\.colorScheme, resolvedScheme ?? .light)
             .onChange(of: selectedDate) { newValue in
                 let formatter = ISO8601DateFormatter()
