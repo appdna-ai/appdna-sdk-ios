@@ -423,14 +423,29 @@ struct ContentBlockRendererView: View {
     private func styledImage(_ image: Image, fit: String, aspect: CGFloat?, maxHeight: CGFloat, alignment: Alignment) -> some View {
         let fitMode: ContentMode = (fit == "contain" || fit == "fit") ? .fit : .fill
         if fit == "none" {
-            // No resize — keep intrinsic pixel size; frame clips/positions it (objectFit: none).
-            image
-                .frame(maxHeight: maxHeight, alignment: alignment)
+            // No resize — intrinsic pixels; objectFit: none. aspect_ratio (when set) still
+            // constrains the FRAME ratio independently of fit — Android/preview apply the ratio
+            // frame regardless of image_fit, so a 1:1 ratio is honored even with fit=none.
+            if let aspect {
+                image
+                    .aspectRatio(aspect, contentMode: .fit)
+                    .frame(maxHeight: maxHeight, alignment: alignment)
+            } else {
+                image
+                    .frame(maxHeight: maxHeight, alignment: alignment)
+            }
         } else if fit == "fill" {
-            // True stretch — fill BOTH dimensions ignoring aspect ratio (objectFit: fill /
-            // Android ContentScale.FillBounds). NO aspectRatio (that would preserve ratio = cover).
-            image.resizable()
-                .frame(maxWidth: .infinity, maxHeight: maxHeight, alignment: alignment)
+            // True stretch — fill BOTH dimensions ignoring the image's own ratio (objectFit: fill /
+            // Android ContentScale.FillBounds). When aspect_ratio is set the FRAME takes that ratio
+            // and the resizable image stretches to fill it; otherwise stretch to width × maxHeight.
+            if let aspect {
+                image.resizable()
+                    .aspectRatio(aspect, contentMode: fitMode)
+                    .frame(maxHeight: maxHeight, alignment: alignment)
+            } else {
+                image.resizable()
+                    .frame(maxWidth: .infinity, maxHeight: maxHeight, alignment: alignment)
+            }
         } else if let aspect {
             image.resizable()
                 .aspectRatio(aspect, contentMode: fitMode)
@@ -1678,7 +1693,9 @@ struct ContentBlockRendererView: View {
     @ViewBuilder
     private func rowBlock(_ block: ContentBlock) -> some View {
         let childBlocks = block.children ?? block.stack_children ?? []
-        let rowGap = CGFloat(block.gap ?? 8)
+        // SPEC-419 — the editor writes `spacing` (preview reads `spacing`); `gap` is the legacy/
+        // imported key. Read spacing first so authored row gap isn't lost on-device.
+        let rowGap = CGFloat(block.spacing ?? block.gap ?? 8)
         let direction = block.row_direction ?? "horizontal"
         let childFill = block.row_child_fill ?? true
 
