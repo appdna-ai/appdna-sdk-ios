@@ -1634,6 +1634,11 @@ struct ContentBlockRendererView: View {
         let pvFraction: CGFloat? = block.progress_value.map {
             min(1, max(0, CGFloat($0 > 1 ? $0 / 100 : $0)))
         }
+        // SPEC-419 pass-13 correctness — the percentage/fraction label must use
+        // the SAME normalization as the fill (`pvFraction`). Previously the
+        // label rendered the RAW `progress_value` → `progress_value=0.75` filled
+        // 75% but the label read "0%". Matches Android pvPercent.
+        let pvPercent = Int(((pvFraction ?? 0) * 100).rounded())
         // SPEC-419 gap#6 — honor `label_format`/`custom_label`; default keeps
         // the existing "Step X of Y" when no format is authored. Mirrors the
         // console preview progress_bar label logic.
@@ -1641,13 +1646,13 @@ struct ContentBlockRendererView: View {
             guard let fmt = block.label_format else { return "Step \(filledSegs) of \(totalSegs)" }
             switch fmt {
             case "fraction":
-                return variant == "segmented" ? "\(filledSegs)/\(totalSegs)" : "\(Int(block.progress_value ?? 0))/100"
+                return variant == "segmented" ? "\(filledSegs)/\(totalSegs)" : "\(pvPercent)/100"
             case "custom":
                 return block.custom_label ?? ""
             default: // percentage
                 return variant == "segmented"
                     ? "\(Int((Double(filledSegs) / Double(max(totalSegs, 1))) * 100))%"
-                    : "\(Int(block.progress_value ?? 0))%"
+                    : "\(pvPercent)%"
             }
         }()
 
