@@ -87,7 +87,13 @@ struct CountdownTimerBlockView: View {
             if expired {
                 expiredView
             } else {
-                digitalTimerView
+                // SPEC-419 pass-15 #10 — honor timer_variant (digital | circular | flip | bar)
+                switch block.timer_variant ?? "digital" {
+                case "circular": circularTimerView
+                case "flip": flipTimerView
+                case "bar": barTimerView
+                default: digitalTimerView
+                }
             }
         }
         .onAppear {
@@ -105,10 +111,41 @@ struct CountdownTimerBlockView: View {
         }
     }
 
+    // Accent color shared across all timer variants.
+    private var accentColor: Color {
+        Color(hex: block.accent_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
+    }
+
+    // h/m/s segment strings (gated by show_* flags), matching the preview.
+    private var segmentStrings: [String] {
+        let hours = (remainingSeconds % 86400) / 3600
+        let minutes = (remainingSeconds % 3600) / 60
+        let seconds = remainingSeconds % 60
+        var segs: [String] = []
+        if block.show_hours != false { segs.append(String(format: "%02d", hours)) }
+        if block.show_minutes != false { segs.append(String(format: "%02d", minutes)) }
+        if block.show_seconds != false { segs.append(String(format: "%02d", seconds)) }
+        return segs
+    }
+
+    // SPEC-419 pass-15 #28 — default unit labels hrs/min/sec to match preview (was Hours/Min/Sec).
+    private var labelStrings: [String] {
+        let lbls = block.labels
+        var arr: [String] = []
+        if block.show_hours != false { arr.append(lbls?.hours ?? "hrs") }
+        if block.show_minutes != false { arr.append(lbls?.minutes ?? "min") }
+        if block.show_seconds != false { arr.append(lbls?.seconds ?? "sec") }
+        return arr
+    }
+
+    private var barFraction: CGFloat {
+        let initial = CGFloat(max(block.duration_seconds ?? 60, 1))
+        return min(max(CGFloat(remainingSeconds) / initial, 0), 1)
+    }
+
     // Digital variant (default): HStack of time unit columns
     private var digitalTimerView: some View {
-        let timeColor = Color(hex: block.text_color ?? "#000000")
-        let accentCol = Color(hex: block.accent_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
+        let accentCol = accentColor
         let fontSize = CGFloat(block.font_size ?? 28)
         let lbls = block.labels
 
@@ -119,30 +156,93 @@ struct CountdownTimerBlockView: View {
 
         return HStack(spacing: 16) {
             if block.show_days != false && days > 0 {
-                timerUnit(value: days, label: lbls?.days ?? "Days", fontSize: fontSize, color: timeColor, accent: accentCol)
+                timerUnit(value: days, label: lbls?.days ?? "days", fontSize: fontSize, accent: accentCol)
             }
             if block.show_hours != false {
-                timerUnit(value: hours, label: lbls?.hours ?? "Hours", fontSize: fontSize, color: timeColor, accent: accentCol)
+                timerUnit(value: hours, label: lbls?.hours ?? "hrs", fontSize: fontSize, accent: accentCol)
             }
             if block.show_minutes != false {
-                timerUnit(value: minutes, label: lbls?.minutes ?? "Min", fontSize: fontSize, color: timeColor, accent: accentCol)
+                timerUnit(value: minutes, label: lbls?.minutes ?? "min", fontSize: fontSize, accent: accentCol)
             }
             if block.show_seconds != false {
-                timerUnit(value: seconds, label: lbls?.seconds ?? "Sec", fontSize: fontSize, color: timeColor, accent: accentCol)
+                timerUnit(value: seconds, label: lbls?.seconds ?? "sec", fontSize: fontSize, accent: accentCol)
             }
         }
         .frame(maxWidth: .infinity)
     }
 
-    private func timerUnit(value: Int, label: String, fontSize: CGFloat, color: Color, accent: Color) -> some View {
+    // SPEC-419 pass-15 #11 — digits use accent_color, unit labels use secondary grey (matches preview).
+    private func timerUnit(value: Int, label: String, fontSize: CGFloat, accent: Color) -> some View {
         VStack(spacing: 4) {
             Text(String(format: "%02d", value))
                 .font(.system(size: fontSize, weight: .bold, design: .monospaced))
-                .foregroundColor(color)
+                .foregroundColor(accent)
             Text(label)
                 .font(.caption2)
-                .foregroundColor(accent)
+                .foregroundColor(.secondary)
         }
+    }
+
+    // SPEC-419 pass-15 #10 — circular variant: 75% accent ring + joined digits in center.
+    private var circularTimerView: some View {
+        let accentCol = accentColor
+        return ZStack {
+            Circle().stroke(Color(hex: "#E5E7EB"), lineWidth: 4)
+            Circle().trim(from: 0, to: 0.75)
+                .stroke(accentCol, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Text(segmentStrings.joined(separator: ":"))
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundColor(accentCol)
+        }
+        .frame(width: 80, height: 80)
+        .frame(maxWidth: .infinity)
+    }
+
+    // SPEC-419 pass-15 #10 — flip variant: each segment in a tinted card, label below.
+    private var flipTimerView: some View {
+        let accentCol = accentColor
+        let lbls = labelStrings
+        return HStack(spacing: 8) {
+            ForEach(Array(segmentStrings.enumerated()), id: \.offset) { i, seg in
+                VStack(spacing: 4) {
+                    Text(seg)
+                        .font(.system(size: 24, weight: .bold, design: .monospaced))
+                        .foregroundColor(accentCol)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "#F1F5F9")))
+                    Text(i < lbls.count ? lbls[i] : "")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // SPEC-419 pass-15 #10 — bar variant: time + "remaining" + shrinking accent bar.
+    private var barTimerView: some View {
+        let accentCol = accentColor
+        return VStack(spacing: 8) {
+            HStack {
+                Text(segmentStrings.joined(separator: ":"))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(accentCol)
+                Spacer()
+                Text("remaining")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4).fill(Color(hex: "#E5E7EB")).frame(height: 8)
+                    RoundedRectangle(cornerRadius: 4).fill(accentCol).frame(width: geo.size.width * barFraction, height: 8)
+                }
+            }
+            .frame(height: 8)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
