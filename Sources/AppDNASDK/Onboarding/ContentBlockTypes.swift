@@ -1121,6 +1121,11 @@ public struct ContentBlock: Codable, Identifiable {
     public let calendar_bg_color: String?        // explicit background color for graphical date picker
     public let wheel_bg_color: String?           // explicit background color for wheel date picker (top-level, not field_config)
     public let wheel_height: Double?             // wheel picker height in pt (top-level)
+    // SPEC-419 — console writes the picker divider/border line color + stroke at top level
+    // (wheel_line_color / wheel_line_stroke_width). iOS previously read only field_config
+    // picker_border_color/width, so authored line styling never appeared.
+    public let wheel_line_color: String?
+    public let wheel_line_stroke_width: Double?
 
     // SPEC-089d Phase F: stack / row fields (container blocks)
     public let children: [ContentBlock]?
@@ -1250,6 +1255,7 @@ public struct ContentBlock: Codable, Identifiable {
         case columns, default_date_value, min_date, max_date, allow_future, allow_past, date_validation_message
         case highlight_color, haptic_on_scroll, orientation, wheel_orientation, picker_presentation, picker_mode
         case picker_spacing, calendar_bg_color, wheel_bg_color, wheel_height
+        case wheel_line_color, wheel_line_stroke_width
         case children, stack_children, z_index, gap, wrap, justify, align_items
         case row_direction, row_distribution, row_child_fill, column_ratios
         case view_key, custom_config, placeholder_image_url, placeholder_text
@@ -1438,6 +1444,8 @@ public struct ContentBlock: Codable, Identifiable {
         self.calendar_bg_color = try c.decodeIfPresent(String.self, forKey: .calendar_bg_color)
         self.wheel_bg_color = try c.decodeIfPresent(String.self, forKey: .wheel_bg_color)
         self.wheel_height = try c.decodeIfPresent(Double.self, forKey: .wheel_height)
+        self.wheel_line_color = try c.decodeIfPresent(String.self, forKey: .wheel_line_color)
+        self.wheel_line_stroke_width = try c.decodeIfPresent(Double.self, forKey: .wheel_line_stroke_width)
         self.haptic_on_scroll = try c.decodeIfPresent(Bool.self, forKey: .haptic_on_scroll)
         self.children = try c.decodeIfPresent([ContentBlock].self, forKey: .children)
         self.stack_children = try c.decodeIfPresent([ContentBlock].self, forKey: .stack_children)

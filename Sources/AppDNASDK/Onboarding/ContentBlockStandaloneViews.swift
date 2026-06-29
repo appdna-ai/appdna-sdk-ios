@@ -1118,9 +1118,14 @@ struct DateWheelPickerBlockView: View {
         // and bleeds visually into the wheel when inherited. Kept strictly
         // picker-specific so an authored block_style.border doesn't surround
         // the wheel unless the author asks for it explicitly.
-        let pickerBorderColor = (block.field_config?["picker_border_color"]?.value as? String)
+        // SPEC-419 — the console writes the picker line color/stroke at top level
+        // (wheel_line_color / wheel_line_stroke_width); honor those first, then the legacy
+        // field_config picker_border_* keys.
+        let pickerBorderColor = block.wheel_line_color
+            ?? (block.field_config?["picker_border_color"]?.value as? String)
         let pickerBorderWidth = CGFloat(
-            (cfgDouble(block.field_config?["picker_border_width"]))
+            block.wheel_line_stroke_width
+            ?? (cfgDouble(block.field_config?["picker_border_width"]))
             ?? (pickerBorderColor != nil ? 1 : 0)
         )
         let pickerPadding = CGFloat((cfgDouble(block.field_config?["picker_padding"])) ?? 0)
@@ -1150,6 +1155,13 @@ struct DateWheelPickerBlockView: View {
         let triggerTextColor: Color = triggerTextHex.map { Color(hex: $0) } ?? .primary
 
         VStack(spacing: 8) {
+            // SPEC-419 — block-level label (parity with preview/Android, which now render it).
+            if let label = block.text, !label.isEmpty {
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             // Pre-warm: hidden wheel DatePicker mounted behind a zero-size
             // anchor so UIKit instantiates UIPickerView eagerly (cuts the
             // first-drag lag) without claiming any layout space inside the
