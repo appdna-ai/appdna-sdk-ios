@@ -1242,9 +1242,12 @@ struct FormInputSliderBlock: View {
 
     var body: some View {
         let fieldId = block.field_id ?? block.id
-        let minVal = block.min_value ?? 0
-        let maxVal = block.max_value_picker ?? 100
-        let stepVal = block.step_value ?? 1
+        // SPEC-419 pass-21 — editor authors min/max/step/default into field_config
+        // (StepContentEditor :5411/:5415/:5419/:5427); top-level keys are never populated
+        // for these blocks. Top-level first (back-compat), then field_config, then literal.
+        let minVal = block.min_value ?? cfgDouble(block.field_config?["min_value"]) ?? 0
+        let maxVal = block.max_value_picker ?? cfgDouble(block.field_config?["max_value"]) ?? 100
+        let stepVal = block.step_value ?? cfgDouble(block.field_config?["step"]) ?? 1
         let showValue = (block.field_config?["show_value"]?.value as? Bool) ?? true
         let unitStr = block.unit ?? ""
         let trackCol = Color(hex: block.field_style?.track_color ?? block.track_color ?? "#E5E7EB")
@@ -1270,7 +1273,7 @@ struct FormInputSliderBlock: View {
         }
         .onAppear {
             if let saved = inputValues[fieldId] as? Double { value = saved }
-            else { value = block.default_picker_value ?? minVal; inputValues[fieldId] = value }
+            else { value = block.default_picker_value ?? cfgDouble(block.field_config?["default_value"]) ?? minVal; inputValues[fieldId] = value }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -1316,9 +1319,11 @@ struct FormInputStepperBlock: View {
 
     var body: some View {
         let fieldId = block.field_id ?? block.id
-        let minVal = Int(block.min_value ?? 0)
-        let maxVal = Int(block.max_value_picker ?? 100)
-        let stepVal = Int(block.step_value ?? 1)
+        // SPEC-419 pass-21 — editor authors min/max/step into field_config for the stepper
+        // (StepContentEditor :5388/:5392/:5396); top-level keys are never populated.
+        let minVal = Int(block.min_value ?? cfgDouble(block.field_config?["min_value"]) ?? 0)
+        let maxVal = Int(block.max_value_picker ?? cfgDouble(block.field_config?["max_value"]) ?? 100)
+        let stepVal = Int(block.step_value ?? cfgDouble(block.field_config?["step"]) ?? 1)
         let unitStr = block.unit ?? ""
 
         VStack(alignment: .leading, spacing: 6) {
@@ -1334,7 +1339,7 @@ struct FormInputStepperBlock: View {
         }
         .onAppear {
             if let saved = inputValues[fieldId] as? Int { value = saved }
-            else { value = Int(block.default_picker_value ?? Double(minVal)); inputValues[fieldId] = value }
+            else { value = Int(block.default_picker_value ?? cfgDouble(block.field_config?["default_value"]) ?? Double(minVal)); inputValues[fieldId] = value }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -1447,8 +1452,10 @@ struct FormInputRangeSliderBlock: View {
 
     var body: some View {
         let fieldId = block.field_id ?? block.id
-        let minVal = block.min_value ?? 0
-        let maxVal = block.max_value_picker ?? 100
+        // SPEC-419 pass-21 — editor authors min/max into field_config for the range slider
+        // (StepContentEditor :5411/:5415); top-level keys are never populated.
+        let minVal = block.min_value ?? cfgDouble(block.field_config?["min_value"]) ?? 0
+        let maxVal = block.max_value_picker ?? cfgDouble(block.field_config?["max_value"]) ?? 100
         let unitStr = block.unit ?? ""
         let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
 
@@ -1488,11 +1495,11 @@ struct FormInputRangeSliderBlock: View {
         }
         .onAppear {
             if let saved = inputValues[fieldId] as? [String: Any] {
-                lowValue = saved["min"] as? Double ?? block.min_value ?? 0
-                highValue = saved["max"] as? Double ?? block.max_value_picker ?? 100
+                lowValue = saved["min"] as? Double ?? block.min_value ?? cfgDouble(block.field_config?["min_value"]) ?? 0
+                highValue = saved["max"] as? Double ?? block.max_value_picker ?? cfgDouble(block.field_config?["max_value"]) ?? 100
             } else {
-                lowValue = block.min_value ?? 0
-                highValue = block.max_value_picker ?? 100
+                lowValue = block.min_value ?? cfgDouble(block.field_config?["min_value"]) ?? 0
+                highValue = block.max_value_picker ?? cfgDouble(block.field_config?["max_value"]) ?? 100
                 inputValues[fieldId] = ["min": lowValue, "max": highValue]
             }
         }
