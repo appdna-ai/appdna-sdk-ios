@@ -2047,6 +2047,8 @@ struct FormInputSignatureBlock: View {
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
         // SPEC-419 pass-15 #15 — honor field_config.stroke_color (editor + preview); was hardcoded .primary.
         let strokeCol: Color = (block.field_config?["stroke_color"]?.value as? String).map { Color(hex: $0) } ?? .primary
+        // SPEC-419 pass-16 #2 — honor field_config.stroke_width (editor default 2); was hardcoded 2.
+        let strokeW: CGFloat = CGFloat(cfgDouble(block.field_config?["stroke_width"]) ?? 2)
 
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
@@ -2060,7 +2062,7 @@ struct FormInputSignatureBlock: View {
                         for point in line.dropFirst() {
                             path.addLine(to: point)
                         }
-                        context.stroke(path, with: .color(strokeCol), lineWidth: 2)
+                        context.stroke(path, with: .color(strokeCol), lineWidth: strokeW)
                     }
                 }
                 .frame(maxWidth: .infinity, minHeight: 120)
