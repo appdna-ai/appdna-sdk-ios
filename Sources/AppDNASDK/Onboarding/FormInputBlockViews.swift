@@ -139,6 +139,10 @@ struct FormInputTextAreaBlock: View {
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
         let minLines = (block.field_config?["min_lines"]?.value as? Int) ?? 3
+        // SPEC-419 pass-19 #2 — honor field_config.field_height as an additional minimum
+        // (the editor shows "Field Height" for textarea too). min_lines stays the floor.
+        let minLinesHeight = CGFloat(minLines * 22)
+        let textAreaMinHeight = max(minLinesHeight, fieldHeight(block) ?? 0)
         // SPEC-419 pass-15 #14 — honor field_style.text_color + placeholder_color (Android + preview already do).
         let textColor = block.field_style?.text_color.map { Color(hex: $0) }
         let placeholderColor = Color(hex: block.field_style?.placeholder_color ?? "#9CA3AF")
@@ -149,7 +153,7 @@ struct FormInputTextAreaBlock: View {
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $text)
                     .foregroundColor(textColor)
-                    .frame(minHeight: CGFloat(minLines * 22))
+                    .frame(minHeight: textAreaMinHeight)
                     .padding(4)
                     .background(Color(hex: block.field_style?.background_color ?? "transparent"))
                     .cornerRadius(cornerRadius)
@@ -1388,23 +1392,39 @@ struct FormInputRatingBlock: View {
             (cfg?[key]?.value as? Int) ?? (cfg?[key]?.value as? Double).map { Int($0) }
         }
         let fcStr: (String) -> String? = { key in cfg?[key]?.value as? String }
+        let fcBool: (String) -> Bool? = { key in cfg?[key]?.value as? Bool }
         let maxStars = max(1, fcInt("max_stars") ?? block.max_stars ?? 5)  // clamp ≥1 — a field_config 0/negative would trap ForEach(1...maxStars)
         let starSz = CGFloat(fcInt("star_size").map { Double($0) } ?? block.star_size ?? 32)
         let filledCol = Color(hex: fcStr("filled_color") ?? block.filled_color ?? block.field_style?.fill_color ?? "#FBBF24")
         let emptyCol = Color(hex: fcStr("empty_color") ?? block.empty_color ?? "#D1D5DB")
+        // SPEC-419 pass-19 #1 — honor allow_half (Android already renders halves via
+        // block.allow_half). Read field_config first like the other rating keys, fall
+        // back to top-level. Half-star render mirrors the standalone RatingFieldView.
+        let allowHalf = fcBool("allow_half") ?? block.allow_half ?? false
 
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
 
             HStack(spacing: 4) {
                 ForEach(1...maxStars, id: \.self) { index in
-                    Image(systemName: selectedRating >= Double(index) ? "star.fill" : "star")
+                    let starState: Double = {
+                        if selectedRating >= Double(index) { return 1.0 }
+                        if allowHalf && selectedRating >= Double(index) - 0.5 { return 0.5 }
+                        return 0.0
+                    }()
+                    Image(systemName: starState == 1.0 ? "star.fill" : (starState == 0.5 ? "star.leadinghalf.filled" : "star"))
                         .font(.system(size: starSz))
-                        .foregroundColor(selectedRating >= Double(index) ? filledCol : emptyCol)
-                        .onTapGesture {
-                            selectedRating = Double(index)
-                            inputValues[fieldId] = selectedRating
-                        }
+                        .foregroundColor(starState > 0 ? filledCol : emptyCol)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onEnded { dg in
+                                    let isLeftHalf = dg.location.x < starSz / 2
+                                    let raw: Double = (allowHalf && isLeftHalf) ? Double(index) - 0.5 : Double(index)
+                                    selectedRating = allowHalf ? raw : Double(Int(raw))
+                                    inputValues[fieldId] = selectedRating
+                                }
+                        )
                 }
             }
         }
