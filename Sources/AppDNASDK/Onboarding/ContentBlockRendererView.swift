@@ -735,8 +735,9 @@ struct ContentBlockRendererView: View {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, rowStats in
                 HStack(spacing: 12) {
                     ForEach(Array(rowStats.enumerated()), id: \.offset) { _, m in
-                        let value = (m["value"] as? String) ?? ""
-                        let label = (m["label"] as? String) ?? ""
+                        // Coerce — a numeric stat value (Int/Double) cast `as? String` would blank the card.
+                        let value = (m["value"] as? String) ?? (m["value"]).map { "\($0)" } ?? ""
+                        let label = (m["label"] as? String) ?? (m["label"]).map { "\($0)" } ?? ""
                         let color = Color(hex: (m["color"] as? String) ?? defaultAccent)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(value).font(.system(size: 24, weight: .bold)).foregroundColor(color)
