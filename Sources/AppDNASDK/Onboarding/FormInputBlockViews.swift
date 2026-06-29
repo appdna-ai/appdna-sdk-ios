@@ -1463,14 +1463,14 @@ struct FormInputRangeSliderBlock: View {
 
             VStack(spacing: 4) {
                 HStack {
-                    Text("Min")
+                    Text((block.field_config?["min_label"]?.value as? String) ?? "Min")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                     Slider(value: $lowValue, in: minVal...maxVal)
                         .tint(fillCol)
                 }
                 HStack {
-                    Text("Max")
+                    Text((block.field_config?["max_label"]?.value as? String) ?? "Max")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                     Slider(value: $highValue, in: minVal...maxVal)
