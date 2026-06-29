@@ -921,6 +921,58 @@ struct CircularGaugeBlockView: View {
                     }
                 }
                 .frame(width: size, height: frameHeight)
+            } else if variant == "linear" {
+                // SPEC-419 pass-15 #2 — horizontal bar gauge (mirrors preview linear variant):
+                // value-indicator triangle + label above, gradient bar, ticks 0/25/50/75/100 below.
+                let barHeight = max(8, size * 0.08)
+                let totalWidth = size * 1.2
+                let pct = CGFloat(animatedProgress)
+                let labelText = (block.text?.isEmpty == false) ? block.text! : "\(Int(animatedProgress * 100))%"
+                let ticks: [Int] = [0, 25, 50, 75, 100]
+                VStack(spacing: 4) {
+                    ZStack(alignment: .topLeading) {
+                        VStack(spacing: 0) {
+                            Text(labelText)
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(fillCol)
+                            Path { p in
+                                p.move(to: CGPoint(x: 0, y: 0))
+                                p.addLine(to: CGPoint(x: 10, y: 0))
+                                p.addLine(to: CGPoint(x: 5, y: 6))
+                                p.closeSubpath()
+                            }
+                            .fill(fillCol)
+                            .frame(width: 10, height: 6)
+                        }
+                        .fixedSize()
+                        .offset(x: pct * totalWidth - 5, y: 0)
+                    }
+                    .frame(width: totalWidth, height: 22, alignment: .topLeading)
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: barHeight / 2)
+                            .fill(trackCol)
+                            .frame(width: totalWidth, height: barHeight)
+                        RoundedRectangle(cornerRadius: barHeight / 2)
+                            .fill(LinearGradient(colors: [fillCol.opacity(0.53), fillCol], startPoint: .leading, endPoint: .trailing))
+                            .frame(width: pct * totalWidth, height: barHeight)
+                    }
+                    ZStack(alignment: .topLeading) {
+                        ForEach(ticks, id: \.self) { tick in
+                            VStack(spacing: 1) {
+                                Rectangle()
+                                    .fill(Color(hex: "#D1D5DB"))
+                                    .frame(width: 1, height: 4)
+                                Text("\(tick)")
+                                    .font(.system(size: 8))
+                                    .foregroundColor(Color(hex: "#9CA3AF"))
+                            }
+                            .fixedSize()
+                            .offset(x: CGFloat(Double(tick) / 100.0) * totalWidth - 4, y: 0)
+                        }
+                    }
+                    .frame(width: totalWidth, height: 16, alignment: .topLeading)
+                }
+                .frame(width: totalWidth)
             } else {
                 // Arc / radial variants use a regular square ZStack with Circle+trim
                 ZStack {

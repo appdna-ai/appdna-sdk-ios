@@ -1341,10 +1341,18 @@ struct FormInputRatingBlock: View {
 
     var body: some View {
         let fieldId = block.field_id ?? block.id
-        let maxStars = block.max_stars ?? 5
-        let starSz = CGFloat(block.star_size ?? 32)
-        let filledCol = Color(hex: block.filled_color ?? block.field_style?.fill_color ?? "#FBBF24")
-        let emptyCol = Color(hex: block.empty_color ?? "#D1D5DB")
+        // SPEC-419 pass-15 #3 — editor writes these into field_config (StepContentEditor:6312)
+        // and Android promotes field_config→top-level; iOS read top-level only → all 4 dead.
+        // Read field_config first, fall back to the top-level fields for back-compat.
+        let cfg = block.field_config
+        let fcInt: (String) -> Int? = { key in
+            (cfg?[key]?.value as? Int) ?? (cfg?[key]?.value as? Double).map { Int($0) }
+        }
+        let fcStr: (String) -> String? = { key in cfg?[key]?.value as? String }
+        let maxStars = fcInt("max_stars") ?? block.max_stars ?? 5
+        let starSz = CGFloat(fcInt("star_size").map { Double($0) } ?? block.star_size ?? 32)
+        let filledCol = Color(hex: fcStr("filled_color") ?? block.filled_color ?? block.field_style?.fill_color ?? "#FBBF24")
+        let emptyCol = Color(hex: fcStr("empty_color") ?? block.empty_color ?? "#D1D5DB")
 
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
