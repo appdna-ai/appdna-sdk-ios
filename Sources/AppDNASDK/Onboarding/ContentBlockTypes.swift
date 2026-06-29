@@ -1168,6 +1168,10 @@ public struct ContentBlock: Codable, Identifiable {
     public let secondary_color: String?
     public let size_range: [Double]?
     public let fullscreen: Bool?
+    // SPEC-419 pass-15 #8/#9/#25 — editor authors these top-level for star_background.
+    public let particle_color: String?
+    public let particle_opacity: Double?
+    public let particle_speed: String?     // slow, medium, fast (editor key; falls back to `speed`)
 
     // SPEC-089d Phase F: wheel_picker fields
     public let min_value: Double?
@@ -1276,6 +1280,7 @@ public struct ContentBlock: Codable, Identifiable {
         case row_direction, row_distribution, row_child_fill, column_ratios
         case view_key, custom_config, placeholder_image_url, placeholder_text
         case particle_type, density, speed, secondary_color, size_range, fullscreen
+        case particle_color, particle_opacity, particle_speed
         case min_value, max_value_picker, step_value, default_picker_value, default_value
         case unit, unit_position, visible_items
         case pulse_color, pulse_ring_count, pulse_speed, border_width, border_color
@@ -1490,6 +1495,9 @@ public struct ContentBlock: Codable, Identifiable {
         self.secondary_color = try c.decodeIfPresent(String.self, forKey: .secondary_color)
         self.size_range = try c.decodeIfPresent([Double].self, forKey: .size_range)
         self.fullscreen = try c.decodeIfPresent(Bool.self, forKey: .fullscreen)
+        self.particle_color = try c.decodeIfPresent(String.self, forKey: .particle_color)
+        self.particle_opacity = try c.decodeIfPresent(Double.self, forKey: .particle_opacity)
+        self.particle_speed = try c.decodeIfPresent(String.self, forKey: .particle_speed)
         self.min_value = try c.decodeIfPresent(Double.self, forKey: .min_value)
         self.max_value_picker = try c.decodeIfPresent(Double.self, forKey: .max_value_picker)
         self.step_value = try c.decodeIfPresent(Double.self, forKey: .step_value)

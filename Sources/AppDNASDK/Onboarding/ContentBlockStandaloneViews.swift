@@ -1922,8 +1922,11 @@ struct StarBackgroundBlockView: View {
     @State private var isActive = true
 
     var body: some View {
-        let color = Color(hex: block.active_color ?? block.text_color ?? "#FFFFFF")
-        let opacity = block.block_style?.opacity ?? 0.8
+        // SPEC-419 pass-15 #8/#9/#25 — editor authors particle_color/particle_opacity/particle_speed; fall back to legacy native keys.
+        let color = Color(hex: block.particle_color ?? block.active_color ?? block.text_color ?? "#FFFFFF")
+        // SPEC-419 pass-15 #27 — secondary_color tints 1/3 of particles (matches editor + preview)
+        let secondaryColor = block.secondary_color.map { Color(hex: $0) } ?? color
+        let opacity = block.particle_opacity ?? block.block_style?.opacity ?? 0.8
         let particleCount: Int = {
             switch block.density {
             case "sparse": return 20
@@ -1932,7 +1935,7 @@ struct StarBackgroundBlockView: View {
             }
         }()
         let speedFactor: CGFloat = {
-            switch block.speed {
+            switch block.particle_speed ?? block.speed {
             case "slow": return 0.3
             case "fast": return 1.5
             default: return 0.8
@@ -1945,7 +1948,7 @@ struct StarBackgroundBlockView: View {
 
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isActive)) { timeline in
             Canvas { context, size in
-                for particle in particles {
+                for (i, particle) in particles.enumerated() {
                     let rect = CGRect(
                         x: particle.x,
                         y: particle.y,
@@ -1953,9 +1956,10 @@ struct StarBackgroundBlockView: View {
                         height: particle.size
                     )
                     context.opacity = particle.opacity * opacity
+                    // SPEC-419 pass-15 #27 — every 3rd particle uses secondary_color
                     context.fill(
                         Path(ellipseIn: rect),
-                        with: .color(color)
+                        with: .color(i % 3 == 0 ? secondaryColor : color)
                     )
                 }
             }
