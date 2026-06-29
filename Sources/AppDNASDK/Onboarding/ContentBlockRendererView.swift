@@ -1670,14 +1670,16 @@ struct ContentBlockRendererView: View {
     private func stackBlock(_ block: ContentBlock) -> some View {
         let childBlocks = (block.children ?? block.stack_children ?? []).sorted { ($0.z_index ?? 0) < ($1.z_index ?? 0) } // stack_children = the editor's key (match rowBlock); was dropped → ZStack rendered empty
         let align: Alignment = {
-            switch block.alignment {
+            // SPEC-419 — normalize hyphenated editor values (top-left, center-left, bottom-center)
+            // to underscores so they map; also handle the *-center / center-* variants.
+            switch (block.alignment ?? "").replacingOccurrences(of: "-", with: "_") {
             case "top_left", "topLeading": return .topLeading
-            case "top", "topCenter": return .top
+            case "top", "top_center", "topCenter": return .top
             case "top_right", "topTrailing": return .topTrailing
-            case "left", "leading": return .leading
-            case "right", "trailing": return .trailing
+            case "left", "leading", "center_left": return .leading
+            case "right", "trailing", "center_right": return .trailing
             case "bottom_left", "bottomLeading": return .bottomLeading
-            case "bottom", "bottomCenter": return .bottom
+            case "bottom", "bottom_center", "bottomCenter": return .bottom
             case "bottom_right", "bottomTrailing": return .bottomTrailing
             default: return .center
             }
