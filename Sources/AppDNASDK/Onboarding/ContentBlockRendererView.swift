@@ -1146,10 +1146,10 @@ struct ContentBlockRendererView: View {
                     lottie_json: nil,
                     autoplay: block.autoplay ?? true,
                     loop: block.loop ?? true,
-                    speed: block.lottie_speed ?? 1.0,
+                    speed: block.lottie_speed ?? 1.0,  // SPEC-419 pass-22 TODO — editor writes block.speed (number) but iOS `speed` is String?; needs type reconciliation
                     width: block.lottie_width,
                     height: block.lottie_height ?? block.height ?? 160,
-                    alignment: block.icon_alignment ?? "center",
+                    alignment: block.icon_alignment ?? block.alignment ?? "center",  // SPEC-419 pass-22 — editor writes block.alignment
                     play_on_scroll: block.play_on_scroll,
                     play_on_tap: block.play_on_tap,
                     color_overrides: nil
@@ -1172,7 +1172,7 @@ struct ContentBlockRendererView: View {
                     state_machine: block.state_machine,
                     autoplay: block.autoplay ?? true,
                     height: block.height ?? 160,
-                    alignment: block.icon_alignment ?? "center",
+                    alignment: block.icon_alignment ?? block.alignment ?? "center",  // SPEC-419 pass-22 — editor writes block.alignment
                     inputs: nil,
                     trigger_on_step_complete: block.trigger_on_step_complete
                 )

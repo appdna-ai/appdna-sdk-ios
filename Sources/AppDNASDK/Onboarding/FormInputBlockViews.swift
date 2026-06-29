@@ -1245,9 +1245,14 @@ struct FormInputSliderBlock: View {
         // SPEC-419 pass-21 — editor authors min/max/step/default into field_config
         // (StepContentEditor :5411/:5415/:5419/:5427); top-level keys are never populated
         // for these blocks. Top-level first (back-compat), then field_config, then literal.
-        let minVal = block.min_value ?? cfgDouble(block.field_config?["min_value"]) ?? 0
-        let maxVal = block.max_value_picker ?? cfgDouble(block.field_config?["max_value"]) ?? 100
-        let stepVal = block.step_value ?? cfgDouble(block.field_config?["step"]) ?? 1
+        let rawMin = block.min_value ?? cfgDouble(block.field_config?["min_value"]) ?? 0
+        let rawMax = block.max_value_picker ?? cfgDouble(block.field_config?["max_value"]) ?? 100
+        let rawStep = block.step_value ?? cfgDouble(block.field_config?["step"]) ?? 1
+        // SPEC-419 pass-22 — field_config min/max/step are now authorable (were always 0...100);
+        // clamp so the range can't violate ClosedRange (lower<=upper) or stall (step>0).
+        let stepVal = rawStep > 0 ? rawStep : 1
+        let minVal = min(rawMin, rawMax)
+        let maxVal = max(rawMax, minVal + stepVal)
         let showValue = (block.field_config?["show_value"]?.value as? Bool) ?? true
         let unitStr = block.unit ?? ""
         let trackCol = Color(hex: block.field_style?.track_color ?? block.track_color ?? "#E5E7EB")
@@ -1321,9 +1326,13 @@ struct FormInputStepperBlock: View {
         let fieldId = block.field_id ?? block.id
         // SPEC-419 pass-21 — editor authors min/max/step into field_config for the stepper
         // (StepContentEditor :5388/:5392/:5396); top-level keys are never populated.
-        let minVal = Int(block.min_value ?? cfgDouble(block.field_config?["min_value"]) ?? 0)
-        let maxVal = Int(block.max_value_picker ?? cfgDouble(block.field_config?["max_value"]) ?? 100)
-        let stepVal = Int(block.step_value ?? cfgDouble(block.field_config?["step"]) ?? 1)
+        let rawMin = Int(block.min_value ?? cfgDouble(block.field_config?["min_value"]) ?? 0)
+        let rawMax = Int(block.max_value_picker ?? cfgDouble(block.field_config?["max_value"]) ?? 100)
+        let rawStep = Int(block.step_value ?? cfgDouble(block.field_config?["step"]) ?? 1)
+        // SPEC-419 pass-22 — clamp the now-authorable range (min<max, step>0) to guard the ClosedRange.
+        let stepVal = rawStep > 0 ? rawStep : 1
+        let minVal = min(rawMin, rawMax)
+        let maxVal = max(rawMax, minVal + stepVal)
         let unitStr = block.unit ?? ""
 
         VStack(alignment: .leading, spacing: 6) {
@@ -1454,8 +1463,11 @@ struct FormInputRangeSliderBlock: View {
         let fieldId = block.field_id ?? block.id
         // SPEC-419 pass-21 — editor authors min/max into field_config for the range slider
         // (StepContentEditor :5411/:5415); top-level keys are never populated.
-        let minVal = block.min_value ?? cfgDouble(block.field_config?["min_value"]) ?? 0
-        let maxVal = block.max_value_picker ?? cfgDouble(block.field_config?["max_value"]) ?? 100
+        let rawMin = block.min_value ?? cfgDouble(block.field_config?["min_value"]) ?? 0
+        let rawMax = block.max_value_picker ?? cfgDouble(block.field_config?["max_value"]) ?? 100
+        // SPEC-419 pass-22 — clamp the now-authorable range so minVal...maxVal can't trap (min<max).
+        let minVal = min(rawMin, rawMax)
+        let maxVal = max(rawMax, minVal + 1)
         let unitStr = block.unit ?? ""
         let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
 
