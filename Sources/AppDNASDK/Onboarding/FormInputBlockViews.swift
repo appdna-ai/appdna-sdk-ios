@@ -90,6 +90,10 @@ struct FormInputTextBlock: View {
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
         // Always use UIKitTextField — SwiftUI TextField has focus/dark mode issues.
         let keyboardAppearanceRaw = block.field_config?["keyboard_appearance"]?.value as? String
+        // SPEC-419 pass-16 #4 — honor field_config.input_text_size (preferred) /
+        // font_size (default 14), mirroring preview precedence. Was no font set +
+        // a fixed inner height of 24 that clipped larger fonts.
+        let inputFontSize = CGFloat(cfgDouble(block.field_config?["input_text_size"]) ?? cfgDouble(block.field_config?["font_size"]) ?? 14)
 
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
@@ -100,10 +104,11 @@ struct FormInputTextBlock: View {
                 keyboardType: keyboardType,
                 keyboardAppearance: .from(keyboardAppearanceRaw),
                 returnKeyType: .done,
+                font: UIFont.systemFont(ofSize: inputFontSize),
                 textColor: block.field_style?.text_color.map { UIColor(Color(hex: $0)) },
                 placeholderColor: block.field_style?.placeholder_color.map { UIColor(Color(hex: $0)) }
             )
-            .frame(height: 24)
+            .frame(height: max(24, inputFontSize + 6))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
             .frame(minHeight: fieldHeight(block), alignment: .center)
