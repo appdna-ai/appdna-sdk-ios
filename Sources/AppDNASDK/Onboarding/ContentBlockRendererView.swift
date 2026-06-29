@@ -1609,7 +1609,7 @@ struct ContentBlockRendererView: View {
 
     @ViewBuilder
     private func stackBlock(_ block: ContentBlock) -> some View {
-        let childBlocks = (block.children ?? []).sorted { ($0.z_index ?? 0) < ($1.z_index ?? 0) }
+        let childBlocks = (block.children ?? block.stack_children ?? []).sorted { ($0.z_index ?? 0) < ($1.z_index ?? 0) } // stack_children = the editor's key (match rowBlock); was dropped → ZStack rendered empty
         let align: Alignment = {
             switch block.alignment {
             case "top_left", "topLeading": return .topLeading
