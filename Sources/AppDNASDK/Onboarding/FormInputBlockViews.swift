@@ -240,7 +240,8 @@ struct FormInputDateBlock: View {
 
     var body: some View {
         let fieldId = block.field_id ?? block.id
-        let accentColor = Color(hex: block.field_style?.fill_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
+        // SPEC-419 pass-15 #34 — honor highlight_color first (editor + preview key); fall back to fill_color/active_color.
+        let accentColor = Color(hex: block.highlight_color ?? block.field_style?.fill_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         // Dark theme detection: explicit color_scheme override, else auto-detect
         // from text_color being a light color (onboarding flows with dark
         // backgrounds set white text, and the native date wheel popover must
