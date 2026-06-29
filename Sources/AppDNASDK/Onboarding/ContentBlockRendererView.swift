@@ -178,7 +178,7 @@ struct ContentBlockRendererView: View {
         case .memory_match: return AnyView(memoryMatchBlock(block))
         case .calendar_month: return AnyView(calendarMonthBlock(block))
         case .button: return AnyView(buttonBlock(block))
-        case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 16)))
+        case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 24))) // SPEC-419 pass-14 #11 — unset default 24 to match editor+preview (was 16)
         case .list: return AnyView(listBlock(block))
         case .divider: return AnyView(dividerBlock(block))
         case .badge: return AnyView(badgeBlock(block))
@@ -1018,7 +1018,7 @@ struct ContentBlockRendererView: View {
         Rectangle()
             .fill(Color(hex: block.divider_color ?? "#E5E7EB"))
             .frame(height: CGFloat(block.divider_thickness ?? 1))
-            .padding(.vertical, CGFloat(block.divider_margin_y ?? 8))
+            .padding(.vertical, CGFloat(block.divider_margin_y ?? 16)) // SPEC-419 pass-14 #12 — unset default 16 to match editor+preview (was 8)
     }
 
     // MARK: - Badge
@@ -1620,7 +1620,7 @@ struct ContentBlockRendererView: View {
             // Auto-bind: current step index + 1 (1-based fill)
             return currentStepIndex + 1
         }()
-        let barH = CGFloat(block.bar_height ?? 6)
+        let barH = CGFloat(block.bar_height ?? 8) // SPEC-419 pass-14 #14 — unset default 8 to match editor+preview (was 6)
         let barRadius = CGFloat(block.corner_radius ?? 3)
         let fillColor = Color(hex: block.bar_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
         // EPIC-2 — multiple progress colors at once (horizontal gradient across the fill).
@@ -1660,7 +1660,11 @@ struct ContentBlockRendererView: View {
         }()
 
         return VStack(spacing: 8) {
-            if block.show_label == true {
+            // SPEC-419 pass-14 #13 — show_label defaults TRUE (unset) to match the
+            // editor (inits true) + preview (`show_label !== false`). Was `== true`
+            // (false default), so AI/imported payloads without the flag hid the
+            // label on-device while the preview showed it.
+            if block.show_label != false {
                 Text(labelText)
                     .font(.caption)
                     .foregroundColor(.secondary)
