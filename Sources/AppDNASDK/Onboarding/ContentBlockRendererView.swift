@@ -884,7 +884,8 @@ struct ContentBlockRendererView: View {
     private func calendarMonthBlock(_ block: ContentBlock) -> some View {
         let cfg = block.field_config
         let monthLabel = (cfg?["month_label"]?.value as? String) ?? "June 2026"
-        let daysInMonth = (cfg?["days_in_month"]?.value as? Int) ?? Int(cfgDouble(cfg?["days_in_month"]) ?? 30)
+        // Clamp 0...31 — a negative days_in_month made `0..<(startOffset+daysInMonth)` a malformed Range → fatalError crash.
+        let daysInMonth = min(max((cfg?["days_in_month"]?.value as? Int) ?? Int(cfgDouble(cfg?["days_in_month"]) ?? 30), 0), 31)
         let startOffset = min(max((cfg?["start_offset"]?.value as? Int) ?? Int(cfgDouble(cfg?["start_offset"]) ?? 0), 0), 6)
         let selectedDays = ((cfg?["selected_days"]?.value as? [Any]) ?? []).compactMap { ($0 as? Int) ?? ($0 as? Double).map { Int($0) } }
         let today = (cfg?["today"]?.value as? Int) ?? Int(cfgDouble(cfg?["today"]) ?? -1)
