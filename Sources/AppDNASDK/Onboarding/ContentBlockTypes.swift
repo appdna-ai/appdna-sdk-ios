@@ -963,6 +963,15 @@ public struct ContentBlock: Codable, Identifiable {
     public let loop: Bool?
     public let muted: Bool?
     public let controls: Bool?
+    // SPEC-419 pass-14 — `video_*`-prefixed fallbacks. The console editor +
+    // preview + Android all write the prefixed keys (video_autoplay/_loop/
+    // _muted/_controls); iOS previously only decoded the unprefixed
+    // autoplay/loop/muted/controls, so authored prefixed payloads were
+    // silently ignored. Decode both; the renderer falls back unprefixed → prefixed.
+    public let video_autoplay: Bool?
+    public let video_loop: Bool?
+    public let video_muted: Bool?
+    public let video_controls: Bool?
     // SPEC-085: Lottie
     public let lottie_url: String?
     public let lottie_speed: Double?
@@ -1227,6 +1236,7 @@ public struct ContentBlock: Codable, Identifiable {
         case toggle_label, toggle_description, toggle_default
         case video_url, video_thumbnail_url, video_height, video_corner_radius
         case autoplay, loop, muted, controls
+        case video_autoplay, video_loop, video_muted, video_controls
         case lottie_url, lottie_speed, lottie_width, lottie_height
         case play_on_scroll, play_on_tap
         case rive_url, artboard, state_machine, trigger_on_step_complete
@@ -1326,6 +1336,10 @@ public struct ContentBlock: Codable, Identifiable {
         self.loop = try c.decodeIfPresent(Bool.self, forKey: .loop)
         self.muted = try c.decodeIfPresent(Bool.self, forKey: .muted)
         self.controls = try c.decodeIfPresent(Bool.self, forKey: .controls)
+        self.video_autoplay = try c.decodeIfPresent(Bool.self, forKey: .video_autoplay)
+        self.video_loop = try c.decodeIfPresent(Bool.self, forKey: .video_loop)
+        self.video_muted = try c.decodeIfPresent(Bool.self, forKey: .video_muted)
+        self.video_controls = try c.decodeIfPresent(Bool.self, forKey: .video_controls)
         self.lottie_url = try c.decodeIfPresent(String.self, forKey: .lottie_url)
         self.lottie_speed = try c.decodeIfPresent(Double.self, forKey: .lottie_speed)
         self.lottie_width = try c.decodeIfPresent(Double.self, forKey: .lottie_width)

@@ -1089,10 +1089,13 @@ struct ContentBlockRendererView: View {
                     video_thumbnail_url: block.video_thumbnail_url ?? block.image_url,
                     video_height: Double(effectiveHeight),
                     video_corner_radius: Double(effectiveCornerRadius),
-                    autoplay: block.autoplay,
-                    loop: block.loop,
-                    muted: block.muted,
-                    controls: block.controls,
+                    // SPEC-419 pass-14 #3 — fall back to the video_*-prefixed
+                    // keys the console editor + preview + Android write, so an
+                    // authored video_autoplay/_loop/_muted/_controls is honored.
+                    autoplay: block.autoplay ?? block.video_autoplay,
+                    loop: block.loop ?? block.video_loop,
+                    muted: block.muted ?? block.video_muted,
+                    controls: block.controls ?? block.video_controls,
                     inline_playback: true
                 )
                 VideoBlockView(block: videoBlock)
@@ -1718,6 +1721,11 @@ struct ContentBlockRendererView: View {
                 renderBlock(child)
             }
         }
+        // SPEC-419 pass-14 #4 — apply authored `height` to the stack container
+        // (the editor default-inits 200; preview applies block.height at
+        // OnboardingStepPreview.tsx:1735). A bare ZStack only sized to its
+        // children, so authored heights were dropped on-device.
+        .frame(height: block.height.map { CGFloat($0) }, alignment: align)
     }
 
     // MARK: - Row (HStack container — SPEC-089d AC-025)
