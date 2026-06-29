@@ -2057,7 +2057,8 @@ struct CarouselBlockView: View {
 
     var body: some View {
         let pages = block.children ?? block.stack_children ?? []
-        let height = CGFloat(block.height ?? 240)
+        // Empty carousel collapses to 0 (matches Android, which renders nothing) — was a 240pt blank box.
+        let height = pages.isEmpty ? 0 : CGFloat(block.height ?? 240)
         let activeColor = (block.field_config?["indicator_active_color"]?.value as? String).map { Color(hex: $0) } ?? Color(hex: AppDNA.brandAccentHex ?? "#6366F1")
         let inactiveColor = (block.field_config?["indicator_color"]?.value as? String).map { Color(hex: $0) } ?? Color(hex: "#4B5563")
         return VStack(spacing: 12) {
