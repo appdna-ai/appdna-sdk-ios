@@ -1050,6 +1050,11 @@ public struct ContentBlock: Codable, Identifiable {
     public let track_color: String?
     public let show_label: Bool?
     public let segment_gap: Double?
+    // SPEC-419 gap#6 — progress_bar label formatting. `label_format`:
+    // "percentage" | "fraction" | "custom"; `custom_label` supplies the text
+    // when format == "custom". Authored top-level by the console editor.
+    public let label_format: String?
+    public let custom_label: String?
 
     // SPEC-089d Phase A: timeline fields
     public let timeline_items: [TimelineItemConfig]?
@@ -1243,6 +1248,7 @@ public struct ContentBlock: Codable, Identifiable {
         case markdown_content, rich_text_variant, base_style, link_color
         case progress_variant, progress_value, total_segments, filled_segments
         case bar_height, bar_color, bar_gradient_colors, track_color, show_label, segment_gap
+        case label_format, custom_label
         case timeline_items, line_color, completed_color, current_color
         case upcoming_color, show_line, compact, title_style, subtitle_style
         case loading_variant, loading_text, loading_text_position, loading_text_size, loading_text_color, loading_items, progress_color, check_color
@@ -1386,6 +1392,8 @@ public struct ContentBlock: Codable, Identifiable {
         self.track_color = try c.decodeIfPresent(String.self, forKey: .track_color)
         self.show_label = try c.decodeIfPresent(Bool.self, forKey: .show_label)
         self.segment_gap = try c.decodeIfPresent(Double.self, forKey: .segment_gap)
+        self.label_format = try c.decodeIfPresent(String.self, forKey: .label_format)
+        self.custom_label = try c.decodeIfPresent(String.self, forKey: .custom_label)
         self.timeline_items = try c.decodeIfPresent([TimelineItemConfig].self, forKey: .timeline_items)
         self.line_color = try c.decodeIfPresent(String.self, forKey: .line_color)
         self.completed_color = try c.decodeIfPresent(String.self, forKey: .completed_color)

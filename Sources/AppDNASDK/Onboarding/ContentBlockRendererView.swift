@@ -1627,10 +1627,33 @@ struct ContentBlockRendererView: View {
             : AnyShapeStyle(fillColor)
         let trackCol = Color(hex: block.track_color ?? "#E5E7EB")
         let gap = CGFloat(block.segment_gap ?? 4)
+        // SPEC-419 gap#2 — explicit continuous fill from `progress_value`
+        // (0–1 fraction OR 0–100 percent), clamped. When unset the bar keeps
+        // auto-binding to the step index (filledSegs/totalSegs). Matches the
+        // console preview which fills `width: progress_value%`.
+        let pvFraction: CGFloat? = block.progress_value.map {
+            min(1, max(0, CGFloat($0 > 1 ? $0 / 100 : $0)))
+        }
+        // SPEC-419 gap#6 — honor `label_format`/`custom_label`; default keeps
+        // the existing "Step X of Y" when no format is authored. Mirrors the
+        // console preview progress_bar label logic.
+        let labelText: String = {
+            guard let fmt = block.label_format else { return "Step \(filledSegs) of \(totalSegs)" }
+            switch fmt {
+            case "fraction":
+                return variant == "segmented" ? "\(filledSegs)/\(totalSegs)" : "\(Int(block.progress_value ?? 0))/100"
+            case "custom":
+                return block.custom_label ?? ""
+            default: // percentage
+                return variant == "segmented"
+                    ? "\(Int((Double(filledSegs) / Double(max(totalSegs, 1))) * 100))%"
+                    : "\(Int(block.progress_value ?? 0))%"
+            }
+        }()
 
         return VStack(spacing: 8) {
             if block.show_label == true {
-                Text("Step \(filledSegs) of \(totalSegs)")
+                Text(labelText)
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1653,7 +1676,7 @@ struct ContentBlockRendererView: View {
                             .fill(trackCol)
                             .frame(height: barH)
 
-                        let fraction = totalSegs > 0 ? CGFloat(filledSegs) / CGFloat(totalSegs) : 0
+                        let fraction = pvFraction ?? (totalSegs > 0 ? CGFloat(filledSegs) / CGFloat(totalSegs) : 0)
                         RoundedRectangle(cornerRadius: barRadius)
                             .fill(fillStyle)
                             .frame(width: geometry.size.width * min(fraction, 1.0), height: barH)
