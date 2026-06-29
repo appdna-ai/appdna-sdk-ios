@@ -417,11 +417,52 @@ struct ContentBlockRendererView: View {
         .frame(height: itemH)
     }
 
+    /// SPEC-419 — shared image styling: image_fit (cover/contain/fill/none), aspect_ratio,
+    /// and image_position alignment. Mirrors the console preview + Android ImageBlock.
+    @ViewBuilder
+    private func styledImage(_ image: Image, fit: String, aspect: CGFloat?, maxHeight: CGFloat, alignment: Alignment) -> some View {
+        let fitMode: ContentMode = (fit == "contain" || fit == "fit") ? .fit : .fill
+        if fit == "none" {
+            // No resize — keep intrinsic pixel size; frame clips/positions it (objectFit: none).
+            image
+                .frame(maxHeight: maxHeight, alignment: alignment)
+        } else if let aspect {
+            image.resizable()
+                .aspectRatio(aspect, contentMode: fitMode)
+                .frame(maxHeight: maxHeight, alignment: alignment)
+        } else {
+            image.resizable()
+                .aspectRatio(contentMode: fitMode)
+                .frame(maxHeight: maxHeight, alignment: alignment)
+        }
+    }
+
     private func imageBlock(_ block: ContentBlock) -> some View {
         let cr = CGFloat(block.corner_radius ?? 0)
         let isCircle = (block.corner_radius ?? 0) >= 9999
-        let fitMode: ContentMode = (block.image_fit == "contain" || block.image_fit == "fit") ? .fit : .fill
         let imgHeight = CGFloat(block.height ?? 200)
+        // SPEC-419 — image_fit. Match preview objectFit values + Android ContentScale:
+        // contain/fit → .fit; fill → .fill (stretch-fill); none → no resize (intrinsic); else cover → .fill.
+        let imageFit = block.image_fit ?? "cover"
+        // SPEC-419 (P2) — aspect_ratio routed through field_config (JVM-255 budget); preview applies it too.
+        let aspectRatioValue: CGFloat? = {
+            switch block.field_config?["aspect_ratio"]?.value as? String {
+            case "16:9": return 16.0 / 9.0
+            case "4:3": return 4.0 / 3.0
+            case "1:1": return 1.0
+            case "3:4": return 3.0 / 4.0
+            case "9:16": return 9.0 / 16.0
+            default: return nil
+            }
+        }()
+        // SPEC-419 (P3) — image_position top/bottom routed through field_config; preview uses objectPosition.
+        let positionAlignment: Alignment = {
+            switch block.field_config?["image_position"]?.value as? String {
+            case "top": return .top
+            case "bottom": return .bottom
+            default: return .center
+            }
+        }()
 
         return Group {
             if block.image_frame == "phone", let urlString = block.image_url, let url = URL(string: urlString) {
@@ -431,15 +472,11 @@ struct ContentBlockRendererView: View {
                     switch phase {
                     case .success(let image):
                         if isCircle {
-                            image.resizable()
-                                .aspectRatio(contentMode: fitMode)
-                                .frame(maxHeight: imgHeight)
+                            styledImage(image, fit: imageFit, aspect: aspectRatioValue, maxHeight: imgHeight, alignment: positionAlignment)
                                 .clipShape(Circle())
                                 .accessibilityLabel(block.alt ?? "Image")
                         } else {
-                            image.resizable()
-                                .aspectRatio(contentMode: fitMode)
-                                .frame(maxHeight: imgHeight)
+                            styledImage(image, fit: imageFit, aspect: aspectRatioValue, maxHeight: imgHeight, alignment: positionAlignment)
                                 .clipShape(RoundedRectangle(cornerRadius: cr))
                                 .accessibilityLabel(block.alt ?? "Image")
                         }
@@ -1676,6 +1713,25 @@ struct ContentBlockRendererView: View {
             }
         }()
 
+        // SPEC-419 — row_distribution for the horizontal HStack. iOS decoded this but never applied
+        // it (Android maps it to Arrangement; preview to justifyContent). Like the preview
+        // (`justifyContent: rowChildFill ? undefined : rowDist`) + Android (weight(1f) when childFill),
+        // distribution only takes effect when children DON'T fill — filling children make it moot.
+        // Ratio-driven rows ignore it entirely (column_ratios path is untouched below).
+        let distribution = (block.row_distribution ?? "start").replacingOccurrences(of: "-", with: "_")
+        let applyDistribution = !childFill
+        let useSpacers = applyDistribution &&
+            (distribution == "space_between" || distribution == "space_around" || distribution == "space_evenly")
+        let edgeSpacers = applyDistribution &&
+            (distribution == "space_around" || distribution == "space_evenly")
+        let distAlignment: Alignment = {
+            switch distribution {
+            case "center": return .center
+            case "end": return .trailing
+            default: return .leading // start
+            }
+        }()
+
         Group {
             if direction == "vertical" {
                 VStack(alignment: hAlign, spacing: rowGap) {
@@ -1708,16 +1764,26 @@ struct ContentBlockRendererView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
-                HStack(alignment: vAlign, spacing: rowGap) {
+                // SPEC-419 — apply row_distribution. When children fill (childFill), distribution is
+                // moot (matches preview/Android). When they don't, center/end use frame alignment;
+                // space_between/around/evenly interleave Spacers (around/evenly add leading+trailing).
+                HStack(alignment: vAlign, spacing: useSpacers ? 0 : rowGap) {
+                    if edgeSpacers { Spacer(minLength: 0) }
                     if let icon = leadingIcon {
                         rowLeadingIconView(icon: icon, size: leadingIconSize, color: leadingIconColor, bgColor: leadingIconBgColor, bgSize: leadingIconBgSize)
+                        if useSpacers { Spacer(minLength: 0) }
                     }
-                    ForEach(childBlocks) { child in
+                    ForEach(Array(childBlocks.enumerated()), id: \.element.id) { idx, child in
                         renderBlock(child)
                             .applyRelativeSizing(width: child.element_width, height: child.element_height)
                             .frame(maxWidth: childFill ? .infinity : nil)
                             .zIndex(child.overflow == "visible" ? 1 : 0)
+                        if useSpacers && idx < childBlocks.count - 1 { Spacer(minLength: 0) }
                     }
+                    if edgeSpacers { Spacer(minLength: 0) }
+                }
+                .if(applyDistribution) { view in
+                    view.frame(maxWidth: .infinity, alignment: distAlignment)
                 }
             }
         }
