@@ -188,6 +188,8 @@ struct FormInputPasswordBlock: View {
         let borderColor = Color(hex: block.field_style?.border_color ?? "#D1D5DB")
         let cornerRadius = CGFloat(block.field_style?.corner_radius ?? 8)
         let keyboardAppearanceRaw = block.field_config?["keyboard_appearance"]?.value as? String
+        // SPEC-419 pass-17 — mirror FormInputTextBlock font sizing onto the password sibling.
+        let inputFontSize = CGFloat(cfgDouble(block.field_config?["input_text_size"]) ?? cfgDouble(block.field_config?["font_size"]) ?? 14)
 
         VStack(alignment: .leading, spacing: 6) {
             formFieldLabel(block)
@@ -202,10 +204,11 @@ struct FormInputPasswordBlock: View {
                     autocorrection: false,
                     autocapitalization: .none,
                     returnKeyType: .done,
+                    font: UIFont.systemFont(ofSize: inputFontSize),
                     textColor: block.field_style?.text_color.map { UIColor(Color(hex: $0)) },
                     placeholderColor: block.field_style?.placeholder_color.map { UIColor(Color(hex: $0)) }
                 )
-                .frame(height: 24)
+                .frame(height: max(24, inputFontSize + 6))
 
                 Button {
                     showPassword.toggle()
