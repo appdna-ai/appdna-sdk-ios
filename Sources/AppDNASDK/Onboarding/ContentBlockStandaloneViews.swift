@@ -1223,7 +1223,9 @@ struct DateWheelPickerBlockView: View {
             minDate = max(minDate, today)
         }
 
-        return minDate...maxDate
+        // SPEC-419 pass-24 — guard the ClosedRange: a descending min_date/max_date config, or
+        // allow_past/allow_future pushing minDate past maxDate, would trap minDate...maxDate.
+        return minDate...max(minDate, maxDate)
     }
 
     var body: some View {
