@@ -1908,7 +1908,7 @@ struct PulsingAvatarBlockView: View {
     var body: some View {
         let avatarSize = CGFloat(block.icon_size ?? block.height ?? 80)
         let pulseCol = Color(hex: block.pulse_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
-        let ringCount = block.pulse_ring_count ?? 3
+        let ringCount = max(1, block.pulse_ring_count ?? 3)  // SPEC-419 pass-23 — guard ForEach(0..<ringCount) trap on negative + pulseDuration/ringCount div-by-zero
         let pulseDuration = block.pulse_speed ?? 1.5
         let borderW = CGFloat(block.border_width ?? 0)
         let borderCol = Color(hex: block.border_color ?? "#FFFFFF")
@@ -2041,8 +2041,11 @@ struct StarBackgroundBlockView: View {
             default: return 0.8
             }
         }()
-        let minSize = CGFloat(block.size_range?.first ?? 1)
-        let maxSize = CGFloat(block.size_range?.last ?? 3)
+        let rawMinSize = CGFloat(block.size_range?.first ?? 1)
+        let rawMaxSize = CGFloat(block.size_range?.last ?? 3)
+        // SPEC-419 pass-23 — guard CGFloat.random(in: minSize...maxSize) against a descending size_range (e.g. [5,2])
+        let minSize = min(rawMinSize, rawMaxSize)
+        let maxSize = max(rawMinSize, rawMaxSize)
         let isFullscreen = block.fullscreen ?? false
         let height = CGFloat(block.height ?? 200)
 
