@@ -1146,7 +1146,7 @@ struct ContentBlockRendererView: View {
                     lottie_json: nil,
                     autoplay: block.autoplay ?? true,
                     loop: block.loop ?? true,
-                    speed: block.lottie_speed ?? 1.0,  // SPEC-419 pass-22 TODO — editor writes block.speed (number) but iOS `speed` is String?; needs type reconciliation
+                    speed: block.lottie_speed ?? 1.0,  // SPEC-419 pass-23 — editor now authors lottie_speed (decoupled from the overloaded string `speed` particle key)
                     width: block.lottie_width,
                     height: block.lottie_height ?? block.height ?? 160,
                     alignment: block.icon_alignment ?? block.alignment ?? "center",  // SPEC-419 pass-22 — editor writes block.alignment

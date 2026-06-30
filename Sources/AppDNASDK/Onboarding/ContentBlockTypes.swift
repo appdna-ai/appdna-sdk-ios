@@ -1493,7 +1493,7 @@ public struct ContentBlock: Codable, Identifiable {
         self.placeholder_text = try c.decodeIfPresent(String.self, forKey: .placeholder_text)
         self.particle_type = try c.decodeIfPresent(String.self, forKey: .particle_type)
         self.density = try c.decodeIfPresent(String.self, forKey: .density)
-        self.speed = try c.decodeIfPresent(String.self, forKey: .speed)
+        self.speed = (try? c.decodeIfPresent(String.self, forKey: .speed)) ?? nil  // SPEC-419 pass-23 — tolerate a legacy numeric `speed` (old lottie blocks wrote a number here) rather than throwing on the whole block
         self.secondary_color = try c.decodeIfPresent(String.self, forKey: .secondary_color)
         self.size_range = try c.decodeIfPresent([Double].self, forKey: .size_range)
         self.fullscreen = try c.decodeIfPresent(Bool.self, forKey: .fullscreen)
