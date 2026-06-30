@@ -504,6 +504,9 @@ struct FormInputSelectBlock: View {
         let accentHex = block.field_style?.fill_color ?? block.field_style?.focused_border_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1")
         let fillCol = Color(hex: accentHex)
         let separatorCol = (cfg?["separator_color"]?.value as? String).map { Color(hex: $0) } ?? Color(hex: "#D1D5DB")
+        // SPEC-419 pass-24 — separator_thickness (console Slider 0–4, default 1) drives the
+        // divider height; thickness was previously hardcoded to 1pt.
+        let separatorThickness = CGFloat((cfgDouble(cfg?["separator_thickness"])) ?? 1)
         let textCol: Color = (cfg?["text_color"]?.value as? String).map { Color(hex: $0) } ?? block.field_style?.text_color.map { Color(hex: $0) } ?? .primary
         let selectedTextCol: Color = (cfg?["selected_text_color"]?.value as? String).map { Color(hex: $0) } ?? textCol
         let selectedBgCol = (cfg?["selected_bg_color"]?.value as? String).map { Color(hex: $0) } ?? fillCol.opacity(0.15)
@@ -529,7 +532,7 @@ struct FormInputSelectBlock: View {
                 .contentShape(Rectangle())
                 .onTapGesture { toggleSelection(option: option, fieldId: fieldId) }
                 if idx < options.count - 1 {
-                    Rectangle().fill(separatorCol).frame(height: 1)
+                    Rectangle().fill(separatorCol).frame(height: separatorThickness)
                 }
             }
         }
@@ -580,6 +583,10 @@ struct FormInputSelectBlock: View {
         let unselectedBorderCol: Color = cfgOptBorder ?? block.field_style?.border_color.map { Color(hex: $0) } ?? Color(hex: "#D1D5DB")
         let cols = max(Int((cfgDouble(cfg?["grid_columns"])) ?? 2), 1)
         let tileHeight = CGFloat((cfgDouble(cfg?["tile_height"])) ?? 140)
+        // SPEC-419 pass-24 — tile_aspect_ratio ("W:H", console Select 1:1/4:3/16:9/3:4) sizes the
+        // tile by its (flexible) width × the ratio. When set it overrides the fixed tile_height;
+        // falls back to tile_height when unset.
+        let tileAspect = parseAspectRatio(cfg?["tile_aspect_ratio"]?.value as? String)
         let selectedBorderW = CGFloat((cfgDouble(cfg?["selected_border_width"])) ?? 2)
         let unselectedBorderW = CGFloat((cfgDouble(cfg?["unselected_border_width"])) ?? 1)
         let spacing = CGFloat((cfgDouble(cfg?["option_spacing"])) ?? 8)
@@ -614,7 +621,7 @@ struct FormInputSelectBlock: View {
                     .padding(10)
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: tileHeight)
+                .tileSize(aspectRatio: tileAspect, height: tileHeight)
                 .clipShape(RoundedRectangle(cornerRadius: cornerR))
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerR)
@@ -719,6 +726,12 @@ struct FormInputSelectBlock: View {
         // Stacked-list image size default (32). Shares the `option_image_size`
         // config with the grid path so one console slider governs both.
         let stackedImageSize = CGFloat((cfgDouble(cfg?["option_image_size"])) ?? 32)
+        // SPEC-419 pass-24 — show_item_separators (console Switch, stacked only) draws a divider
+        // between stacked options, honoring separator_color + separator_thickness like the list
+        // variant. Off by default (cards already have borders).
+        let showItemSeparators = (cfg?["show_item_separators"]?.value as? Bool) == true
+        let separatorCol = (cfg?["separator_color"]?.value as? String).map { Color(hex: $0) } ?? Color(hex: "#D1D5DB")
+        let separatorThickness = CGFloat((cfgDouble(cfg?["separator_thickness"])) ?? 1)
 
         VStack(spacing: optionSpacing) {
             ForEach(Array(options.enumerated()), id: \.offset) { pair in
@@ -876,8 +889,22 @@ struct FormInputSelectBlock: View {
                 // leading_text/trailing_text/badge) as a discrete accessibility element so the
                 // structural parity harness can read each box, instead of the Button merging them.
                 .accessibilityElement(children: .contain)
+                // SPEC-419 pass-24 — optional divider between stacked options (parity with list).
+                if showItemSeparators && oi < options.count - 1 {
+                    Rectangle().fill(separatorCol).frame(height: separatorThickness)
+                }
             }
         }
+    }
+
+    // SPEC-419 pass-24 — parse a "W:H" aspect-ratio string into a width/height ratio
+    // for `.aspectRatio(_:contentMode:)`. Returns nil for unset/malformed values so the
+    // caller can fall back to a fixed height.
+    private func parseAspectRatio(_ s: String?) -> CGFloat? {
+        guard let s = s else { return nil }
+        let parts = s.split(separator: ":")
+        guard parts.count == 2, let w = Double(parts[0]), let h = Double(parts[1]), w > 0, h > 0 else { return nil }
+        return CGFloat(w / h)
     }
 
     // MARK: - Badge alignment helper (SPEC-070 EPIC-1)
@@ -2215,6 +2242,19 @@ struct FlowLayoutView<Content: View>: View {
         let columns = [GridItem(.adaptive(minimum: 60, maximum: .infinity), spacing: spacing)]
         LazyVGrid(columns: columns, alignment: .leading, spacing: spacing) {
             content()
+        }
+    }
+}
+
+// SPEC-419 pass-24 — size an image-tile by an explicit aspect ratio (width × ratio) when
+// `tile_aspect_ratio` is set, else fall back to a fixed `tile_height`.
+private extension View {
+    @ViewBuilder
+    func tileSize(aspectRatio: CGFloat?, height: CGFloat) -> some View {
+        if let ar = aspectRatio {
+            self.aspectRatio(ar, contentMode: .fit)
+        } else {
+            self.frame(height: height)
         }
     }
 }
