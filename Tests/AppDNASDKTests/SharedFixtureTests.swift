@@ -53,6 +53,12 @@ final class SharedFixtureTests: XCTestCase {
 
     // MARK: - Fixture model (decoded from JSON)
 
+    /// Lightweight peek to read `category` without requiring `action` — lets the
+    /// loader skip `render`-category fixtures (structural/visual parity harness).
+    struct FixtureHeader: Decodable {
+        let category: String
+    }
+
     struct Fixture: Decodable {
         let id: String
         let category: String
@@ -209,6 +215,13 @@ final class SharedFixtureTests: XCTestCase {
         for case let url as URL in enumerator {
             guard url.lastPathComponent.hasSuffix(".fixture.json") else { continue }
             let data = try Data(contentsOf: url)
+            // `render`-category fixtures drive the structural/visual parity harness
+            // and carry no `action` — skip them in this behavioral runner (decoding
+            // the required `action` would otherwise fail).
+            if let header = try? decoder.decode(FixtureHeader.self, from: data),
+               header.category == "render" {
+                continue
+            }
             do {
                 let f = try decoder.decode(Fixture.self, from: data)
                 if f.platforms.contains("ios") {
