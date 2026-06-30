@@ -411,9 +411,10 @@ struct FormStepView: View {
     // MARK: - Slider
 
     private func sliderField(_ field: FormField) -> some View {
-        let minVal = field.config?.min_value ?? 0
-        let maxVal = field.config?.max_value ?? 100
-        let step = field.config?.step ?? 1
+        // SPEC-419 pass-29 — clamp the ClosedRange (min<max, step>0); an inverted/degenerate config would trap Slider(in:).
+        let step = { let s = field.config?.step ?? 1; return s > 0 ? s : 1 }()
+        let minVal = min(field.config?.min_value ?? 0, field.config?.max_value ?? 100)
+        let maxVal = max(field.config?.max_value ?? 100, minVal + step)
         let unit = field.config?.unit ?? ""
 
         let binding = Binding<Double>(
@@ -461,9 +462,10 @@ struct FormStepView: View {
     // MARK: - Stepper
 
     private func stepperField(_ field: FormField) -> some View {
-        let minVal = Int(field.config?.min_value ?? 0)
-        let maxVal = Int(field.config?.max_value ?? 100)
-        let step = Int(field.config?.step ?? 1)
+        // SPEC-419 pass-29 — clamp the ClosedRange (min<max, step>0); an inverted/degenerate config would trap Stepper(in:).
+        let step = max(Int(field.config?.step ?? 1), 1)
+        let minVal = min(Int(field.config?.min_value ?? 0), Int(field.config?.max_value ?? 100))
+        let maxVal = max(Int(field.config?.max_value ?? 100), minVal + step)
 
         let binding = Binding<Int>(
             get: { values[field.id] as? Int ?? minVal },
