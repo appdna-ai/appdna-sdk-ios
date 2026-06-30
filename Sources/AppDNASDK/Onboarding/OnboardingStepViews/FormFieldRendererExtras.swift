@@ -161,8 +161,10 @@ struct RangeSliderFieldView: View {
             // Stacked sliders — SwiftUI lacks a native range slider, so we
             // use two coupled sliders that clamp each other.
             VStack(spacing: 4) {
-                Slider(value: low, in: minV...high.wrappedValue)
-                Slider(value: high, in: low.wrappedValue...maxV)
+                // SPEC-419 pass-28 — guard the ClosedRange against an inverted/degenerate config
+                // (min_value > max_value) or a coupled value out of order, mirroring FormInputRangeSliderBlock.
+                Slider(value: low, in: minV...max(minV, high.wrappedValue))
+                Slider(value: high, in: min(maxV, low.wrappedValue)...maxV)
             }
             HStack {
                 Text(cfg?.min_label?.interpolated() ?? formatNumber(minV, places: decimalPlaces))
