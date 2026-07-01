@@ -401,40 +401,48 @@ struct MeasurementWheelBlockView: View {
 
     // MARK: Drum (wheel = flat; dial = perspective) — render-only, wrapper persists
 
+    // Custom drum (NOT SwiftUI Picker(.wheel), which forces a UIKit white edge-fade
+    // + fixed intrinsic height that overflows on a dark background). Rows fade by
+    // distance to the page background via opacity; `dial` tilts each row for a
+    // rotary-perspective look; `wheel` is flat. Render-only — the wrapper persists.
     @ViewBuilder
     private func drumVisual(perspective: Bool) -> some View {
         let vals = displayValues
+        let sel = nearestIndex(to: currentDisplay, in: vals)
+        let rowH: CGFloat = 40
+        let half = 2   // 5 visible rows
         ZStack {
-            // Center highlight band (track).
             RoundedRectangle(cornerRadius: 8)
                 .fill(trackColor.opacity(0.6))
-                .frame(height: 40)
-
-            Picker("", selection: drumSelection(values: vals)) {
-                ForEach(vals.indices, id: \.self) { i in
-                    Text(formattedDisplay(vals[i]))
-                        .foregroundColor(accentColor)
-                        .tag(i)
+                .frame(height: rowH)
+            VStack(spacing: 0) {
+                ForEach(-half...half, id: \.self) { off in
+                    let idx = sel + off
+                    let inRange = idx >= 0 && idx < vals.count
+                    // `dial` = barrel/rotary feel via a per-row SCALE (layout-safe,
+                    // centered in the 40pt slot); `wheel` = flat (scale 1). Never a
+                    // per-row rotation3DEffect — it collapses the VStack layout.
+                    let scale = perspective ? max(0.62, 1 - Double(abs(off)) * 0.16) : 1.0
+                    Text(inRange ? formattedDisplay(vals[idx]) : " ")
+                        .font(.system(size: off == 0 ? 24 : 18, weight: off == 0 ? .bold : .regular))
+                        .foregroundColor(off == 0 ? accentColor : tickColor)
+                        .opacity(off == 0 ? 1 : max(0.18, 1 - Double(abs(off)) * 0.30))
+                        .scaleEffect(scale)
+                        .frame(height: rowH)
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                        .onTapGesture { if inRange { pick(vals[idx]) } }
                 }
             }
-            .pickerStyle(.wheel)
-            .frame(maxWidth: .infinity)
-            .tint(accentColor)
-            // Perspective tilt for the "dial" style.
-            .rotation3DEffect(
-                .degrees(perspective ? 12 : 0),
-                axis: (x: 1, y: 0, z: 0),
-                perspective: 0.6
-            )
         }
-        .frame(height: 150)
-    }
-
-    private func drumSelection(values vals: [Double]) -> Binding<Int> {
-        Binding(
-            get: { nearestIndex(to: currentDisplay, in: vals) },
-            set: { newIdx in
-                if newIdx >= 0, newIdx < vals.count { pick(vals[newIdx]) }
+        .frame(height: rowH * 5)
+        .clipped()
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture().onEnded { g in
+                let steps = Int((-g.translation.height / rowH).rounded())
+                let ni = min(max(sel + steps, 0), vals.count - 1)
+                if ni != sel { pick(vals[ni]) }
             }
         )
     }

@@ -291,6 +291,94 @@ final class VisualSnapshotTests: XCTestCase {
         }
     }
 
+    /// SPEC-420 — measurement wheel, ruler style (weight, kg base, 70). Parity with Android.
+    func testMeasurement_ruler() throws {
+        let view = try render("""
+        {
+          "id": "mw1", "type": "wheel_picker", "field_id": "weight", "highlight_color": "#6366F1",
+          "field_config": {
+            "measurement_type": "weight", "measurement_style": "ruler",
+            "measurement_default": 70, "unit_default": "kg",
+            "units": [
+              { "id": "kg", "label": "kg", "min": 30, "max": 200, "step": 0.5, "decimals": 1, "factor": 1, "offset": 0 },
+              { "id": "lbs", "label": "lbs", "min": 66, "max": 441, "step": 1, "decimals": 0, "factor": 2.20462, "offset": 0 }
+            ]
+          }
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
+
+    /// SPEC-420 — measurement wheel, gauge style (temperature, °C base, 37). Parity with Android.
+    func testMeasurement_gauge() throws {
+        let view = try render("""
+        {
+          "id": "mw2", "type": "wheel_picker", "field_id": "temp", "highlight_color": "#6366F1",
+          "field_config": {
+            "measurement_type": "temperature", "measurement_style": "gauge",
+            "measurement_default": 37, "unit_default": "c",
+            "units": [
+              { "id": "c", "label": "°C", "min": 35, "max": 42, "step": 0.1, "decimals": 1, "factor": 1, "offset": 0 },
+              { "id": "f", "label": "°F", "min": 95, "max": 108, "step": 0.1, "decimals": 1, "factor": 1.8, "offset": 32 }
+            ]
+          }
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
+
+    /// SPEC-420 — measurement wheel, dial style (height, cm base, 170). Parity with Android.
+    func testMeasurement_dial() throws {
+        let view = try render("""
+        {
+          "id": "mw3", "type": "wheel_picker", "field_id": "height", "highlight_color": "#6366F1",
+          "field_config": {
+            "measurement_type": "height", "measurement_style": "dial",
+            "measurement_default": 170, "unit_default": "cm",
+            "units": [
+              { "id": "cm", "label": "cm", "min": 100, "max": 220, "step": 1, "decimals": 0, "factor": 1, "offset": 0 },
+              { "id": "in", "label": "in", "min": 39, "max": 87, "step": 1, "decimals": 0, "factor": 0.393701, "offset": 0 }
+            ]
+          }
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
+
+    /// SPEC-420 — measurement wheel, classic flat drum style (weight, kg base, 70). Parity with Android.
+    func testMeasurement_wheel() throws {
+        let view = try render("""
+        {
+          "id": "mw4", "type": "wheel_picker", "field_id": "weight", "highlight_color": "#6366F1",
+          "field_config": {
+            "measurement_type": "weight", "measurement_style": "wheel",
+            "measurement_default": 70, "unit_default": "kg",
+            "units": [
+              { "id": "kg", "label": "kg", "min": 30, "max": 200, "step": 0.5, "decimals": 1, "factor": 1, "offset": 0 },
+              { "id": "lbs", "label": "lbs", "min": 66, "max": 441, "step": 1, "decimals": 0, "factor": 2.20462, "offset": 0 }
+            ]
+          }
+        }
+        """)
+        let recordMode: SnapshotTestingConfiguration.Record =
+            ProcessInfo.processInfo.environment["RECORD_SNAPSHOTS"] != nil ? .all : .never
+        withSnapshotTesting(record: recordMode) {
+            assertSnapshot(of: view, as: .image(layout: .sizeThatFits))
+        }
+    }
+
     /// EPIC-2 — flow-level progress: thin (2pt) solid + thick (12pt) multi-color gradient. Parity with Android.
     func testProgress_flowThinGradient() throws {
         let view = VStack(spacing: 22) {

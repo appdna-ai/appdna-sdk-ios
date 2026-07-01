@@ -255,7 +255,8 @@ final class SharedFixtureTests: XCTestCase {
             "onboarding_completed_with_responses",   // complete_flow action.kind unimplemented
             "permission_action_safe_fallback",       // permission action block dispatch
             "reset_password_no_advance",             // submit_form for reset_password action
-            "screen_view_emits_screen_field"         // notifyScreenAppeared event simulation
+            "screen_view_emits_screen_field",        // notifyScreenAppeared event simulation
+            "wheel_measurement_emit"                 // SPEC-420 onElementInteraction emission — driver not yet wired
         ]
 
         for fixture in fixtures {
