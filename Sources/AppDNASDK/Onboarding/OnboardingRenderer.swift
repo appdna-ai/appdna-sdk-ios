@@ -1674,6 +1674,16 @@ struct OnboardingStepRouter: View {
     private func handleBlockAction(_ action: String, _ actionValue: String?) {
         switch action {
         case "next":
+            // SPEC-421 — a permission step whose CTA is authored as plain `action:"next"`
+            // (instead of `action:"permission"`) must STILL honor the step's `permission_type`
+            // and run the permission pipeline rather than silently advancing. Reuse
+            // PermissionManager's own support check — do not invent a new list. Non-permission
+            // "next" steps (empty/unsupported type) fall through to the normal advance below.
+            let nextPermissionType = (effectiveConfig.layout?["permission_type"]?.value as? String) ?? ""
+            if !nextPermissionType.isEmpty, PermissionManager.isSupported(nextPermissionType) {
+                runPermissionPipeline(nextPermissionType)
+                return
+            }
             // Validate required fields before advancing
             guard canAdvance else {
                 withAnimation { showValidationToast = true }
