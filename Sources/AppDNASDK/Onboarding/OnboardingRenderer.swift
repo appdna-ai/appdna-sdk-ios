@@ -74,7 +74,9 @@ struct OnboardingFlowHost: View {
                         savedResponses: responses[step.id] as? [String: Any],
                         performInteraction: { blockId, action, value, iv in
                             await performInteraction(blockId: blockId, action: action, value: value, inputValues: iv)
-                        }
+                        },
+                        delegate: delegate,
+                        eventTracker: eventTracker
                     )
                     // Chat steps use stable step.id so back-navigation preserves chat transcript;
                     // other steps use currentIndex to force view recreation for transition animations.
@@ -1449,8 +1451,18 @@ struct OnboardingStepRouter: View {
     var savedResponses: [String: Any]? = nil
     /// SPEC-419 STEP-2 — bridge to the flow host's delegate round-trip for interactive elements.
     var performInteraction: (String, String, String?, [String: Any]) async -> AppliedInteraction? = { _, _, _, _ in nil }
+    /// SPEC-421 — flow host delegate + analytics tracker, needed for the permission pipeline
+    /// (pre-hook, `onPermissionResult`, and the five `permission_*` analytics literals).
+    weak var delegate: AppDNAOnboardingDelegate?
+    var eventTracker: EventTracker?
 
     @State private var toggleValues: [String: Bool] = [:]
+    /// SPEC-421 — async per-type OS permission requester (retained across re-renders so a
+    /// pending location/notification prompt's continuation isn't dropped).
+    @State private var permissionManager = PermissionManager()
+    /// SPEC-421 — drives the optional "Open Settings" affordance when a permission is denied and
+    /// the step authored `show_settings_fallback_on_denied`.
+    @State private var permissionSettingsAlert: PermissionSettingsAlert?
     @State private var inputValues: [String: Any]
     @State private var showValidationToast = false
     /// SPEC-419 STEP-2 — per-block `field_config` overrides pushed back by the host delegate
@@ -1458,7 +1470,7 @@ struct OnboardingStepRouter: View {
     /// render time on top of the resolved block; empty = zero change.
     @State private var fieldConfigOverrides: [String: [String: Any]] = [:]
 
-    init(step: OnboardingStep, effectiveConfig: StepConfig, onNext: @escaping ([String: Any]?) -> Void, onSkip: @escaping () -> Void, flowId: String = "", currentStepIndex: Int = 0, totalSteps: Int = 1, savedResponses: [String: Any]? = nil, performInteraction: @escaping (String, String, String?, [String: Any]) async -> AppliedInteraction? = { _, _, _, _ in nil }) {
+    init(step: OnboardingStep, effectiveConfig: StepConfig, onNext: @escaping ([String: Any]?) -> Void, onSkip: @escaping () -> Void, flowId: String = "", currentStepIndex: Int = 0, totalSteps: Int = 1, savedResponses: [String: Any]? = nil, performInteraction: @escaping (String, String, String?, [String: Any]) async -> AppliedInteraction? = { _, _, _, _ in nil }, delegate: AppDNAOnboardingDelegate? = nil, eventTracker: EventTracker? = nil) {
         self.step = step
         self.effectiveConfig = effectiveConfig
         self.onNext = onNext
@@ -1468,6 +1480,8 @@ struct OnboardingStepRouter: View {
         self.totalSteps = totalSteps
         self.savedResponses = savedResponses
         self.performInteraction = performInteraction
+        self.delegate = delegate
+        self.eventTracker = eventTracker
         // Pre-populate inputValues from saved responses so child views see data immediately
         _inputValues = State(initialValue: savedResponses ?? [:])
     }
@@ -1518,6 +1532,27 @@ struct OnboardingStepRouter: View {
             }
         }
         .entryAnimation(effectiveConfig.animation?.entry_animation, durationMs: effectiveConfig.animation?.entry_duration_ms)
+        // SPEC-421 — settings fallback for a denied permission (opt-in via `show_settings_fallback_on_denied`).
+        .alert(
+            "Permission needed",
+            isPresented: Binding(
+                get: { permissionSettingsAlert != nil },
+                set: { if !$0 { permissionSettingsAlert = nil } }
+            ),
+            presenting: permissionSettingsAlert
+        ) { alert in
+            Button(alert.label) {
+                permissionManager.openSettings()
+                permissionSettingsAlert = nil
+                advancePermissionStep()
+            }
+            Button("Continue", role: .cancel) {
+                permissionSettingsAlert = nil
+                advancePermissionStep()
+            }
+        } message: { _ in
+            Text("You can enable this in Settings.")
+        }
     }
 
     // MARK: - Block-based step view (SPEC-084)
@@ -1685,10 +1720,12 @@ struct OnboardingStepRouter: View {
             }
             onNext(data)
         case "permission":
-            // P1: Requires runtime permission request infrastructure.
-            // action_value will specify the permission type (e.g. "camera", "notifications").
-            // For now, advance the step as a safe fallback.
-            onNext(nil)
+            // SPEC-421: Fire the real OS permission prompt (async), capture grant/deny safely,
+            // emit analytics + delegate hooks, store the result for next-step routing, then advance.
+            // Type source of truth = the step's `layout.permission_type` (the only console-authorable
+            // path). If absent/unsupported the pipeline emits `permission_unavailable` + advances.
+            let permissionType = (effectiveConfig.layout?["permission_type"]?.value as? String) ?? ""
+            runPermissionPipeline(permissionType)
 
         // MARK: Auth actions (entry)
         case "login", "register", "reset_password", "magic_link",
@@ -1754,6 +1791,115 @@ struct OnboardingStepRouter: View {
             inputValues: inputValues,
         )
     }
+
+    // MARK: - Permission pipeline (SPEC-421)
+
+    /// Analytics props attached to every `permission_*` literal.
+    private func permissionProps(_ type: String) -> [String: Any] {
+        ["permission_type": type, "flow_id": flowId, "step_id": step.id]
+    }
+
+    /// Store the resolved value under `permission_{type}` (routable by `next_step_rules`) and
+    /// fire the observe-only delegate callback. Does NOT advance — callers advance explicitly.
+    private func storePermissionResult(_ type: String, granted: Bool) {
+        inputValues["permission_" + type] = granted ? "granted" : "denied"
+        delegate?.onPermissionResult(flowId: flowId, stepId: step.id, permissionType: type, granted: granted)
+    }
+
+    /// Advance via the same collect-and-`onNext` path the step's primary CTA uses, so the freshly
+    /// stored `permission_{type}` value rides along in the step response.
+    private func advancePermissionStep() {
+        var data: [String: Any] = [:]
+        for (key, value) in toggleValues { data["toggle_\(key)"] = value }
+        for (key, value) in inputValues { data[key] = value }
+        onNext(data.isEmpty ? nil : data)
+    }
+
+    private func presentSettingsFallback(type: String, label: String) {
+        permissionSettingsAlert = PermissionSettingsAlert(type: type, label: label)
+    }
+
+    /// The full async permission pipeline for a `permission` CTA. Reads `layout.permission_type`,
+    /// runs the optional host pre-hook, status check, native OS request, analytics + delegate
+    /// callbacks, stores the result, and advances. Never crashes on a missing usage-description key
+    /// (`PermissionManager.status` returns `.unavailable` → we emit + advance without calling the OS).
+    private func runPermissionPipeline(_ type: String) {
+        let mgr = permissionManager
+        Task {
+            // 1. Optional host pre-hook — host may resolve without prompting.
+            if let handling = await delegate?.onPermissionRequest(type) {
+                switch handling {
+                case .handledByHost(let granted):
+                    await MainActor.run {
+                        if granted {
+                            eventTracker?.track(event: "permission_granted", properties: permissionProps(type))
+                        } else {
+                            eventTracker?.track(event: "permission_denied", properties: permissionProps(type))
+                        }
+                        storePermissionResult(type, granted: granted)
+                        advancePermissionStep()
+                    }
+                    return
+                case .proceed:
+                    break
+                }
+            }
+
+            // 2. Status check (async where the OS requires it).
+            let status = await mgr.status(type)
+            switch status {
+            case .granted:
+                await MainActor.run {
+                    eventTracker?.track(event: "permission_already_granted", properties: permissionProps(type))
+                    storePermissionResult(type, granted: true)
+                    advancePermissionStep()
+                }
+
+            case .denied:
+                let showFallback = (effectiveConfig.layout?["show_settings_fallback_on_denied"]?.value as? Bool) == true
+                let label = (effectiveConfig.layout?["settings_fallback_label"]?.value as? String) ?? "Open Settings"
+                await MainActor.run {
+                    eventTracker?.track(event: "permission_denied", properties: permissionProps(type))
+                    storePermissionResult(type, granted: false)
+                    if showFallback {
+                        // Offer an "Open Settings" affordance; advance on the user's choice.
+                        presentSettingsFallback(type: type, label: label)
+                    } else {
+                        advancePermissionStep()
+                    }
+                }
+
+            case .unavailable:
+                await MainActor.run {
+                    eventTracker?.track(event: "permission_unavailable", properties: permissionProps(type))
+                    Log.warning("[Permission] '\(type)' unavailable (missing Info.plist usage description or unsupported type) — advancing without prompting.")
+                    advancePermissionStep()
+                }
+
+            case .undetermined:
+                await MainActor.run {
+                    eventTracker?.track(event: "permission_prompted", properties: permissionProps(type))
+                }
+                let granted = await mgr.request(type)
+                await MainActor.run {
+                    if granted {
+                        eventTracker?.track(event: "permission_granted", properties: permissionProps(type))
+                    } else {
+                        eventTracker?.track(event: "permission_denied", properties: permissionProps(type))
+                    }
+                    storePermissionResult(type, granted: granted)
+                    advancePermissionStep()
+                }
+            }
+        }
+    }
+}
+
+/// SPEC-421 — identifies a pending "Open Settings" affordance for a denied permission.
+struct PermissionSettingsAlert: Identifiable {
+    let id = UUID()
+    let type: String
+    let label: String
 }
 
 // MARK: - Required-field gate (SPEC-419 STEP-2)

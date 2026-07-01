@@ -648,6 +648,17 @@ public func applyInteractionResult(_ result: ElementInteractionResult, inputValu
     )
 }
 
+// MARK: - Permission handling (SPEC-421)
+
+/// SPEC-421 — optional host override for an onboarding permission step. Returned from
+/// `onPermissionRequest`. `.handledByHost` means the host already resolved the permission
+/// (or wants to inject a result) — the SDK writes the result + emits analytics uniformly and
+/// does NOT show the OS prompt. `.proceed` (or `nil`) lets the SDK run the native OS flow.
+public enum PermissionHandling: Equatable {
+    case proceed
+    case handledByHost(granted: Bool)
+}
+
 // MARK: - Delegate protocol
 
 /// Delegate for receiving onboarding flow lifecycle events.
@@ -688,6 +699,13 @@ public protocol AppDNAOnboardingDelegate: AnyObject {
         value: String?,
         inputValues: [String: Any]
     ) async -> ElementInteractionResult?
+
+    // SPEC-421: Runtime permission hooks for onboarding permission steps.
+    // Optional pre-hook — return `.handledByHost(granted:)` to short-circuit the OS prompt,
+    // or `.proceed`/`nil` to let the SDK run the native flow.
+    func onPermissionRequest(_ permissionType: String) async -> PermissionHandling?
+    // Observe-only result callback after the permission is resolved (host, status, or prompt).
+    func onPermissionResult(flowId: String, stepId: String, permissionType: String, granted: Bool)
 }
 
 /// Default empty implementations so delegates can be partial.
@@ -728,4 +746,8 @@ public extension AppDNAOnboardingDelegate {
     ) async -> ElementInteractionResult? {
         return nil
     }
+
+    // SPEC-421 defaults: no host handling, observe-only result is a no-op.
+    func onPermissionRequest(_ permissionType: String) async -> PermissionHandling? { nil }
+    func onPermissionResult(flowId: String, stepId: String, permissionType: String, granted: Bool) {}
 }
