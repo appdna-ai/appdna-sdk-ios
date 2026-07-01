@@ -1686,6 +1686,19 @@ struct WheelPickerBlockView: View {
     private let horizontalItemWidth: CGFloat = 60
 
     var body: some View {
+        // SPEC-420 — opt-in measurement mode. When `field_config.measurement_type`
+        // is present AND the units resolve to a usable set, render the measurement
+        // wrapper (unit toggle + ruler/gauge/dial/wheel visual, base-owned persist).
+        // Otherwise the legacy drum below renders UNCHANGED.
+        if let mcfg = parseMeasurementConfig(block) {
+            MeasurementWheelBlockView(block: block, config: mcfg, inputValues: $inputValues)
+        } else {
+            legacyBody
+        }
+    }
+
+    @ViewBuilder
+    private var legacyBody: some View {
         let minVal = block.min_value ?? 0
         // SPEC-419 — the editor writes `max_value`/`default_value`; natives canonical keys are
         // `max_value_picker`/`default_picker_value`. Read the picker key first, fall back to the
