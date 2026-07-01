@@ -1665,6 +1665,8 @@ struct WheelPickerBlockView: View {
     /// onboarding response dict, so the user's spin was silently dropped.
     /// Now the selected number is persisted under `block.field_id`.
     @Binding var inputValues: [String: Any]
+    /// SPEC-419 STEP-2 — fires `("value_changed", baseValue)` on drag-END/commit (never per tick).
+    var onInteract: (String, String, String?) -> Void = { _, _, _ in }
 
     @State private var selectedIndex: Int = 0
     /// True once the user has either tapped an item or scrolled the wheel.
@@ -1904,10 +1906,18 @@ struct WheelPickerBlockView: View {
         let fieldId = block.field_id ?? block.id
         let safeIdx = max(0, min(selectedIndex, values.count - 1))
         let v = values[safeIdx]
+        let baseValue: String
         if v == v.rounded() {
             inputValues[fieldId] = Int(v)
+            baseValue = String(Int(v))
         } else {
             inputValues[fieldId] = v
+            baseValue = String(v)
+        }
+        // SPEC-419 STEP-2 — fire ONLY on a real user commit (not the pristine onAppear auto-persist),
+        // so the delegate sees drag-END/commit and never a per-tick storm.
+        if hasUserInteracted {
+            onInteract(block.id, "value_changed", baseValue)
         }
     }
 }

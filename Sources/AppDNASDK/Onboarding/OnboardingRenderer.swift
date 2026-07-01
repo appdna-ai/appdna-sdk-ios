@@ -37,6 +37,9 @@ struct OnboardingFlowHost: View {
     @State private var isInitialLoading = true
     // EPIC-2 — dynamic color flash on step-advance (the progress fill briefly animates to flash_color).
     @State private var progressFlashing = false
+    // SPEC-419 STEP-2 — lightweight guard for in-flight element interactions (distinct from the full-step
+    // `isProcessing` overlay). Prevents overlapping delegate round-trips from an element firing twice.
+    @State private var interactionInFlight = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,7 +71,10 @@ struct OnboardingFlowHost: View {
                         flowId: flow.id,
                         currentStepIndex: currentIndex,
                         totalSteps: flow.steps.count,
-                        savedResponses: responses[step.id] as? [String: Any]
+                        savedResponses: responses[step.id] as? [String: Any],
+                        performInteraction: { blockId, action, value, iv in
+                            await performInteraction(blockId: blockId, action: action, value: value, inputValues: iv)
+                        }
                     )
                     // Chat steps use stable step.id so back-navigation preserves chat transcript;
                     // other steps use currentIndex to force view recreation for transition animations.
@@ -466,6 +472,31 @@ struct OnboardingFlowHost: View {
             localizations: config.localizations,
             default_locale: config.default_locale
         )
+    }
+
+    // MARK: - Element interaction (SPEC-419 STEP-2)
+
+    /// Fired by an interactive content block (calendar day tap, otp complete, memory match, press-hold
+    /// confirm, wheel commit, health connect, settings-footer toggle). Awaits the host delegate's
+    /// `onElementInteraction`, then folds the returned `ElementInteractionResult` into an
+    /// `AppliedInteraction` the STEP scope applies (inputValues + fieldConfigOverrides + advance).
+    /// No advance logic lives here — the flow host can't see the step's blocks to validate; the step
+    /// scope routes any `advance` through `handleBlockAction("next")` so required-field validation runs.
+    /// Guarded by `interactionInFlight` (NOT the full-step `isProcessing`) so overlapping fires are dropped.
+    @MainActor
+    func performInteraction(blockId: String, action: String, value: String?, inputValues: [String: Any]) async -> AppliedInteraction? {
+        guard !interactionInFlight else { return nil }
+        interactionInFlight = true
+        defer { interactionInFlight = false }
+        guard let result = await delegate?.onElementInteraction(
+            flowId: flow.id,
+            stepId: currentIndex < flow.steps.count ? flow.steps[currentIndex].id : "",
+            blockId: blockId,
+            action: action,
+            value: value,
+            inputValues: inputValues
+        ) else { return nil }
+        return applyInteractionResult(result, inputValues: inputValues)
     }
 
     // MARK: - Step lifecycle
@@ -1416,12 +1447,18 @@ struct OnboardingStepRouter: View {
     var totalSteps: Int = 1
     /// Previously saved responses for this step (for input retention on back navigation).
     var savedResponses: [String: Any]? = nil
+    /// SPEC-419 STEP-2 — bridge to the flow host's delegate round-trip for interactive elements.
+    var performInteraction: (String, String, String?, [String: Any]) async -> AppliedInteraction? = { _, _, _, _ in nil }
 
     @State private var toggleValues: [String: Bool] = [:]
     @State private var inputValues: [String: Any]
     @State private var showValidationToast = false
+    /// SPEC-419 STEP-2 — per-block `field_config` overrides pushed back by the host delegate
+    /// (`ElementInteractionResult.fieldConfigPatches`). Keyed by blockId → (key → value). Layered at
+    /// render time on top of the resolved block; empty = zero change.
+    @State private var fieldConfigOverrides: [String: [String: Any]] = [:]
 
-    init(step: OnboardingStep, effectiveConfig: StepConfig, onNext: @escaping ([String: Any]?) -> Void, onSkip: @escaping () -> Void, flowId: String = "", currentStepIndex: Int = 0, totalSteps: Int = 1, savedResponses: [String: Any]? = nil) {
+    init(step: OnboardingStep, effectiveConfig: StepConfig, onNext: @escaping ([String: Any]?) -> Void, onSkip: @escaping () -> Void, flowId: String = "", currentStepIndex: Int = 0, totalSteps: Int = 1, savedResponses: [String: Any]? = nil, performInteraction: @escaping (String, String, String?, [String: Any]) async -> AppliedInteraction? = { _, _, _, _ in nil }) {
         self.step = step
         self.effectiveConfig = effectiveConfig
         self.onNext = onNext
@@ -1430,6 +1467,7 @@ struct OnboardingStepRouter: View {
         self.currentStepIndex = currentStepIndex
         self.totalSteps = totalSteps
         self.savedResponses = savedResponses
+        self.performInteraction = performInteraction
         // Pre-populate inputValues from saved responses so child views see data immediately
         _inputValues = State(initialValue: savedResponses ?? [:])
     }
@@ -1534,7 +1572,9 @@ struct OnboardingStepRouter: View {
             loc: loc,
             inputValues: $inputValues,
             currentStepIndex: currentStepIndex,
-            totalSteps: totalSteps
+            totalSteps: totalSteps,
+            onInteract: handleInteract,
+            fieldConfigOverrides: fieldConfigOverrides
         )
     }
 
@@ -1569,17 +1609,31 @@ struct OnboardingStepRouter: View {
 
     // MARK: - Block action handler
 
-    /// Check if all required input blocks have values
+    /// Check if all required input blocks have values.
+    /// SPEC-419 STEP-2 — delegates to the pure `RequiredFieldGate` so the walk is unit-testable and the
+    /// interaction-driven advance path can't bypass required-field validation.
     private var canAdvance: Bool {
-        guard let blocks = effectiveConfig.content_blocks else { return true }
-        for block in blocks where block.field_required == true {
-            let fieldId = block.field_id ?? block.id
-            let value = inputValues[fieldId]
-            if value == nil { return false }
-            if let str = value as? String, str.isEmpty { return false }
-            if let dict = value as? [String: Any], dict.isEmpty { return false }
+        RequiredFieldGate.evaluate(blocks: effectiveConfig.content_blocks ?? [], inputValues: inputValues).canAdvance
+    }
+
+    // MARK: - Element interaction (SPEC-419 STEP-2)
+
+    /// Closure threaded down the block tree; an interactive element calls this with its
+    /// `(blockId, action, value)`. Awaits the flow host's delegate round-trip, then on a non-nil result
+    /// applies inputValue patches, key-level-merges field_config overrides, and — if the host asked to
+    /// advance — funnels through `handleBlockAction("next")` (the ONLY entry that runs `canAdvance`).
+    private func handleInteract(_ blockId: String, _ action: String, _ value: String?) {
+        Task {
+            let applied = await performInteraction(blockId, action, value, inputValues)
+            await MainActor.run {
+                guard let applied else { return }
+                inputValues = applied.inputValues
+                fieldConfigOverrides = mergeFieldConfigOverrides(fieldConfigOverrides, with: applied.fieldConfigOverrides)
+                if applied.advance {
+                    handleBlockAction("next", nil)
+                }
+            }
         }
-        return true
     }
 
     private func handleBlockAction(_ action: String, _ actionValue: String?) {
@@ -1700,6 +1754,65 @@ struct OnboardingStepRouter: View {
             inputValues: inputValues,
         )
     }
+}
+
+// MARK: - Required-field gate (SPEC-419 STEP-2)
+
+/// Pure required-field validation used by `handleBlockAction("next")`. Extracted so the advance gate is
+/// unit-testable without a live host, proving an interaction-driven advance can't bypass validation.
+enum RequiredFieldGate {
+    static func evaluate(blocks: [ContentBlock], inputValues: [String: Any]) -> (canAdvance: Bool, firstMissing: String?) {
+        for block in blocks where block.field_required == true {
+            let fieldId = block.field_id ?? block.id
+            let value = inputValues[fieldId]
+            if value == nil { return (false, fieldId) }
+            if let str = value as? String, str.isEmpty { return (false, fieldId) }
+            if let dict = value as? [String: Any], dict.isEmpty { return (false, fieldId) }
+        }
+        return (true, nil)
+    }
+}
+
+// MARK: - Element-interaction fold (SPEC-419 STEP-2)
+
+/// Key-level merge of new per-block `field_config` patches over existing overrides (override wins).
+/// Never blind-replaces a block's override bag — merges key by key.
+func mergeFieldConfigOverrides(_ current: [String: [String: Any]], with patches: [String: [String: Any]]) -> [String: [String: Any]] {
+    var out = current
+    for (id, patch) in patches {
+        out[id, default: [:]].merge(patch) { _, new in new }
+    }
+    return out
+}
+
+/// Pure composition of the flow-host + step-scope interaction fold: awaits the delegate, applies the
+/// `ElementInteractionResult` to `inputValues`, key-level-merges field_config overrides, and reports whether
+/// an advance was requested. The production path splits this across `OnboardingFlowHost.performInteraction`
+/// (delegate + `applyInteractionResult`) and `OnboardingStepRouter.handleInteract` (merge + advance); this
+/// mirror exists so the composed seam is unit-testable without a live SwiftUI host.
+func fireElementInteraction(
+    delegate: AppDNAOnboardingDelegate?,
+    flowId: String,
+    stepId: String,
+    blockId: String,
+    action: String,
+    value: String?,
+    inputValues: [String: Any],
+    overrides: [String: [String: Any]]
+) async -> (inputValues: [String: Any], overrides: [String: [String: Any]], advanceRequested: Bool) {
+    guard let result = await delegate?.onElementInteraction(
+        flowId: flowId,
+        stepId: stepId,
+        blockId: blockId,
+        action: action,
+        value: value,
+        inputValues: inputValues
+    ) else {
+        return (inputValues, overrides, false)
+    }
+    let applied = applyInteractionResult(result, inputValues: inputValues)
+    let mergedOverrides = mergeFieldConfigOverrides(overrides, with: applied.fieldConfigOverrides)
+    return (applied.inputValues, mergedOverrides, applied.advance)
 }
 
 // MARK: - Auth Action Policy

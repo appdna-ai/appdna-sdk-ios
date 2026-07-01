@@ -23,6 +23,11 @@ struct ContentBlockRendererView: View {
     var isZoneManaged: Bool = false
     /// Scroll offset from parent ScrollView — used for collapse_on_scroll blocks (Sprint 7).
     var scrollOffset: CGFloat = 0
+    /// SPEC-419 STEP-2 — fired by an interactive block; carries (blockId, action, value) to the step scope.
+    var onInteract: (String, String, String?) -> Void = { _, _, _ in }
+    /// SPEC-419 STEP-2 — per-block field_config overrides (from `ElementInteractionResult.fieldConfigPatches`),
+    /// folded onto the resolved block at render time.
+    var fieldConfigOverrides: [String: [String: Any]] = [:]
 
     var body: some View {
         let visibleBlocks = blocks.filter { block in
@@ -47,7 +52,13 @@ struct ContentBlockRendererView: View {
         VStack(spacing: 12) {
             ForEach(visibleBlocks) { block in
                 let shouldAnimate = animatedBlockIds.contains(block.id)
-                let resolvedBlock = resolveBlockBindings(block, hookData: hookData, responses: responses)
+                // SPEC-419 STEP-2 — fold any host-pushed field_config overrides onto the resolved block
+                // UNCONDITIONALLY (resolveBlockBindings early-returns raw blocks with no bindings/templates —
+                // which is every EPIC-11 element — so the merge cannot live inside it). Empty overrides = no-op.
+                let resolvedBlock = resolvedFieldConfig(
+                    resolveBlockBindings(block, hookData: hookData, responses: responses),
+                    fieldConfigOverrides
+                )
                 let shouldCollapse = resolvedBlock.collapse_on_scroll == true
                 // Collapse threshold: how many points of scroll before this block hides
                 let collapseThreshold = CGFloat(
@@ -166,17 +177,17 @@ struct ContentBlockRendererView: View {
         case .media_gallery: return AnyView(mediaGalleryBlock(block))
         case .section_background: return AnyView(sectionBackgroundBlock(block))
         case .carousel: return AnyView(CarouselBlockView(block: block, onAction: onAction, toggleValues: $toggleValues, inputValues: $inputValues))
-        case .otp_input: return AnyView(otpInputBlock(block))
+        case .otp_input: return AnyView(OTPInputBlockView(block: block, inputValues: $inputValues, onInteract: onInteract))
         case .warning_banner: return AnyView(warningBannerBlock(block))
         case .password_strength: return AnyView(passwordStrengthBlock(block))
         case .speech_bubble: return AnyView(speechBubbleBlock(block))
         case .feedback_panel: return AnyView(feedbackPanelBlock(block))
         case .summary_screen: return AnyView(summaryScreenBlock(block))
-        case .press_hold_confirm: return AnyView(pressHoldConfirmBlock(block))
+        case .press_hold_confirm: return AnyView(PressHoldConfirmBlockView(block: block, inputValues: $inputValues, onInteract: onInteract))
         case .health_connect: return AnyView(healthConnectBlock(block))
         case .settings_footer: return AnyView(settingsFooterBlock(block))
-        case .memory_match: return AnyView(memoryMatchBlock(block))
-        case .calendar_month: return AnyView(calendarMonthBlock(block))
+        case .memory_match: return AnyView(MemoryMatchBlockView(block: block, onInteract: onInteract))
+        case .calendar_month: return AnyView(CalendarMonthBlockView(block: block, inputValues: $inputValues, onInteract: onInteract))
         case .button: return AnyView(buttonBlock(block))
         case .spacer: return AnyView(Spacer().frame(height: CGFloat(block.spacer_height ?? 24))) // SPEC-419 pass-14 #11 — unset default 24 to match editor+preview (was 16)
         case .list: return AnyView(listBlock(block))
@@ -188,7 +199,7 @@ struct ContentBlockRendererView: View {
         case .lottie: return AnyView(lottieBlock(block))
         case .rive: return AnyView(riveBlock(block))
         case .page_indicator: return AnyView(pageIndicatorBlock(block))
-        case .wheel_picker: return AnyView(WheelPickerBlockView(block: block, inputValues: $inputValues))
+        case .wheel_picker: return AnyView(WheelPickerBlockView(block: block, inputValues: $inputValues, onInteract: onInteract))
         case .pulsing_avatar: return AnyView(PulsingAvatarBlockView(block: block))
         case .social_login: return AnyView(socialLoginBlock(block))
         case .timeline: return AnyView(timelineBlock(block))
@@ -622,40 +633,6 @@ struct ContentBlockRendererView: View {
         return UnitPoint(x: 0.5 + sin(rads) / 2, y: 0.5 - cos(rads) / 2)
     }
 
-    // EPIC-11 — OTP / code-input: a row of N single-character boxes (verification codes). Value from
-    // inputValues[field_id] or field_config.otp_value (snapshot/preview seed). Parity with Android.
-    private func otpInputBlock(_ block: ContentBlock) -> some View {
-        let rawLen = (block.field_config?["otp_length"]?.value as? Int)
-            ?? cfgDouble(block.field_config?["otp_length"]).map { Int($0) } ?? 6
-        let length = min(max(rawLen, 2), 10)
-        let fieldId = block.field_id ?? block.id
-        let value = (inputValues[fieldId] as? String)
-            ?? (block.field_config?["otp_value"]?.value as? String) ?? ""
-        let accent = Color(hex: block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
-        let boxBg = Color(hex: block.bg_color ?? "#1F2937")
-        let chars = Array(value)
-        return HStack(spacing: 8) {
-            ForEach(0..<length, id: \.self) { i in
-                let ch: Character? = i < chars.count ? chars[i] : nil
-                let isActive = i == chars.count
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10).fill(boxBg)
-                    if let ch = ch {
-                        Text(String(ch)).font(.system(size: 22, weight: .semibold)).foregroundColor(.white)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(isActive ? accent : (ch != nil ? accent.opacity(0.5) : Color.gray.opacity(0.35)),
-                                lineWidth: (isActive || ch != nil) ? 2 : 1)
-                )
-            }
-        }
-        .frame(maxWidth: .infinity)
-    }
-
     // EPIC-11 — warning/info banner: tinted rounded card + leading icon + message. Parity with Android.
     private func warningBannerBlock(_ block: ContentBlock) -> some View {
         let variant = (block.field_config?["banner_variant"]?.value as? String) ?? "warning"
@@ -816,26 +793,6 @@ struct ContentBlockRendererView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // EPIC-11 — press-and-hold-to-confirm: a pill that fills left→right as the user holds. Parity with Android.
-    private func pressHoldConfirmBlock(_ block: ContentBlock) -> some View {
-        let progress = min(max(cfgDouble(block.field_config?["hold_progress"]) ?? 0, 0), 1)
-        let accent = Color(hex: block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
-        let text = loc?("block.\(block.id).text", block.text ?? "Hold to confirm") ?? block.text ?? "Hold to confirm"
-        return GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Rectangle().fill(Color(hex: "#1F2937"))
-                Rectangle().fill(accent).frame(width: geo.size.width * CGFloat(progress))
-                Text(text)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity, alignment: .center)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 28))
-        }
-        .frame(height: 56)
-        .frame(maxWidth: .infinity)
-    }
-
     // EPIC-11 — Health/HealthKit connect: a tappable card (icon + title + subtitle + chevron/✓). Native connect
     // flow is host-driven via onAction("health_connect"). Parity with Android.
     private func healthConnectBlock(_ block: ContentBlock) -> some View {
@@ -848,6 +805,8 @@ struct ContentBlockRendererView: View {
         let subtitle = (block.field_config?["health_subtitle"]?.value as? String) ?? "Sync steps, workouts & vitals"
         return Button {
             onAction("health_connect", nil)
+            // SPEC-419 STEP-2 — provider is platform-fixed on iOS (Apple Health).
+            onInteract(block.id, "health_connect", "apple_health")
         } label: {
             HStack(spacing: 14) {
                 ZStack {
@@ -882,7 +841,10 @@ struct ContentBlockRendererView: View {
         return HStack {
             HStack(spacing: 10) {
                 Text("🌙").font(.system(size: 18))
-                Button { onAction("toggle_dark_mode", nil) } label: {
+                Button {
+                    onAction("toggle_dark_mode", nil)
+                    onInteract(block.id, "toggle_dark_mode", String(!darkMode))
+                } label: {
                     ZStack(alignment: darkMode ? .trailing : .leading) {
                         RoundedRectangle(cornerRadius: 14)
                             .fill(darkMode ? accent : Color.white.opacity(0.22))
@@ -893,7 +855,10 @@ struct ContentBlockRendererView: View {
                 .buttonStyle(.plain)
             }
             Spacer()
-            Button { onAction("switch_language", nil) } label: {
+            Button {
+                onAction("switch_language", nil)
+                onInteract(block.id, "switch_language", language)
+            } label: {
                 HStack(spacing: 7) {
                     Text("🌐").font(.system(size: 15))
                     Text(language).font(.system(size: 14, weight: .medium)).foregroundColor(.white)
@@ -907,80 +872,6 @@ struct ContentBlockRendererView: View {
             .buttonStyle(.plain)
         }
         .padding(.vertical, 8)
-        .frame(maxWidth: .infinity)
-    }
-
-    // EPIC-11 — memory / pair-match grid (Duolingo): square cards (face-down "?" / face-up symbol / matched).
-    private func memoryMatchBlock(_ block: ContentBlock) -> some View {
-        let rawCols = (block.field_config?["match_columns"]?.value as? Int)
-            ?? cfgDouble(block.field_config?["match_columns"]).map { Int($0) } ?? 3
-        let cols = min(max(rawCols, 2), 5)
-        let cardsRaw = (block.field_config?["match_cards"]?.value as? [Any]) ?? []
-        let cards: [[String: Any]] = cardsRaw.compactMap { $0 as? [String: Any] }
-        let accent = Color(hex: block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
-        let matched = Color(hex: "#10B981")
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: cols)
-        return LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(Array(cards.enumerated()), id: \.offset) { _, m in
-                let symbol = (m["symbol"] as? String) ?? ""
-                let state = (m["state"] as? String) ?? "down"
-                let bg: Color = state == "up" ? .white : (state == "matched" ? matched.opacity(0.18) : accent.opacity(0.16))
-                let border: Color = state == "up" ? accent : (state == "matched" ? matched : accent.opacity(0.4))
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(bg)
-                    if state == "down" {
-                        Text("?").font(.system(size: 26, weight: .bold)).foregroundColor(accent)
-                    } else {
-                        Text(symbol).font(.system(size: 28))
-                    }
-                }
-                .aspectRatio(1, contentMode: .fit)
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(border, lineWidth: 2))
-            }
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    // EPIC-11 — month calendar (Flo): header + weekday row + day grid (selected = accent fill, today = ring).
-    // Multi-month scroll is host-driven; this renders one month. Parity with Android.
-    private func calendarMonthBlock(_ block: ContentBlock) -> some View {
-        let cfg = block.field_config
-        let monthLabel = (cfg?["month_label"]?.value as? String) ?? "June 2026"
-        // Clamp 0...31 — a negative days_in_month made `0..<(startOffset+daysInMonth)` a malformed Range → fatalError crash.
-        let daysInMonth = min(max((cfg?["days_in_month"]?.value as? Int) ?? Int(cfgDouble(cfg?["days_in_month"]) ?? 30), 0), 31)
-        let startOffset = min(max((cfg?["start_offset"]?.value as? Int) ?? Int(cfgDouble(cfg?["start_offset"]) ?? 0), 0), 6)
-        let selectedDays = ((cfg?["selected_days"]?.value as? [Any]) ?? []).compactMap { ($0 as? Int) ?? ($0 as? Double).map { Int($0) } }
-        let today = (cfg?["today"]?.value as? Int) ?? Int(cfgDouble(cfg?["today"]) ?? -1)
-        let accent = Color(hex: block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
-        let weekdays = ["S", "M", "T", "W", "T", "F", "S"]
-        let cells = (0..<(startOffset + daysInMonth)).map { $0 - startOffset + 1 }
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
-        return VStack(spacing: 8) {
-            Text(monthLabel).font(.system(size: 20, weight: .bold)).foregroundColor(.white).frame(maxWidth: .infinity)
-            HStack(spacing: 0) {
-                ForEach(0..<7, id: \.self) { i in
-                    Text(weekdays[i]).font(.system(size: 12, weight: .medium)).foregroundColor(.white.opacity(0.5)).frame(maxWidth: .infinity)
-                }
-            }
-            LazyVGrid(columns: columns, spacing: 0) {
-                ForEach(Array(cells.enumerated()), id: \.offset) { _, day in
-                    ZStack {
-                        if day >= 1 && day <= daysInMonth {
-                            let isSelected = selectedDays.contains(day)
-                            let isToday = day == today
-                            Circle().fill(isSelected ? accent : Color.clear).frame(width: 34, height: 34)
-                            if isToday && !isSelected {
-                                Circle().stroke(accent, lineWidth: 1.5).frame(width: 34, height: 34)
-                            }
-                            Text("\(day)")
-                                .font(.system(size: 15, weight: (isToday || isSelected) ? .bold : .regular))
-                                .foregroundColor(isSelected ? .white : .white.opacity(0.9))
-                        }
-                    }
-                    .frame(height: 42)
-                }
-            }
-        }
         .frame(maxWidth: .infinity)
     }
 

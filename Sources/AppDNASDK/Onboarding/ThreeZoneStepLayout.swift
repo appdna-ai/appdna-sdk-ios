@@ -15,6 +15,10 @@ struct ThreeZoneStepLayout: View {
     @Binding var inputValues: [String: Any]
     var currentStepIndex: Int = 0
     var totalSteps: Int = 1
+    /// SPEC-419 STEP-2 — fired by an interactive block; carries (blockId, action, value) to the step scope.
+    var onInteract: (String, String, String?) -> Void = { _, _, _ in }
+    /// SPEC-419 STEP-2 — per-block field_config overrides pushed by the host delegate, layered at render time.
+    var fieldConfigOverrides: [String: [String: Any]] = [:]
 
     /// Scroll offset tracked for collapse_on_scroll blocks (Sprint 7).
     @State private var scrollOffset: CGFloat = 0
@@ -100,7 +104,9 @@ struct ThreeZoneStepLayout: View {
             currentStepIndex: currentStepIndex,
             totalSteps: totalSteps,
             isZoneManaged: true,
-            scrollOffset: scrollOffset
+            scrollOffset: scrollOffset,
+            onInteract: onInteract,
+            fieldConfigOverrides: fieldConfigOverrides
         )
         // Use ~8% of screen width for responsive margins across all devices
         .padding(.horizontal, max(24, UIScreen.main.bounds.width * 0.08))
