@@ -472,7 +472,12 @@ struct OnboardingFlowHost: View {
             element_style: config.element_style,
             animation: config.animation,
             localizations: config.localizations,
-            default_locale: config.default_locale
+            default_locale: config.default_locale,
+            next_step_rules: config.next_step_rules,
+            progress_color: config.progress_color,
+            permission_type: config.permission_type,
+            show_settings_fallback_on_denied: config.show_settings_fallback_on_denied,
+            settings_fallback_label: config.settings_fallback_label
         )
     }
 
@@ -1679,7 +1684,7 @@ struct OnboardingStepRouter: View {
             // and run the permission pipeline rather than silently advancing. Reuse
             // PermissionManager's own support check — do not invent a new list. Non-permission
             // "next" steps (empty/unsupported type) fall through to the normal advance below.
-            let nextPermissionType = (effectiveConfig.layout?["permission_type"]?.value as? String) ?? ""
+            let nextPermissionType = effectiveConfig.permission_type ?? (effectiveConfig.layout?["permission_type"]?.value as? String) ?? ""
             if !nextPermissionType.isEmpty, PermissionManager.isSupported(nextPermissionType) {
                 runPermissionPipeline(nextPermissionType)
                 return
@@ -1734,7 +1739,7 @@ struct OnboardingStepRouter: View {
             // emit analytics + delegate hooks, store the result for next-step routing, then advance.
             // Type source of truth = the step's `layout.permission_type` (the only console-authorable
             // path). If absent/unsupported the pipeline emits `permission_unavailable` + advances.
-            let permissionType = (effectiveConfig.layout?["permission_type"]?.value as? String) ?? ""
+            let permissionType = effectiveConfig.permission_type ?? (effectiveConfig.layout?["permission_type"]?.value as? String) ?? ""
             runPermissionPipeline(permissionType)
 
         // MARK: Auth actions (entry)
@@ -1866,8 +1871,8 @@ struct OnboardingStepRouter: View {
                 }
 
             case .denied:
-                let showFallback = (effectiveConfig.layout?["show_settings_fallback_on_denied"]?.value as? Bool) == true
-                let label = (effectiveConfig.layout?["settings_fallback_label"]?.value as? String) ?? "Open Settings"
+                let showFallback = (effectiveConfig.show_settings_fallback_on_denied ?? (effectiveConfig.layout?["show_settings_fallback_on_denied"]?.value as? Bool)) == true
+                let label = effectiveConfig.settings_fallback_label ?? (effectiveConfig.layout?["settings_fallback_label"]?.value as? String) ?? "Open Settings"
                 await MainActor.run {
                     eventTracker?.track(event: "permission_denied", properties: permissionProps(type))
                     storePermissionResult(type, granted: false)

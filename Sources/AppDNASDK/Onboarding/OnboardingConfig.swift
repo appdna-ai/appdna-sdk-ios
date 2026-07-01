@@ -190,7 +190,11 @@ public struct OnboardingStep: Codable, Identifiable {
                     content_blocks: stepBlocks, layout_variant: decoded.layout_variant,
                     background: decoded.background, text_style: decoded.text_style,
                     element_style: decoded.element_style, animation: decoded.animation,
-                    localizations: decoded.localizations, default_locale: decoded.default_locale
+                    localizations: decoded.localizations, default_locale: decoded.default_locale,
+                    next_step_rules: decoded.next_step_rules, progress_color: decoded.progress_color,
+                    permission_type: decoded.permission_type,
+                    show_settings_fallback_on_denied: decoded.show_settings_fallback_on_denied,
+                    settings_fallback_label: decoded.settings_fallback_label
                 )
             }
         }
@@ -289,6 +293,16 @@ public struct StepConfig: Codable {
     // Per-step progress bar color override (overrides flow.settings.progress_color)
     public let progress_color: String?
 
+    // SPEC-421 — permission-step contract. The console serializer writes these at the
+    // step-content TOP LEVEL (siblings of `content_blocks`), NOT under the inner `layout`
+    // sub-map. They were previously only read from `layout[...]` → resolved to nil → every
+    // authored permission step emitted `permission_unavailable` and advanced without prompting.
+    // Decode them as first-class fields here; the renderer prefers these, falling back to the
+    // inner `layout` map only for safety.
+    public let permission_type: String?
+    public let show_settings_fallback_on_denied: Bool?
+    public let settings_fallback_label: String?
+
     private enum CodingKeys: String, CodingKey {
         case title, subtitle, image_url, cta_text, skip_enabled
         case options, selection_mode, items, layout, next_step_rules
@@ -298,6 +312,7 @@ public struct StepConfig: Codable {
         case text_style, element_style, animation
         case localizations, default_locale
         case progress_color
+        case permission_type, show_settings_fallback_on_denied, settings_fallback_label
     }
 
     public init(from decoder: Decoder) throws {
@@ -325,6 +340,10 @@ public struct StepConfig: Codable {
         default_locale = try c.decodeIfPresent(String.self, forKey: .default_locale)
         next_step_rules = try c.decodeIfPresent([NextStepRule].self, forKey: .next_step_rules)
         progress_color = try c.decodeIfPresent(String.self, forKey: .progress_color)
+        // SPEC-421 — decoded from the SAME top-level container as content_blocks (console siblings).
+        permission_type = try c.decodeIfPresent(String.self, forKey: .permission_type)
+        show_settings_fallback_on_denied = try c.decodeIfPresent(Bool.self, forKey: .show_settings_fallback_on_denied)
+        settings_fallback_label = try c.decodeIfPresent(String.self, forKey: .settings_fallback_label)
     }
 
     // Public memberwise init used by applyOverrides and default construction
@@ -341,7 +360,10 @@ public struct StepConfig: Codable {
         element_style: ElementStyleConfig? = nil, animation: AnimationConfig? = nil,
         localizations: [String: [String: String]]? = nil, default_locale: String? = nil,
         next_step_rules: [NextStepRule]? = nil,
-        progress_color: String? = nil
+        progress_color: String? = nil,
+        permission_type: String? = nil,
+        show_settings_fallback_on_denied: Bool? = nil,
+        settings_fallback_label: String? = nil
     ) {
         self.title = title; self.subtitle = subtitle; self.image_url = image_url
         self.cta_text = cta_text; self.skip_enabled = skip_enabled
@@ -355,6 +377,9 @@ public struct StepConfig: Codable {
         self.localizations = localizations; self.default_locale = default_locale
         self.next_step_rules = next_step_rules
         self.progress_color = progress_color
+        self.permission_type = permission_type
+        self.show_settings_fallback_on_denied = show_settings_fallback_on_denied
+        self.settings_fallback_label = settings_fallback_label
     }
 }
 

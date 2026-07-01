@@ -137,6 +137,52 @@ final class PermissionManagerTests: XCTestCase {
         XCTAssertNotEqual(PermissionHandling.handledByHost(granted: true), .handledByHost(granted: false))
     }
 
+    // MARK: - SPEC-421 console-shape decode (permission_type at step-content TOP LEVEL)
+
+    /// Regression for the SPEC-421 contract bug: the console serializer writes
+    /// `permission_type` / `show_settings_fallback_on_denied` / `settings_fallback_label`
+    /// as SIBLINGS of `content_blocks` at the step-content top level (`step.layout = stepConfig`),
+    /// NOT inside the inner `layout` sub-map. The SDK previously read them from the inner map →
+    /// resolved to "" → every authored permission step emitted `permission_unavailable` and
+    /// advanced WITHOUT prompting. These must decode into first-class StepConfig fields.
+    func testPermissionFieldsDecodeFromStepContentTopLevel() throws {
+        // `step.layout` = the whole content object; permission keys are siblings of content_blocks.
+        let json = """
+        {
+          "id": "perm-step",
+          "type": "custom",
+          "layout": {
+            "permission_type": "camera",
+            "show_settings_fallback_on_denied": true,
+            "settings_fallback_label": "Enable in Settings",
+            "content_blocks": [
+              { "type": "text", "text": "We need your camera" }
+            ]
+          }
+        }
+        """
+        let step = try JSONDecoder().decode(OnboardingStep.self, from: Data(json.utf8))
+        // Top-level permission fields must resolve — NOT from the inner `layout` sub-map.
+        XCTAssertEqual(step.config.permission_type, "camera")
+        XCTAssertEqual(step.config.show_settings_fallback_on_denied, true)
+        XCTAssertEqual(step.config.settings_fallback_label, "Enable in Settings")
+        // Sibling content_blocks still decode alongside.
+        XCTAssertEqual(step.config.content_blocks?.count, 1)
+        // The permission type resolved from the field is supported → pipeline WILL prompt.
+        XCTAssertTrue(PermissionManager.isSupported(step.config.permission_type ?? ""))
+    }
+
+    /// The `config`-keyed variant (some server paths write `step.config` instead of `step.layout`)
+    /// must resolve the same top-level permission fields.
+    func testPermissionFieldsDecodeFromConfigKey() throws {
+        let json = """
+        { "id": "s", "type": "custom",
+          "config": { "permission_type": "notification", "content_blocks": [] } }
+        """
+        let step = try JSONDecoder().decode(OnboardingStep.self, from: Data(json.utf8))
+        XCTAssertEqual(step.config.permission_type, "notification")
+    }
+
     // MARK: - Helpers (mirror the renderer's per-decision store rule)
 
     private func storedValue(for decision: PermissionRouteDecision) -> String? {
