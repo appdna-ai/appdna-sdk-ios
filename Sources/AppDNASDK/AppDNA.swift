@@ -114,6 +114,10 @@ public final class AppDNA: @unchecked Sendable {
     /// Current config bundle version reported by events.
     internal static var currentBundleVersion: Int = 0
 
+    /// SPEC-070-C D4 — the configured SDK-wrapper framework tag (native|flutter|
+    /// react_native); tagged on every event's device context. Defaults to "native".
+    internal static var framework: String { shared.options.framework }
+
     // MARK: - Singleton
 
     private static let shared = AppDNA()

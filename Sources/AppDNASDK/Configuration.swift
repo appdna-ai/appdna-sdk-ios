@@ -39,6 +39,10 @@ public struct AppDNAOptions: Sendable {
     public let logLevel: LogLevel
     /// Billing provider for paywall purchases. Default: .storeKit2.
     public let billingProvider: BillingProvider
+    /// SPEC-070-C D4 — SDK-wrapper attribution (`native` | `flutter` | `react_native`),
+    /// tagged on every event's device context (→ BigQuery `framework` column). Defaults
+    /// to `native`; the Flutter/RN wrappers pass their identity via configure().
+    public let framework: String
 
     public init(
         flushInterval: TimeInterval = 30,
@@ -46,13 +50,15 @@ public struct AppDNAOptions: Sendable {
         /// SPEC-067: Default TTL increased from 300s to 3600s (1 hour) to reduce Firestore reads.
         configTTL: TimeInterval = 3600,
         logLevel: LogLevel = .warning,
-        billingProvider: BillingProvider = .storeKit2
+        billingProvider: BillingProvider = .storeKit2,
+        framework: String = "native"
     ) {
         self.flushInterval = flushInterval
         self.batchSize = batchSize
         self.configTTL = configTTL
         self.logLevel = logLevel
         self.billingProvider = billingProvider
+        self.framework = framework
     }
 }
 

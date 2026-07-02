@@ -27,6 +27,8 @@ struct EventDevice: Codable {
     let bundle_version: Int?
     let locale: String
     let country: String
+    /// SPEC-070-C D4 — SDK-wrapper attribution (native|flutter|react_native).
+    let framework: String
 }
 
 struct EventContext: Codable {
@@ -125,7 +127,8 @@ enum EventEnvelopeBuilder {
             sdk_version: AppDNA.sdkVersion,
             bundle_version: bundleVer,
             locale: Locale.current.identifier,
-            country: (Locale.current as NSLocale).countryCode ?? ""
+            country: (Locale.current as NSLocale).countryCode ?? "",
+            framework: AppDNA.framework
         )
 
         let props: [String: AnyCodable]? = properties?.mapValues { AnyCodable($0) }
