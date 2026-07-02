@@ -2,7 +2,7 @@
 // Source: src/lib/sdk-codegen/dto-registry.ts
 // Generator: scripts/sdk-codegen/emit-dtos.ts
 // Regenerate: pnpm sdk-codegen
-// Last codegen commit: 9b514e667c4204268ef456415a60d2f7a7f59a9b
+// Last codegen commit: 85473b173a44db0d2ed1488f176c3c76ceb5a27a
 
 import Foundation
 
@@ -47,5 +47,53 @@ public struct AppDNAEnvironment: Codable, Equatable {
         case rolloutPercentage = "rollout_percentage"
         case region = "region"
         case featureFlags = "feature_flags"
+    }
+}
+
+/// AppDNAPushAction — one structured notification action button on a push payload (SPEC-070-A push section; matches push_payload/action_buttons_parse fixture).
+public struct AppDNAPushAction: Codable, Equatable {
+    /// Stable action identifier — registers the notification button and echoes back on tap.
+    public let id: String
+
+    /// Button label shown in the notification tray (may be template-interpolated).
+    public let label: String
+
+    /// Action kind, e.g. "deep_link" | "dismiss" | "show_screen".
+    public let actionType: String
+
+    /// Action target (deep-link URL / screen id); absent for actions like "dismiss".
+    public let actionValue: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id = "id"
+        case label = "label"
+        case actionType = "action_type"
+        case actionValue = "action_value"
+    }
+}
+
+/// AppDNAPushPayload — a delivered push notification the SDK surfaces to the host app (SPEC-070-A push section; matches push_payload/action_buttons_parse fixture).
+public struct AppDNAPushPayload: Codable, Equatable {
+    /// Server-assigned push campaign/message id; echoed on push_received / push_tapped events.
+    public let pushId: String
+
+    /// Notification title (post template interpolation).
+    public let title: String
+
+    /// Notification body text; optional for data-only / title-only pushes.
+    public let body: String?
+
+    /// Optional rich-media image URL for the expanded notification.
+    public let imageUrl: String?
+
+    /// Structured notification action buttons registered for this push.
+    public let actions: [AppDNAPushAction]?
+
+    enum CodingKeys: String, CodingKey {
+        case pushId = "push_id"
+        case title = "title"
+        case body = "body"
+        case imageUrl = "image_url"
+        case actions = "actions"
     }
 }
