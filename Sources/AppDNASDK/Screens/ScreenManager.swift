@@ -247,6 +247,38 @@ internal class ScreenManager {
     // MARK: - Action Handling
 
     private func handleAction(_ action: SectionAction, screenId: String, startTime: Date, completion: ((ScreenResult) -> Void)?) {
+        // SPEC-070-C D10 — veto gate, consulted before performing ANY action.
+        //
+        // (1) SYNC delegate veto: `onScreenAction` returns `Bool`. This was
+        //     previously called only for `.custom` and its return value was
+        //     DISCARDED — the veto was never honored. It is now the single
+        //     gate for every action and a `false` reply blocks the action.
+        // (2) ASYNC wrapper-veto: an optional closure a cross-platform wrapper
+        //     (Flutter) registers when it can only answer asynchronously. When
+        //     set, it is awaited before performing; a `false` reply blocks.
+        //
+        // Native hosts that don't set `asyncOnScreenAction` (all of them today)
+        // keep synchronous behavior — the action is performed inline below.
+        if AppDNA.screenDelegate?.onScreenAction(screenId: screenId, action: action) == false {
+            Log.debug("Screen action vetoed by host onScreenAction: \(screenId)")
+            return
+        }
+        if let asyncVeto = AppDNA.asyncOnScreenAction {
+            Task { @MainActor [weak self] in
+                let allow = await asyncVeto(screenId, action)
+                guard allow else {
+                    Log.debug("Screen action vetoed by host asyncOnScreenAction: \(screenId)")
+                    return
+                }
+                self?.performAction(action, screenId: screenId, startTime: startTime, completion: completion)
+            }
+            return
+        }
+        performAction(action, screenId: screenId, startTime: startTime, completion: completion)
+    }
+
+    /// Perform a screen action after the D10 veto gate has allowed it.
+    private func performAction(_ action: SectionAction, screenId: String, startTime: Date, completion: ((ScreenResult) -> Void)?) {
         switch action {
         case .next:
             // For single screens (not flows), "next" dismisses the screen
@@ -321,8 +353,11 @@ internal class ScreenManager {
                 HapticEngine.trigger(hapticType)
             }
 
-        case .custom(let type, let value):
-            AppDNA.screenDelegate?.onScreenAction(screenId: screenId, action: action)
+        case .custom:
+            // The host was already notified of this custom action via the D10
+            // veto gate (`onScreenAction`) in `handleAction`; a custom action
+            // has no built-in SDK handling beyond that host callback.
+            break
 
         default:
             break

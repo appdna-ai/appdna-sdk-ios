@@ -143,6 +143,33 @@ final class MessageManager {
             return
         }
 
+        // SPEC-070-C D10 — OPTIONAL async wrapper-veto. Awaited in ADDITION to
+        // the synchronous delegate veto above so a cross-platform wrapper host
+        // (Flutter) that can only answer asynchronously (round-trip to Dart)
+        // can still suppress a message. When nil (every native host), the
+        // remainder runs synchronously exactly as before — no behavior change.
+        // `present()` already runs on the main queue (dispatched from onEvent).
+        if let asyncVeto = AppDNA.inAppMessages.asyncShouldShowMessage {
+            Task { @MainActor [weak self] in
+                let allow = await asyncVeto(messageId)
+                guard allow else {
+                    Log.debug("In-app message \(messageId) suppressed by host asyncShouldShowMessage veto")
+                    return
+                }
+                self?.presentBody(messageId: messageId, config: config, triggerEvent: triggerEvent)
+            }
+            return
+        }
+
+        presentBody(messageId: messageId, config: config, triggerEvent: triggerEvent)
+    }
+
+    /// The presentation remainder, extracted so the D10 async wrapper-veto can
+    /// gate it behind an awaited decision. `config` is the experiment-resolved
+    /// config computed by `present(...)`. Runs on the main queue.
+    private func presentBody(messageId: String, config: MessageConfig, triggerEvent: String) {
+        guard !isPresenting else { return }
+
         guard let windowScene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first,

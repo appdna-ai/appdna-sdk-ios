@@ -46,6 +46,14 @@ public final class AppDNA: @unchecked Sendable {
     /// Delegate for server-driven screen events (SPEC-089c).
     public static weak var screenDelegate: AppDNAScreenDelegate?
 
+    /// SPEC-070-C D10 — OPTIONAL async `onScreenAction` wrapper-veto. Set by a
+    /// cross-platform wrapper (Flutter plugin) that must round-trip to answer a
+    /// veto. Consulted by `ScreenManager.handleAction(...)` in ADDITION to the
+    /// synchronous `screenDelegate.onScreenAction`; either can veto. Nil for
+    /// native hosts → the action is performed synchronously exactly as before.
+    /// (Held strongly — unlike `screenDelegate`, a closure has no other owner.)
+    public static var asyncOnScreenAction: ((String, SectionAction) async -> Bool)?
+
     /// SPEC-404 — lifecycle delegate. Fires `onSdkRuntimeLocked` once when
     /// the bootstrap response carries a `runtime_lock`, and
     /// `onSdkRuntimeUnlocked` once when a subsequent bootstrap returns

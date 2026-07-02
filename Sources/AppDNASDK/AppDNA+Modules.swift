@@ -416,6 +416,14 @@ extension AppDNA {
         internal weak var manager: MessageManager?
         internal var delegate: AppDNAInAppMessageDelegate?
 
+        /// SPEC-070-C D10 — OPTIONAL async wrapper-veto. Set by a cross-platform
+        /// wrapper (e.g. the Flutter plugin) that must round-trip to answer a
+        /// veto. Consulted by `MessageManager.present(...)` in ADDITION to the
+        /// synchronous `delegate.shouldShowMessage`; both can suppress. Nil for
+        /// native hosts (no behavior change). Default-allow on nil/timeout is
+        /// the wrapper's responsibility.
+        public var asyncShouldShowMessage: ((String) async -> Bool)?
+
         init(manager: MessageManager?) {
             self.manager = manager
         }
@@ -459,11 +467,27 @@ extension AppDNA {
     public final class DeepLinksModule: @unchecked Sendable {
         internal var delegate: AppDNADeepLinkDelegate?
 
+        /// SPEC-070-C D10 — OPTIONAL async `shouldOpen` wrapper-veto. This is a
+        /// NET-NEW decision point (no native veto existed for deep links). When
+        /// set (Flutter plugin), `handleURL(_:)` awaits it before dispatching
+        /// `onDeepLinkReceived`; a `false` reply skips processing. Nil for
+        /// native hosts → dispatch synchronously exactly as before.
+        public var asyncShouldOpen: ((URL, [String: String]) async -> Bool)?
+
         init() {}
 
         /// Handle an incoming URL.
         public func handleURL(_ url: URL) {
-            delegate?.onDeepLinkReceived(url: url, params: url.queryParameters)
+            let params = url.queryParameters
+            if let asyncVeto = asyncShouldOpen {
+                Task { @MainActor [weak self] in
+                    let allow = await asyncVeto(url, params)
+                    guard allow else { return }
+                    self?.delegate?.onDeepLinkReceived(url: url, params: params)
+                }
+                return
+            }
+            delegate?.onDeepLinkReceived(url: url, params: params)
         }
 
         /// Set a delegate for deep link events.
