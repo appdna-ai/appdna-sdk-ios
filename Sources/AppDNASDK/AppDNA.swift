@@ -656,8 +656,9 @@ public final class AppDNA: @unchecked Sendable {
     /// Print a comprehensive SDK health report to the console.
     /// Call after `configure()` has had time to complete (e.g. after 3-5 seconds or in viewDidAppear).
     /// Checks: API key format, bootstrap status, Firebase initialization, Firestore connectivity, event queue health.
-    public static func diagnose() {
-        shared.queue.async {
+    @discardableResult
+    public static func diagnose() -> String {
+        return shared.queue.sync {
             let isOffline = NetworkMonitor.shared.currentConnectionType == .none
             let hasBundledConfig = currentBundleVersion > 0
             let hasBootstrap = shared.bootstrapData != nil
@@ -778,6 +779,9 @@ public final class AppDNA: @unchecked Sendable {
             for line in lines {
                 print("[AppDNA] \(line)")
             }
+            // Parity with Android `diagnose(): String` — return the report so
+            // cross-platform hosts (incl. the Flutter wrapper) get the text too.
+            return lines.joined(separator: "\n")
         }
     }
 
