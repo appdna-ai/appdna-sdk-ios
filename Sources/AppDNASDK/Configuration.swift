@@ -44,6 +44,11 @@ public struct AppDNAOptions: Sendable {
     /// to `native`; the Flutter/RN wrappers pass their identity via configure().
     public let framework: String
 
+    /// SPEC-070-C — the wrapper SDK's OWN published version (e.g. Flutter "1.0.5"),
+    /// passed by the wrapper so diagnose() reports the wrapper version per platform
+    /// instead of the native core version. nil for native hosts.
+    public let frameworkVersion: String?
+
     public init(
         flushInterval: TimeInterval = 30,
         batchSize: Int = 20,
@@ -51,7 +56,8 @@ public struct AppDNAOptions: Sendable {
         configTTL: TimeInterval = 3600,
         logLevel: LogLevel = .warning,
         billingProvider: BillingProvider = .storeKit2,
-        framework: String = "native"
+        framework: String = "native",
+        frameworkVersion: String? = nil
     ) {
         self.flushInterval = flushInterval
         self.batchSize = batchSize
@@ -59,6 +65,7 @@ public struct AppDNAOptions: Sendable {
         self.logLevel = logLevel
         self.billingProvider = billingProvider
         self.framework = framework
+        self.frameworkVersion = frameworkVersion
     }
 }
 

@@ -665,7 +665,14 @@ public final class AppDNA: @unchecked Sendable {
 
             var lines: [String] = []
             lines.append("╔══════════════════════════════════════════")
-            lines.append("║  AppDNA SDK Diagnostic Report  v\(sdkVersion)")
+            // Per-platform version: wrapper hosts (flutter/react_native) report
+            // their OWN version; native core version shown on a Platform line.
+            let fw = shared.options.framework
+            let reportVersion = fw != "native" ? (shared.options.frameworkVersion ?? sdkVersion) : sdkVersion
+            lines.append("║  AppDNA SDK Diagnostic Report  v\(reportVersion)")
+            if fw != "native" {
+                lines.append("║  Platform: \(fw) wrapper (native core v\(sdkVersion))")
+            }
             lines.append("╠══════════════════════════════════════════")
 
             // 1. API Key
