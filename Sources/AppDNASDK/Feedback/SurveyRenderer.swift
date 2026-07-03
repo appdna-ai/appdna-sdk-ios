@@ -260,7 +260,11 @@ struct SurveyContainerView: View {
                 }
             }
             .padding()
-            .background(backgroundView)
+            // Extend the survey background into the BOTTOM safe area (home-indicator
+            // strip) so a bottom-sheet survey has no uncolored gap below the content.
+            // Only the bottom is extended — the top stays contained so a gradient
+            // never bleeds under the status bar (see backgroundView note above).
+            .background(backgroundView.ignoresSafeArea(.container, edges: .bottom))
             .applyBlurBackdrop(theme?.blur_backdrop)
             .tint(accentColor)
             .onAppear {
