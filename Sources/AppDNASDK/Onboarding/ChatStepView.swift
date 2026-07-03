@@ -24,6 +24,9 @@ struct ChatStepView: View {
     @State private var webhookData: [String: AnyCodable] = [:]
     @State private var startTime: Date = Date()
     @State private var showSoftLimitWarning: Bool = false
+    // R4 — chat input focus. A bare TextField in this bottom input bar wasn't
+    // reliably becoming first responder on tap, so the keyboard never opened.
+    @FocusState private var inputFocused: Bool
     @State private var didRestore = false
 
     // Colors — defaults MUST match console preview defaults exactly
@@ -100,12 +103,15 @@ struct ChatStepView: View {
             // Completion CTA or Input bar
             if isCompleted {
                 completionCTA
-            } else if turnsRemaining > 0 || !(chatConfig?.isHardLimit ?? true) {
+            } else if turnsRemaining > 0 {
                 inputBar
             } else {
-                // Hard limit reached — show completion
+                // R5/R6 — turn limit reached: show the completion CTA. Auto-complete
+                // only on a HARD limit; a soft limit lets the user tap Continue. (The
+                // old `|| !isHardLimit` on the inputBar branch kept the input showing
+                // forever for soft limits → max never honored + CTA never shown.)
                 completionCTA
-                    .onAppear { completeChat(reason: "max_turns") }
+                    .onAppear { if (chatConfig?.isHardLimit ?? true) { completeChat(reason: "max_turns") } }
             }
         }
         .background(Color(hex: style?.background_color ?? "#0F172A"))
@@ -274,6 +280,7 @@ struct ChatStepView: View {
                     .font(.system(size: CGFloat(style?.input_font_size ?? 14)))
                     .foregroundColor(inputTextColor)
                     .padding(.horizontal, 12)
+                    .focused($inputFocused)
                     .submitLabel(.send)
                     .onSubmit { if canSendMessage { sendMessage(inputText) } }
             }
@@ -281,6 +288,8 @@ struct ChatStepView: View {
             .background(inputBg)
             .clipShape(RoundedRectangle(cornerRadius: 20))
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(inputBorder, lineWidth: 1))
+            .contentShape(Rectangle())
+            .onTapGesture { inputFocused = true }
 
             Button {
                 sendMessage(inputText)
