@@ -393,7 +393,13 @@ struct SurveyContainerView: View {
     func computeVisibleQuestions() {
         visibleQuestions = (config.questions ?? []).filter { question in
             guard let showIf = question.show_if else { return true }
-            guard let questionId = showIf.question_id, let prevAnswer = answers[questionId] else { return false }
+            // A show_if whose question_id is blank/missing references no real
+            // question — a half-configured condition, or a condition left on the
+            // first question where nothing precedes it. Treat it as "no condition"
+            // and SHOW the question; otherwise the survey silently renders with no
+            // visible questions (an empty sheet).
+            guard let questionId = showIf.question_id, !questionId.isEmpty else { return true }
+            guard let prevAnswer = answers[questionId] else { return false }
 
             return (showIf.answer_in ?? []).contains(where: { condValue in
                 matches(prevAnswer.answer, condValue.value)
