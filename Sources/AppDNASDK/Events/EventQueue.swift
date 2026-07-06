@@ -94,6 +94,19 @@ final class EventQueue {
         }
     }
 
+    /// SPEC-424 STEP-1a (CL-7): purge ALL pending events (in-memory + on-disk) WITHOUT uploading —
+    /// called when analytics consent is revoked so queued-but-unsent events are never transmitted.
+    /// A server-side consent gate is defeated if the SDK later flushes events captured while consent
+    /// was true, so revoke must drop them at the source.
+    func clear() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.pendingEvents.removeAll()
+            self.eventStore.clearAll()
+            Log.info("Event queue purged — analytics consent revoked")
+        }
+    }
+
     // MARK: - Private
 
     private func startFlushTimer() {

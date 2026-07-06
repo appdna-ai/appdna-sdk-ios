@@ -14,9 +14,16 @@ final class EventTracker {
         self.eventQueue = queue
     }
 
-    /// Set analytics consent. When false, track() silently drops events.
+    /// Set analytics consent. When false, track() silently drops events AND any already-queued
+    /// events are purged (SPEC-424 STEP-1a / CL-7).
     func setConsent(analytics: Bool) {
         analyticsConsent = analytics
+        // Revoking consent MUST purge any queued-but-unsent events (in-memory + on-disk) WITHOUT
+        // uploading — else the server-side consent gate is defeated by a later flush of events
+        // captured while consent was true.
+        if !analytics {
+            eventQueue?.clear()
+        }
     }
 
     /// Whether analytics consent is currently granted.

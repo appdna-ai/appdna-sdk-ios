@@ -64,6 +64,12 @@ final class EventStore {
         }
     }
 
+    /// SPEC-424 STEP-1a (CL-7): purge ALL persisted events WITHOUT uploading them — analytics
+    /// consent was revoked, so queued-but-unsent events must never be transmitted.
+    func clearAll() {
+        queue.sync { writeToDisk([]) }
+    }
+
     // MARK: - Private
 
     private func loadFromDisk() -> [SDKEvent] {
