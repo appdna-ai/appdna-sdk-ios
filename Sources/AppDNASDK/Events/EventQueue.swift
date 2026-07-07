@@ -11,6 +11,9 @@ final class EventQueue {
     private let flushInterval: TimeInterval
     private let maxRetries = 3
     private let retryDelays: [TimeInterval] = [1, 2, 4]
+    // SPEC-428 CL-2/D5: client redelivery horizon — never re-send an event older than this (past the
+    // server dedup window it would double-count). Compiled default 7d, tracking SPEC-426's horizon.
+    private let redeliveryHorizonMs: Int64 = 7 * 24 * 60 * 60 * 1000
 
     private var pendingEvents: [SDKEvent] = []
     private var flushTimer: Timer?
@@ -149,8 +152,21 @@ final class EventQueue {
         backgroundTask = .invalid
     }
 
+    /// SPEC-428 CL-2/D5: drop events past the redelivery horizon before any flush — re-sending them
+    /// past the server dedup window would double-count. The drop is counted (CL-1).
+    private func pruneStaleEvents() {
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let staleIds = Set(pendingEvents.filter { nowMs - $0.ts_ms > redeliveryHorizonMs }.map(\.event_id))
+        guard !staleIds.isEmpty else { return }
+        pendingEvents.removeAll { staleIds.contains($0.event_id) }
+        eventStore.removeSent(eventIds: staleIds)
+        DroppedEventsCounter.increment(staleIds.count)
+        Log.warning("Dropped \(staleIds.count) events past the redelivery horizon (would double-count past server dedup)")
+    }
+
     private func performFlush() {
         // Already on queue
+        pruneStaleEvents()
         guard !pendingEvents.isEmpty else { return }
 
         // Stop hammering the server after repeated failures — wait for next app session
