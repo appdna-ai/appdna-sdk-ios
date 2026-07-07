@@ -43,8 +43,14 @@ final class EventQueue {
         // Load persisted events from disk
         let persisted = eventStore.loadPending()
         if !persisted.isEmpty {
-            self.pendingEvents = persisted
-            Log.info("Loaded \(persisted.count) persisted events from disk")
+            // SPEC-428 P1: trim the in-memory window to maxInMemoryEvents on load — disk keeps them
+            // all, RAM holds only the most-recent 1000. iOS previously assigned the full disk load
+            // (up to the 10k disk cap) into RAM after restart, violating its own maxInMemoryEvents
+            // (Android already trims after load).
+            self.pendingEvents = persisted.count > maxInMemoryEvents
+                ? Array(persisted.suffix(maxInMemoryEvents))
+                : persisted
+            Log.info("Loaded \(persisted.count) persisted events from disk (\(self.pendingEvents.count) held in memory)")
         }
 
         // Start flush timer on main run loop
