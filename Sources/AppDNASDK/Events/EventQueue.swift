@@ -16,6 +16,10 @@ final class EventQueue {
     private var flushTimer: Timer?
     private var retryCount = 0
     private var consecutiveFailures = 0
+    // SPEC-428 CL-5/D4: single-flush-authority guard (mirrors Android's flushMutex). Set on the serial
+    // `queue`; a second performFlush while a batch is in-flight would grab the same prefix + POST it
+    // twice (removal happens only AFTER the async upload awaits).
+    private var isFlushing = false
     private let maxConsecutiveFailures = 5
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
@@ -156,6 +160,14 @@ final class EventQueue {
             return
         }
 
+        // SPEC-428 CL-5: only one flush may be in-flight — otherwise a timer/threshold/retry/background
+        // flush grabs the same prefix before the async removal and POSTs it twice.
+        guard !isFlushing else {
+            Log.debug("Flush already in progress — skipping overlapping flush")
+            return
+        }
+        isFlushing = true
+
         let batch = Array(pendingEvents.prefix(currentBatchSize > 0 ? currentBatchSize : pendingEvents.count))
         let eventIds = Set(batch.map(\.event_id))
 
@@ -171,6 +183,7 @@ final class EventQueue {
 
         guard let bodyData = try? JSONSerialization.data(withJSONObject: payload) else {
             Log.error("Failed to serialize event batch")
+            isFlushing = false // CL-5: release the guard on this early-return path
             return
         }
 
@@ -209,6 +222,9 @@ final class EventQueue {
                         }
                     }
                 }
+                // SPEC-428 CL-5: release the single-flush guard once this batch's upload is resolved
+                // (success removal, permanent-fail pause, or retry scheduled).
+                self.isFlushing = false
             }
         }
     }
