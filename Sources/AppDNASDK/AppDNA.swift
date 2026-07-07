@@ -35,6 +35,36 @@ public final class AppDNA: @unchecked Sendable {
     /// Callbacks registered via `onWebEntitlementChanged`.
     private static var webEntitlementChangeHandlers: [(WebEntitlement?) -> Void] = []
 
+    // SPEC-428 CL-10/D7: bounded pre-init buffer at the STATIC facade — captures track() calls made
+    // before configure() (when `shared.eventTracker` is still nil, so they'd otherwise no-op at the
+    // facade and be dropped) and drains them in order once the pipeline is wired. Overflow is
+    // drop-oldest + counted (CL-1). Mirrors Android's preInitBuffer.
+    private static let preInitLock = NSLock()
+    private static var preInitBuffer: [(event: String, properties: [String: Any]?)] = []
+    private static let preInitBufferCap = 200
+
+    private static func bufferPreInit(event: String, properties: [String: Any]?) {
+        preInitLock.lock()
+        defer { preInitLock.unlock() }
+        if preInitBuffer.count >= preInitBufferCap {
+            preInitBuffer.removeFirst() // drop-oldest
+            DroppedEventsCounter.increment(1) // SPEC-428 CL-1: count the pre-init overflow drop
+        }
+        preInitBuffer.append((event, properties))
+    }
+
+    private static func drainPreInitBuffer() {
+        preInitLock.lock()
+        let buffered = preInitBuffer
+        preInitBuffer.removeAll()
+        preInitLock.unlock()
+        guard !buffered.isEmpty else { return }
+        Log.info("Draining \(buffered.count) pre-init events")
+        for item in buffered {
+            shared.eventTracker?.track(event: item.event, properties: item.properties)
+        }
+    }
+
     // MARK: - Delegates
 
     /// Delegate for push notification events (taps, receives).
@@ -252,7 +282,9 @@ public final class AppDNA: @unchecked Sendable {
             if let traits = traits {
                 identifyProps["traits"] = traits
             }
-            shared.eventTracker?.track(event: "identify", properties: identifyProps)
+            // SPEC-428 CL-10/D7: route identify through the facade so a pre-configure() identify() is
+            // captured by the pre-init buffer too (was a direct eventTracker?.track → silently dropped).
+            AppDNA.track(event: "identify", properties: identifyProps)
 
             // Send identify to backend alias endpoint
             var aliasBody: [String: Any] = [
@@ -332,6 +364,12 @@ public final class AppDNA: @unchecked Sendable {
 
     /// Track a custom event.
     public static func track(event: String, properties: [String: Any]? = nil) {
+        // SPEC-428 CL-10/D7: before configure(), the pipeline isn't wired (eventTracker == nil) — buffer
+        // the call instead of dropping it at the facade. Drained in order by configure().
+        if shared.eventTracker == nil {
+            bufferPreInit(event: event, properties: properties)
+            return
+        }
         shared.queue.async {
             shared.eventTracker?.track(event: event, properties: properties)
             // Evaluate in-app messages on every tracked event
@@ -966,6 +1004,11 @@ public final class AppDNA: @unchecked Sendable {
         )
         self.eventQueue = eq
         tracker.setEventQueue(eq)
+
+        // SPEC-428 CL-10/D7: drain events tracked before configure() (in order, now that the pipeline
+        // is wired). Their client_seq is stamped at buildEnvelope from the persisted counter, so they
+        // sit strictly above the prior run's ceiling.
+        AppDNA.drainPreInitBuffer()
 
         // SPEC-067: Initialize background uploader.
         // BGTaskScheduler.register must happen during app launch (before
