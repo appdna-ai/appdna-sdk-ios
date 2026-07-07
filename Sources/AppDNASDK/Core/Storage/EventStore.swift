@@ -40,6 +40,7 @@ final class EventStore {
             if existing.count > Self.maxEvents {
                 let overflow = existing.count - Self.maxEvents
                 Log.warning("Event store overflow: dropping \(overflow) oldest events (count cap)")
+                DroppedEventsCounter.increment(overflow) // SPEC-428 CL-1/D2: count the loss (never silent)
                 existing = Array(existing.suffix(Self.maxEvents))
             }
 
@@ -102,7 +103,33 @@ final class EventStore {
 
         let dropped = originalCount - events.count
         if dropped > 0 {
+            DroppedEventsCounter.increment(dropped) // SPEC-428 CL-1/D2: count the loss (never silent)
             Log.warning("Event store disk quota enforced: dropped \(dropped) oldest events (\(Self.maxDiskBytes / 1024)KB limit)")
         }
+    }
+}
+
+/// SPEC-428 CL-1/D2 — durable counter of events dropped by a cap/quota eviction. Persisted in
+/// UserDefaults so a restart never loses the count; drained by EventTracker into a
+/// `_sdk_events_dropped` meta-event so the loss is SERVER-VISIBLE, not a silent Log.warning.
+enum DroppedEventsCounter {
+    private static let key = "ai.appdna.sdk.dropped_events"
+    private static let lock = NSLock()
+
+    static func increment(_ n: Int) {
+        guard n > 0 else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        let current = UserDefaults.standard.integer(forKey: key)
+        UserDefaults.standard.set(current + n, forKey: key)
+    }
+
+    /// Atomically read + reset. The caller emits the meta-event with the returned count.
+    static func getAndReset() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        let current = UserDefaults.standard.integer(forKey: key)
+        if current > 0 { UserDefaults.standard.set(0, forKey: key) }
+        return current
     }
 }
