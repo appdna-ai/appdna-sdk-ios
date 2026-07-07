@@ -35,6 +35,25 @@ struct EventContext: Codable {
     let session_id: String
     let screen: String?
     let experiment_exposures: [ExperimentExposure]?
+    // SPEC-428 CL-3/D6: per-device monotonic sequence, assigned at buildEnvelope.
+    let client_seq: Int64?
+}
+
+/// SPEC-428 CL-3/D6 — device-wide MONOTONIC sequence counter. Persisted in UserDefaults (a
+/// FACADE-available store, not the EventStore/EventQueue which are built inside configure()), so it
+/// survives restart and is readable before configure(). The single increment site is buildEnvelope.
+enum ClientSeqCounter {
+    private static let key = "ai.appdna.sdk.client_seq"
+    private static let lock = NSLock()
+
+    static func next() -> Int64 {
+        lock.lock()
+        defer { lock.unlock() }
+        let current = (UserDefaults.standard.object(forKey: key) as? NSNumber)?.int64Value ?? 0
+        let next = current + 1
+        UserDefaults.standard.set(NSNumber(value: next), forKey: key)
+        return next
+    }
 }
 
 struct ExperimentExposure: Codable {
@@ -143,7 +162,11 @@ enum EventEnvelopeBuilder {
             context: EventContext(
                 session_id: sessionId,
                 screen: nil,
-                experiment_exposures: experimentExposures
+                experiment_exposures: experimentExposures,
+                // SPEC-428 CL-3/D6: stamp the monotonic sequence at the single choke point every
+                // event's envelope is built (post-configure). ts_ms stays but is no longer the
+                // ordering key.
+                client_seq: ClientSeqCounter.next()
             ),
             properties: props,
             privacy: EventPrivacy(consent: Consent(analytics: analyticsConsent))
