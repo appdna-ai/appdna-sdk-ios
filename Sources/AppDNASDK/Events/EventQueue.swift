@@ -1,6 +1,28 @@
 import Foundation
 import UIKit
 
+/// SPEC-428 CL-9/D4 — process-wide single upload owner. The in-process flush (EventQueue) and the
+/// background uploader (BackgroundUploader) must be mutually exclusive, else both POST the same rows
+/// concurrently (DUP). A non-blocking claim: whoever holds it uploads; the other skips this cycle.
+enum EventUploadCoordinator {
+    private static let lock = NSLock()
+    private static var uploading = false
+
+    static func tryAcquire() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if uploading { return false }
+        uploading = true
+        return true
+    }
+
+    static func release() {
+        lock.lock()
+        defer { lock.unlock() }
+        uploading = false
+    }
+}
+
 /// Manages in-memory + disk event queue with automatic flushing.
 /// SPEC-067: Adaptive batch sizing based on network conditions.
 final class EventQueue {
@@ -190,6 +212,14 @@ final class EventQueue {
         }
         isFlushing = true
 
+        // SPEC-428 CL-9/D4: also claim the cross-path upload owner so the background uploader cannot
+        // POST the same batch concurrently. If the background path holds it, back off this cycle.
+        guard EventUploadCoordinator.tryAcquire() else {
+            isFlushing = false
+            Log.debug("Flush deferred — background uploader is active")
+            return
+        }
+
         let batch = Array(pendingEvents.prefix(currentBatchSize > 0 ? currentBatchSize : pendingEvents.count))
         let eventIds = Set(batch.map(\.event_id))
 
@@ -206,6 +236,7 @@ final class EventQueue {
         guard let bodyData = try? JSONSerialization.data(withJSONObject: payload) else {
             Log.error("Failed to serialize event batch")
             isFlushing = false // CL-5: release the guard on this early-return path
+            EventUploadCoordinator.release() // CL-9: release the cross-path claim
             return
         }
 
@@ -247,6 +278,7 @@ final class EventQueue {
                 // SPEC-428 CL-5: release the single-flush guard once this batch's upload is resolved
                 // (success removal, permanent-fail pause, or retry scheduled).
                 self.isFlushing = false
+                EventUploadCoordinator.release() // SPEC-428 CL-9: release the cross-path upload claim
             }
         }
     }

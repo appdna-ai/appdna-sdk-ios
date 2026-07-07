@@ -102,6 +102,16 @@ final class BackgroundUploader {
                 return
             }
 
+            // SPEC-428 CL-9/D4: single upload owner — if the in-process flush holds the claim, skip
+            // this background run so the same rows are never POSTed twice. `defer` releases on every
+            // subsequent exit path.
+            guard EventUploadCoordinator.tryAcquire() else {
+                Log.info("Background upload skipped — in-process flush is active")
+                task.setTaskCompleted(success: true)
+                return
+            }
+            defer { EventUploadCoordinator.release() }
+
             let events = self.eventStore.loadPending()
             guard !events.isEmpty else {
                 task.setTaskCompleted(success: true)
