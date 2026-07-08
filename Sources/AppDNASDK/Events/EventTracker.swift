@@ -30,7 +30,7 @@ final class EventTracker {
     var isConsentGranted: Bool { analyticsConsent }
 
     /// Track an event. If consent is false, the event is silently dropped.
-    func track(event: String, properties: [String: Any]?) {
+    func track(event: String, properties: [String: Any]?, clientSeq: Int64? = nil) {
         guard analyticsConsent else {
             Log.debug("Event '\(event)' dropped — analytics consent is false")
             return
@@ -52,7 +52,8 @@ final class EventTracker {
             properties: properties,
             identity: identity,
             sessionId: sessionId,
-            analyticsConsent: analyticsConsent
+            analyticsConsent: analyticsConsent,
+            clientSeq: clientSeq // SPEC-428 STEP-9: a pre-init event carries the seq it stamped at track() time
         )
 
         eventQueue?.enqueue(sdkEvent)

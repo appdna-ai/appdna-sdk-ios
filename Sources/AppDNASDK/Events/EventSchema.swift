@@ -136,7 +136,12 @@ enum EventEnvelopeBuilder {
         identity: DeviceIdentity,
         sessionId: String,
         analyticsConsent: Bool,
-        experimentExposures: [ExperimentExposure]? = nil
+        experimentExposures: [ExperimentExposure]? = nil,
+        // SPEC-428 STEP-9/§4.E: a PRE-STAMPED client_seq (a pre-init event stamped its seq at facade
+        // track() time). When present, buildEnvelope MUST use it verbatim and NOT re-mint at drain — else
+        // a post-configure event minting during the drain window gets a LOWER seq than an earlier pre-init
+        // event drained afterward = ordering inversion.
+        clientSeq: Int64? = nil
     ) -> SDKEvent {
         let bundleVer = AppDNA.currentBundleVersion > 0 ? AppDNA.currentBundleVersion : nil
         let device = EventDevice(
@@ -163,10 +168,10 @@ enum EventEnvelopeBuilder {
                 session_id: sessionId,
                 screen: nil,
                 experiment_exposures: experimentExposures,
-                // SPEC-428 CL-3/D6: stamp the monotonic sequence at the single choke point every
-                // event's envelope is built (post-configure). ts_ms stays but is no longer the
-                // ordering key.
-                client_seq: ClientSeqCounter.next()
+                // SPEC-428 CL-3/D6/STEP-9: stamp the monotonic sequence at the single choke point every
+                // event's envelope is built. ts_ms stays but is no longer the ordering key. A pre-init
+                // event carries the seq it stamped at facade track() time (used verbatim, never re-minted).
+                client_seq: clientSeq ?? ClientSeqCounter.next()
             ),
             properties: props,
             privacy: EventPrivacy(consent: Consent(analytics: analyticsConsent))

@@ -40,17 +40,22 @@ public final class AppDNA: @unchecked Sendable {
     // facade and be dropped) and drains them in order once the pipeline is wired. Overflow is
     // drop-oldest + counted (CL-1). Mirrors Android's preInitBuffer.
     private static let preInitLock = NSLock()
-    private static var preInitBuffer: [(event: String, properties: [String: Any]?)] = []
+    // SPEC-428 STEP-9/§4.E: each pre-init event STAMPS its client_seq at facade track() time (below) and
+    // carries it through the drain — buildEnvelope uses it verbatim, never re-minting. Preserves the true
+    // tracking order across configure() (a post-configure event minting during the drain window can no
+    // longer get a lower seq than an earlier pre-init event drained after it).
+    private static var preInitBuffer: [(event: String, properties: [String: Any]?, seq: Int64)] = []
     private static let preInitBufferCap = 200
 
     private static func bufferPreInit(event: String, properties: [String: Any]?) {
+        let seq = ClientSeqCounter.next() // stamp NOW, in tracking order, before configure()
         preInitLock.lock()
         defer { preInitLock.unlock() }
         if preInitBuffer.count >= preInitBufferCap {
             preInitBuffer.removeFirst() // drop-oldest
             DroppedEventsCounter.increment(1) // SPEC-428 CL-1: count the pre-init overflow drop
         }
-        preInitBuffer.append((event, properties))
+        preInitBuffer.append((event, properties, seq))
     }
 
     private static func drainPreInitBuffer() {
@@ -61,7 +66,8 @@ public final class AppDNA: @unchecked Sendable {
         guard !buffered.isEmpty else { return }
         Log.info("Draining \(buffered.count) pre-init events")
         for item in buffered {
-            shared.eventTracker?.track(event: item.event, properties: item.properties)
+            // Carry the seq stamped at track() time — do NOT re-mint at drain.
+            shared.eventTracker?.track(event: item.event, properties: item.properties, clientSeq: item.seq)
         }
     }
 

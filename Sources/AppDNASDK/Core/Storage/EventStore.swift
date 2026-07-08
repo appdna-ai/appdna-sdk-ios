@@ -131,6 +131,7 @@ final class EventStore {
     /// O(n) work, run at most every `compactionInterval` appends. Dropped events are counted (CL-1).
     private func compact() {
         var events = loadFromDisk()
+        let original = events
         let originalCount = events.count
         if events.count > self.maxEvents {
             events = Array(events.suffix(self.maxEvents))
@@ -144,10 +145,23 @@ final class EventStore {
             writeToDisk(events)
         }
 
-        let dropped = originalCount - events.count
-        if dropped > 0 {
-            DroppedEventsCounter.increment(dropped) // SPEC-428 CL-1/D2: count the loss (never silent)
-            Log.warning("Event store compaction dropped \(dropped) oldest events (count/disk caps enforced)")
+        let droppedCount = originalCount - events.count
+        if droppedCount > 0 {
+            // SPEC-428 STEP-4: never UNDER-count the loss metric. All drops are from the FRONT (oldest), so
+            // the evicted set is the prefix. For a normal event count 1; for an evicted `_sdk_events_dropped`
+            // META event, RECOVER the N drops it carried (they were already reset to 0 when it was composed,
+            // so evicting it before delivery would otherwise lose them) — re-adding N re-emits them later.
+            let evicted = original.prefix(droppedCount)
+            var lost = 0
+            for e in evicted {
+                if e.event_name == "_sdk_events_dropped" {
+                    lost += (e.properties?["count"]?.value as? Int) ?? 0
+                } else {
+                    lost += 1
+                }
+            }
+            if lost > 0 { DroppedEventsCounter.increment(lost) } // CL-1/D2: count the loss (never silent)
+            Log.warning("Event store compaction dropped \(droppedCount) oldest events (loss metric +\(lost))")
         }
         appendsSinceCompaction = 0
     }

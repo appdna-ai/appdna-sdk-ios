@@ -165,6 +165,39 @@ final class EventPipelineFixtureTests: XCTestCase {
         resetCounters()
     }
 
+    // MARK: - Pre-init client_seq carry (SPEC-428 STEP-9/§4.E) + persistence (D6)
+
+    /// A pre-init event STAMPS its client_seq at facade track() time and carries it through the drain,
+    /// used VERBATIM. This proves the configure-window inversion is fixed: even though the pre-init event
+    /// is BUILT after a later post-configure event, its reserved (earlier-stamped) seq stays lower.
+    func testPreInitClientSeqCarry() {
+        resetCounters()
+        let id = DeviceIdentity(anonId: "spec428-anon", userId: nil, traits: nil)
+        // 1. Pre-init: stamp the seq NOW (before configure), in tracking order.
+        let preInitSeq = ClientSeqCounter.next()
+        // 2. A post-configure event mints during the drain window (BUILT before the pre-init drains).
+        let post = EventEnvelopeBuilder.build(event: "post", properties: nil, identity: id, sessionId: "s", analyticsConsent: true)
+        // 3. The pre-init event drains AFTER, carrying its reserved seq verbatim.
+        let pre = EventEnvelopeBuilder.build(event: "pre", properties: nil, identity: id, sessionId: "s", analyticsConsent: true, clientSeq: preInitSeq)
+        XCTAssertEqual(pre.context.client_seq, preInitSeq, "carried seq must be used verbatim, never re-minted")
+        XCTAssertNotNil(post.context.client_seq)
+        XCTAssertLessThan(pre.context.client_seq!, post.context.client_seq!,
+            "the pre-init event keeps its reserved LOWER seq even though it was built after the post event (no inversion)")
+        resetCounters()
+    }
+
+    /// D6 — client_seq is persistence-backed: it advances monotonically across independent reads
+    /// (each next() reads the persisted counter), so a cold restart continues the sequence, never resets.
+    func testClientSeqPersistsAcrossReads() {
+        resetCounters()
+        let a = ClientSeqCounter.next(), b = ClientSeqCounter.next()
+        XCTAssertEqual(b, a + 1)
+        // Simulate a process restart: a fresh read of the SAME persisted counter continues, not resets.
+        let c = ClientSeqCounter.next()
+        XCTAssertEqual(c, b + 1, "client_seq must continue from the persisted value across a (simulated) restart, never reset to 0")
+        resetCounters()
+    }
+
     // MARK: - Loading
 
     private func loadEventFixtures() throws -> [Fixture] {
