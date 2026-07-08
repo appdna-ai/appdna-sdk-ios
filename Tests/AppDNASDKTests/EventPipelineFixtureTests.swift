@@ -88,15 +88,21 @@ final class EventPipelineFixtureTests: XCTestCase {
         var online = true
         var ingestedIds = Set<String>()
         var ingested: [SDKEvent] = []
+        var rawSent = 0
+        var hadRedeliver = false
 
         func flush() {
             guard online else { return }
             let pending = store.loadPending()
+            rawSent += pending.count // EVERY send, including redeliveries of still-unacked events
             for e in pending where !ingestedIds.contains(e.event_id) {
-                ingestedIds.insert(e.event_id) // server dedups by event_id → each ingested exactly once
+                ingestedIds.insert(e.event_id) // server dedups by STABLE event_id → each ingested once
                 ingested.append(e)
             }
-            store.removeSent(eventIds: Set(pending.map { $0.event_id }))
+            // Deliberately do NOT removeSent — the queue stays "unacked" so a `redeliver` step re-sends
+            // the SAME stored events (same event_id). If event_id were regenerated on resend, the sink
+            // would fail to dedup → ingested_count would exceed the expected → the test fails. That is
+            // what makes offline_redelivery_idempotent a real test of CL-2 event_id stability.
         }
 
         for step in f.pipeline.steps {
@@ -118,7 +124,8 @@ final class EventPipelineFixtureTests: XCTestCase {
                 // persistence survives: same on-disk file + UserDefaults-backed ClientSeqCounter.
                 store = EventStore(maxEvents: cap, compactionInterval: 1, fileName: fileName)
             case "redeliver":
-                flush() // re-runs the flush path; acked events already removed → no re-send / no dup
+                hadRedeliver = true
+                flush() // re-sends the still-unacked events (same event_id) → sink must dedup them
             case "advance_time_ms":
                 break
             default:
@@ -140,10 +147,18 @@ final class EventPipelineFixtureTests: XCTestCase {
         if e.monotonic_client_seq == true {
             let seqs = ingested.compactMap { $0.context.client_seq }
             XCTAssertEqual(seqs.count, ingested.count, "[\(f.id)] every ingested event carries a client_seq")
-            let sorted = seqs.sorted()
-            for i in 1..<max(sorted.count, 1) where i < sorted.count {
-                XCTAssertGreaterThan(sorted[i], sorted[i - 1], "[\(f.id)] client_seq strictly increasing (no equal/inversion)")
+            // Assert the INGESTED (returned) order is ALREADY ascending by client_seq — do NOT sort
+            // first. This is what `ingested_order_key: client_seq` promises: the store returns events
+            // in client_seq order, never wall-clock. A CL-6 intra-second reorder regression fails here.
+            for i in 1..<max(seqs.count, 1) where i < seqs.count {
+                XCTAssertGreaterThan(seqs[i], seqs[i - 1], "[\(f.id)] ingested client_seq strictly increasing IN RETURNED ORDER (index \(i))")
             }
+        }
+        // A `redeliver` step MUST actually re-send unacked events (else the idempotency guarantee is
+        // never exercised): the raw send count exceeds the deduped ingested count only if the same
+        // event_ids were re-sent and the sink collapsed them.
+        if hadRedeliver {
+            XCTAssertGreaterThan(rawSent, ingested.count, "[\(f.id)] redeliver must re-send unacked events (raw \(rawSent) vs ingested \(ingested.count))")
         }
 
         store.clearAll()
