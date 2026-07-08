@@ -10,24 +10,24 @@ import Foundation
 final class EventStore {
     private let queue = DispatchQueue(label: "ai.appdna.sdk.eventstore")
     private let fileURL: URL
-    private static let maxEvents = 10_000
+    private let maxEvents: Int
     /// SPEC-067: Maximum disk usage for event storage (5 MB).
     static let maxDiskBytes = 5 * 1024 * 1024
     /// SPEC-428 CL-8: compact (enforce caps by rewriting) at most every N appends → amortized O(1).
-    private static let compactionInterval = 500
+    private let compactionInterval: Int
     private var appendsSinceCompaction = 0
 
-    init() {
-        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            // Fallback to temp directory if Application Support is unavailable
-            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ai.appdna.sdk", isDirectory: true)
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            self.fileURL = dir.appendingPathComponent("pending_events.json")
-            return
-        }
-        let dir = appSupport.appendingPathComponent("ai.appdna.sdk", isDirectory: true)
+    /// SPEC-428: `maxEvents`/`compactionInterval`/`fileName` are injectable so the shared behavioral
+    /// fixtures (`events/` category) can drive eviction at a small cap with a clean, isolated store.
+    /// Production callers use the defaults (10k cap / compact-every-500 / the canonical file).
+    init(maxEvents: Int = 10_000, compactionInterval: Int = 500, fileName: String = "pending_events.json") {
+        self.maxEvents = maxEvents
+        self.compactionInterval = compactionInterval
+        let base = (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory)
+        let dir = base.appendingPathComponent("ai.appdna.sdk", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        self.fileURL = dir.appendingPathComponent("pending_events.json")
+        self.fileURL = dir.appendingPathComponent(fileName)
     }
 
     /// Returns the current disk size of the event store file in bytes.
@@ -42,7 +42,7 @@ final class EventStore {
         queue.sync {
             appendToDisk(events)
             appendsSinceCompaction += events.count
-            if appendsSinceCompaction >= Self.compactionInterval || fileSize() > Self.maxDiskBytes {
+            if appendsSinceCompaction >= self.compactionInterval || fileSize() > Self.maxDiskBytes {
                 compact()
             }
         }
@@ -132,8 +132,8 @@ final class EventStore {
     private func compact() {
         var events = loadFromDisk()
         let originalCount = events.count
-        if events.count > Self.maxEvents {
-            events = Array(events.suffix(Self.maxEvents))
+        if events.count > self.maxEvents {
+            events = Array(events.suffix(self.maxEvents))
         }
         writeToDisk(events)
 

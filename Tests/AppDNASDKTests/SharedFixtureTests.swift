@@ -215,11 +215,11 @@ final class SharedFixtureTests: XCTestCase {
         for case let url as URL in enumerator {
             guard url.lastPathComponent.hasSuffix(".fixture.json") else { continue }
             let data = try Data(contentsOf: url)
-            // `render`-category fixtures drive the structural/visual parity harness
-            // and carry no `action` — skip them in this behavioral runner (decoding
-            // the required `action` would otherwise fail).
+            // `render`-category fixtures drive the structural/visual parity harness and `events`-category
+            // fixtures drive the SPEC-428 event-pipeline harness (EventPipelineFixtureTests) — both carry
+            // no `action`, so skip them here (decoding the required `action` would otherwise fail).
             if let header = try? decoder.decode(FixtureHeader.self, from: data),
-               header.category == "render" {
+               header.category == "render" || header.category == "events" {
                 continue
             }
             do {
