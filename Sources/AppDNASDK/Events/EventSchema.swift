@@ -68,7 +68,11 @@ enum ClientSeqCounter {
         current += 1
         if current > ceiling {
             ceiling = current + blockSize
-            UserDefaults.standard.set(NSNumber(value: ceiling), forKey: key) // persist ceiling ABOVE handed-out
+            UserDefaults.standard.set(NSNumber(value: ceiling), forKey: key)
+            // Force the ceiling to disk at the (rare) block boundary so it is DURABLE before we hand out a
+            // seq from the new block — a hard kill then yields a gap, NEVER a reuse. synchronize() is
+            // deprecated but remains the way to force a UserDefaults flush; only ~1 in blockSize pays it.
+            UserDefaults.standard.synchronize()
         }
         return current
     }

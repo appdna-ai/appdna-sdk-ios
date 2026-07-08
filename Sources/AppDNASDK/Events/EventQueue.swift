@@ -178,12 +178,11 @@ final class EventQueue {
     /// past the server dedup window would double-count. The drop is counted (CL-1).
     private func pruneStaleEvents() {
         let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
-        let staleIds = Set(pendingEvents.filter { nowMs - $0.ts_ms > redeliveryHorizonMs }.map(\.event_id))
-        guard !staleIds.isEmpty else { return }
-        pendingEvents.removeAll { staleIds.contains($0.event_id) }
-        eventStore.removeSent(eventIds: staleIds)
-        DroppedEventsCounter.increment(staleIds.count)
-        Log.warning("Dropped \(staleIds.count) events past the redelivery horizon (would double-count past server dedup)")
+        // Remove stale from the in-memory working set only (NO count here); eventStore.pruneStale is the
+        // SINGLE, meta-aware count source (the persisted copies of these events live on disk), so the loss
+        // metric can't be double-incremented by the in-process flush AND the background upload both pruning.
+        pendingEvents.removeAll { nowMs - $0.ts_ms > redeliveryHorizonMs }
+        eventStore.pruneStale(horizonMs: redeliveryHorizonMs)
     }
 
     private func performFlush() {

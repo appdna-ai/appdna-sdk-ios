@@ -74,17 +74,24 @@ final class EventStore {
     func pruneStale(horizonMs: Int64 = EventStore.redeliveryHorizonMs) -> Int {
         queue.sync {
             let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
-            var existing = loadFromDisk()
-            let before = existing.count
-            existing.removeAll { nowMs - $0.ts_ms > horizonMs }
-            let dropped = before - existing.count
-            if dropped > 0 {
-                writeToDisk(existing)
-                appendsSinceCompaction = 0
-                DroppedEventsCounter.increment(dropped)
-                Log.warning("Pruned \(dropped) events past the redelivery horizon (double-count guard)")
+            let existing = loadFromDisk()
+            let stale = existing.filter { nowMs - $0.ts_ms > horizonMs }
+            guard !stale.isEmpty else { return 0 }
+            writeToDisk(existing.filter { nowMs - $0.ts_ms <= horizonMs })
+            appendsSinceCompaction = 0
+            // SPEC-428 STEP-4: count the loss meta-aware — 1 per normal event, but the carried N for an
+            // evicted `_sdk_events_dropped` meta (so a meta aged past the horizon doesn't lose its N).
+            var lost = 0
+            for e in stale {
+                if e.event_name == "_sdk_events_dropped" {
+                    lost += (e.properties?["count"]?.value as? Int) ?? 0
+                } else {
+                    lost += 1
+                }
             }
-            return dropped
+            if lost > 0 { DroppedEventsCounter.increment(lost) }
+            Log.warning("Pruned \(stale.count) events past the redelivery horizon (loss metric +\(lost))")
+            return stale.count
         }
     }
 
