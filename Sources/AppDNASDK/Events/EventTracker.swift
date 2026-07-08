@@ -40,7 +40,9 @@ final class EventTracker {
         // _sdk_events_dropped meta-event so the loss is SERVER-VISIBLE. Drain before the real event;
         // guard against the meta-event itself re-triggering the drain.
         if event != "_sdk_events_dropped" {
-            let dropped = DroppedEventsCounter.getAndReset()
+            // SPEC-428 STEP-4: PEEK (don't reset) — the count is decremented only after the meta is durable
+            // (in emitDroppedMeta's onPersisted), so a crash before the meta lands re-emits it (no under-count).
+            let dropped = DroppedEventsCounter.peek()
             if dropped > 0 { emitDroppedMeta(count: dropped) }
         }
 
@@ -72,7 +74,9 @@ final class EventTracker {
             sessionId: sessionId,
             analyticsConsent: analyticsConsent
         )
-        eventQueue?.enqueue(ev)
+        // SPEC-428 STEP-4: decrement by exactly `count` ONLY after the meta is durably persisted (never a
+        // zero-reset). Crash before persist → counter keeps `count` → re-emit (no under-count).
+        eventQueue?.enqueue(ev, onPersisted: { DroppedEventsCounter.subtract(count) })
         Log.debug("Emitted _sdk_events_dropped meta-event (count=\(count))")
     }
 

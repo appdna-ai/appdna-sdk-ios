@@ -101,7 +101,9 @@ final class EventQueue {
     private let maxInMemoryEvents = 1000
 
     /// Add an event to the queue. Triggers threshold flush if adaptive batch size reached.
-    func enqueue(_ event: SDKEvent) {
+    /// `onPersisted` (SPEC-428 STEP-4) fires on the serial queue AFTER the event is durably on disk —
+    /// used by the dropped-meta path to decrement the loss counter only once its meta is safe.
+    func enqueue(_ event: SDKEvent, onPersisted: (() -> Void)? = nil) {
         queue.async { [weak self] in
             guard let self else { return }
 
@@ -113,6 +115,7 @@ final class EventQueue {
 
             // Persist to disk immediately
             self.eventStore.save(events: [event])
+            onPersisted?() // SPEC-428 STEP-4: meta now durable → safe to decrement the drop counter
 
             // SPEC-067: Check adaptive threshold
             let currentBatchSize = self.effectiveBatchSize

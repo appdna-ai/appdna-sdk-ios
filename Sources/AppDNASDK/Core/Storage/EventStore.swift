@@ -214,12 +214,32 @@ enum DroppedEventsCounter {
         UserDefaults.standard.set(current + n, forKey: key)
     }
 
-    /// Atomically read + reset. The caller emits the meta-event with the returned count.
+    /// Atomically read + reset. Test helper (fixtures read the accrued count); production uses
+    /// peek()+subtract() so the count is only removed AFTER the meta is durable (STEP-4).
     static func getAndReset() -> Int {
         lock.lock()
         defer { lock.unlock() }
         let current = UserDefaults.standard.integer(forKey: key)
         if current > 0 { UserDefaults.standard.set(0, forKey: key) }
         return current
+    }
+
+    /// SPEC-428 STEP-4: read WITHOUT resetting. The count is only removed (subtract) AFTER the
+    /// `_sdk_events_dropped` meta carrying it is DURABLY persisted — so a hard kill before the meta lands
+    /// re-emits it (never an UNDER-count, which STEP-4 forbids). A concurrent peek may double-emit
+    /// (over-count, direction-safe — the spec prioritizes never-under-count).
+    static func peek() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return UserDefaults.standard.integer(forKey: key)
+    }
+
+    /// SPEC-428 STEP-4: atomic DECREMENT-by-N (floored at 0), called once the meta carrying N is durable.
+    static func subtract(_ n: Int) {
+        guard n > 0 else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        let current = UserDefaults.standard.integer(forKey: key)
+        UserDefaults.standard.set(max(0, current - n), forKey: key)
     }
 }
