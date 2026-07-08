@@ -84,6 +84,14 @@ enum ClientSeqCounter {
         current = 0; ceiling = 0; loaded = false
         UserDefaults.standard.removeObject(forKey: key)
     }
+
+    /// Test hook: simulate a COLD restart — drop the in-memory block WITHOUT clearing the persisted
+    /// ceiling, so the next next() re-reads it (exercises the restore branch; a crash yields a gap).
+    static func simulateRestartForTesting() {
+        lock.lock()
+        defer { lock.unlock() }
+        loaded = false
+    }
 }
 
 struct ExperimentExposure: Codable {

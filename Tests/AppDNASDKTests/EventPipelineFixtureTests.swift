@@ -186,15 +186,26 @@ final class EventPipelineFixtureTests: XCTestCase {
         resetCounters()
     }
 
-    /// D6 — client_seq is persistence-backed: it advances monotonically across independent reads
-    /// (each next() reads the persisted counter), so a cold restart continues the sequence, never resets.
+    /// D6 — client_seq is persistence-backed: it advances monotonically across independent reads.
     func testClientSeqPersistsAcrossReads() {
         resetCounters()
         let a = ClientSeqCounter.next(), b = ClientSeqCounter.next()
         XCTAssertEqual(b, a + 1)
-        // Simulate a process restart: a fresh read of the SAME persisted counter continues, not resets.
         let c = ClientSeqCounter.next()
-        XCTAssertEqual(c, b + 1, "client_seq must continue from the persisted value across a (simulated) restart, never reset to 0")
+        XCTAssertEqual(c, b + 1)
+        resetCounters()
+    }
+
+    /// D6 / STEP-6 — across a COLD restart the reserve-block resumes from the persisted CEILING: strictly
+    /// greater than the last handed-out value (a gap is expected), NEVER a reuse or a reset. Exercises the
+    /// restore-from-UserDefaults branch (parity with Android's clientSeqPersistsAcrossRestart).
+    func testClientSeqPersistsAcrossRestart() {
+        resetCounters()
+        let a = ClientSeqCounter.next(), b = ClientSeqCounter.next()
+        XCTAssertEqual(b, a + 1)
+        ClientSeqCounter.simulateRestartForTesting() // cold restart → re-read the persisted ceiling
+        let c = ClientSeqCounter.next()
+        XCTAssertGreaterThan(c, b, "client_seq resumes monotonically across restart (gap OK, never reuse/reset)")
         resetCounters()
     }
 
