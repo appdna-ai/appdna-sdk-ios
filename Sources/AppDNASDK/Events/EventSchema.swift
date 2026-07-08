@@ -43,16 +43,42 @@ struct EventContext: Codable {
 /// FACADE-available store, not the EventStore/EventQueue which are built inside configure()), so it
 /// survives restart and is readable before configure(). The single increment site is buildEnvelope.
 enum ClientSeqCounter {
+    // SPEC-428 CL-3/STEP-6: `key` persists the RESERVED CEILING (>= every seq handed out). We hand out from
+    // an in-memory block and WRITE only when the block is exhausted — persisting the ceiling ABOVE the
+    // values we hand out — so a hard kill between the async UserDefaults write and its disk flush yields a
+    // GAP (the unused reserved tail), NEVER a REUSE of an already-emitted seq (fixture #3 forbids reuse).
+    // Also O(1) amortized: one store write every `blockSize`, not per event (CL-8 hot-path budget).
     private static let key = "ai.appdna.sdk.client_seq"
     private static let lock = NSLock()
+    private static let blockSize: Int64 = 100
+    private static var current: Int64 = 0
+    private static var ceiling: Int64 = 0
+    private static var loaded = false
 
     static func next() -> Int64 {
         lock.lock()
         defer { lock.unlock() }
-        let current = (UserDefaults.standard.object(forKey: key) as? NSNumber)?.int64Value ?? 0
-        let next = current + 1
-        UserDefaults.standard.set(NSNumber(value: next), forKey: key)
-        return next
+        if !loaded {
+            // Restart: resume from the persisted ceiling (>= every seq handed out before a crash).
+            let persisted = (UserDefaults.standard.object(forKey: key) as? NSNumber)?.int64Value ?? 0
+            current = persisted
+            ceiling = persisted
+            loaded = true
+        }
+        current += 1
+        if current > ceiling {
+            ceiling = current + blockSize
+            UserDefaults.standard.set(NSNumber(value: ceiling), forKey: key) // persist ceiling ABOVE handed-out
+        }
+        return current
+    }
+
+    /// Test hook: reset the in-memory block + persisted ceiling so a fresh test starts clean.
+    static func resetForTesting() {
+        lock.lock()
+        defer { lock.unlock() }
+        current = 0; ceiling = 0; loaded = false
+        UserDefaults.standard.removeObject(forKey: key)
     }
 }
 

@@ -112,6 +112,10 @@ final class BackgroundUploader {
             }
             defer { EventUploadCoordinator.release() }
 
+            // SPEC-428 CL-2/D5: this BGTask can fire hours/days after the events were queued — prune past
+            // the redelivery horizon BEFORE upload so a stale event isn't re-sent past the server dedup
+            // window (double-count). The in-process EventQueue prunes too; the store method covers both.
+            self.eventStore.pruneStale()
             let events = self.eventStore.loadPending()
             guard !events.isEmpty else {
                 task.setTaskCompleted(success: true)

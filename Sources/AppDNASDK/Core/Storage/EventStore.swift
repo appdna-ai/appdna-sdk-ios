@@ -63,6 +63,31 @@ final class EventStore {
         }
     }
 
+    /// SPEC-428 CL-2/D5: the client redelivery horizon. Compiled default 7d, tracking SPEC-426's horizon.
+    static let redeliveryHorizonMs: Int64 = 7 * 24 * 60 * 60 * 1000
+
+    /// SPEC-428 CL-2/D5: drop events past the redelivery horizon so NO consumer re-sends an event past the
+    /// server dedup window (double-count). This lives at the STORE so EVERY load path is protected — the
+    /// in-process flush AND the background BGTask/WorkManager uploaders that "fire hours/days later" (the
+    /// paths STEP-5 named). Counted (CL-1). Returns the number dropped.
+    @discardableResult
+    func pruneStale(horizonMs: Int64 = EventStore.redeliveryHorizonMs) -> Int {
+        queue.sync {
+            let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+            var existing = loadFromDisk()
+            let before = existing.count
+            existing.removeAll { nowMs - $0.ts_ms > horizonMs }
+            let dropped = before - existing.count
+            if dropped > 0 {
+                writeToDisk(existing)
+                appendsSinceCompaction = 0
+                DroppedEventsCounter.increment(dropped)
+                Log.warning("Pruned \(dropped) events past the redelivery horizon (double-count guard)")
+            }
+            return dropped
+        }
+    }
+
     /// SPEC-424 STEP-1a (CL-7): purge ALL persisted events WITHOUT uploading them — analytics
     /// consent was revoked, so queued-but-unsent events must never be transmitted.
     func clearAll() {

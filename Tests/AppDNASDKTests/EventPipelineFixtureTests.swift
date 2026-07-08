@@ -60,7 +60,7 @@ final class EventPipelineFixtureTests: XCTestCase {
     // MARK: - Driver
 
     private func resetCounters() {
-        UserDefaults.standard.removeObject(forKey: Self.seqKey)
+        ClientSeqCounter.resetForTesting() // reset the reserve-block in-memory state + persisted ceiling
         UserDefaults.standard.removeObject(forKey: Self.dropKey)
     }
 
@@ -195,6 +195,20 @@ final class EventPipelineFixtureTests: XCTestCase {
         // Simulate a process restart: a fresh read of the SAME persisted counter continues, not resets.
         let c = ClientSeqCounter.next()
         XCTAssertEqual(c, b + 1, "client_seq must continue from the persisted value across a (simulated) restart, never reset to 0")
+        resetCounters()
+    }
+
+    /// R14 / §6 — concurrent next() from many threads must NEVER hand out a duplicate client_seq.
+    func testClientSeqConcurrentEmitUnique() {
+        resetCounters()
+        let count = 800
+        var seqs = [Int64](repeating: 0, count: count)
+        let lock = NSLock()
+        DispatchQueue.concurrentPerform(iterations: count) { i in
+            let s = ClientSeqCounter.next()
+            lock.lock(); seqs[i] = s; lock.unlock()
+        }
+        XCTAssertEqual(Set(seqs).count, count, "R14: concurrent next() must never hand out a duplicate client_seq")
         resetCounters()
     }
 
