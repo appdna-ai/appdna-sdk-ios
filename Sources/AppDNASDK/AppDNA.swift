@@ -47,17 +47,6 @@ public final class AppDNA: @unchecked Sendable {
     private static var preInitBuffer: [(event: String, properties: [String: Any]?, seq: Int64)] = []
     private static let preInitBufferCap = 200
 
-    private static func bufferPreInit(event: String, properties: [String: Any]?) {
-        let seq = ClientSeqCounter.next() // stamp NOW, in tracking order, before configure()
-        preInitLock.lock()
-        defer { preInitLock.unlock() }
-        if preInitBuffer.count >= preInitBufferCap {
-            preInitBuffer.removeFirst() // drop-oldest
-            DroppedEventsCounter.increment(1) // SPEC-428 CL-1: count the pre-init overflow drop
-        }
-        preInitBuffer.append((event, properties, seq))
-    }
-
     private static func drainPreInitBuffer() {
         preInitLock.lock()
         let buffered = preInitBuffer
@@ -370,11 +359,25 @@ public final class AppDNA: @unchecked Sendable {
 
     /// Track a custom event.
     public static func track(event: String, properties: [String: Any]? = nil) {
-        // SPEC-428 CL-10/D7: before configure(), the pipeline isn't wired (eventTracker == nil) — buffer
-        // the call instead of dropping it at the facade. Drained in order by configure().
+        // SPEC-428 CL-10/D7 + F2: before configure() the pipeline isn't wired — buffer instead of dropping.
+        // Double-checked locking (mirrors Android): fast path reads eventTracker with no lock; if nil, take
+        // preInitLock (which configure() holds while it publishes eventTracker) and RE-CHECK — still nil →
+        // buffer (pre-configure); set → fall through to mint. This makes the buffer-vs-mint decision
+        // mutually exclusive with the publish, closing the buffer-after-drain STRAND race (an event offered
+        // after the drain would be enqueued nowhere and silently lost).
         if shared.eventTracker == nil {
-            bufferPreInit(event: event, properties: properties)
-            return
+            preInitLock.lock()
+            if shared.eventTracker == nil {
+                let seq = ClientSeqCounter.next() // stamp NOW under the lock, in tracking order
+                if preInitBuffer.count >= preInitBufferCap {
+                    preInitBuffer.removeFirst() // drop-oldest
+                    DroppedEventsCounter.increment(1) // SPEC-428 CL-1: count the pre-init overflow drop
+                }
+                preInitBuffer.append((event, properties, seq))
+                preInitLock.unlock()
+                return
+            }
+            preInitLock.unlock() // configure() published while we waited → mint below (seq lands above the block)
         }
         shared.queue.async {
             shared.eventTracker?.track(event: event, properties: properties)
@@ -999,7 +1002,7 @@ public final class AppDNA: @unchecked Sendable {
 
         // 2. Initialize event system
         let tracker = EventTracker(identityManager: identityMgr)
-        self.eventTracker = tracker
+        // NB: eventTracker is published LATER (under preInitLock, after setEventQueue) — SPEC-428 F2.
 
         let eq = EventQueue(
             apiClient: client,
@@ -1011,9 +1014,14 @@ public final class AppDNA: @unchecked Sendable {
         self.eventQueue = eq
         tracker.setEventQueue(eq)
 
-        // SPEC-428 CL-10/D7: drain events tracked before configure() (in order, now that the pipeline
-        // is wired). Their client_seq is stamped at buildEnvelope from the persisted counter, so they
-        // sit strictly above the prior run's ceiling.
+        // SPEC-428 CL-10/D7 + F2: publish eventTracker UNDER preInitLock (mutually exclusive with the
+        // facade track()'s buffer-vs-mint decision, so no event can be buffered after the drain and
+        // stranded) AND after setEventQueue (so a post-publish mint never hits a nil queue). Then drain the
+        // events buffered pre-publish — in order; their client_seq was stamped at track() time, sitting
+        // strictly above the prior run's ceiling. Nothing buffers after the publish (track() re-checks).
+        Self.preInitLock.lock()
+        self.eventTracker = tracker
+        Self.preInitLock.unlock()
         AppDNA.drainPreInitBuffer()
 
         // SPEC-067: Initialize background uploader.
