@@ -33,6 +33,14 @@ final class EventQueue {
     private let flushInterval: TimeInterval
     private let maxRetries = 3
     private let retryDelays: [TimeInterval] = [1, 2, 4]
+
+    /// Applies ±25% full jitter to a backoff delay, matching Android's
+    /// `EventQueue.kt`. Without it, every client throttled by the same 429 retries
+    /// on the identical wall clock and stampedes the server again.
+    static func jittered(_ base: TimeInterval) -> TimeInterval {
+        let spread = base * 0.25
+        return max(0, base + TimeInterval.random(in: -spread...spread))
+    }
     // SPEC-428 CL-2/D5: client redelivery horizon — never re-send an event older than this (past the
     // server dedup window it would double-count). Compiled default 7d, tracking SPEC-426's horizon.
     private let redeliveryHorizonMs: Int64 = 7 * 24 * 60 * 60 * 1000
@@ -255,15 +263,20 @@ final class EventQueue {
                     self.consecutiveFailures = 0
                     Log.debug("Flush successful: \(batch.count) events delivered")
                 } else if self.apiClient.eventUploadPermanentlyFailed {
-                    // 401/400 — retrying won't help. Pause immediately.
+                    // Permanent 4xx (401 / other 4xx, but NOT 408 or 429) — retrying
+                    // won't help. Pause immediately.
                     self.consecutiveFailures = self.maxConsecutiveFailures
                     self.retryCount = 0
                     Log.error("Event uploads permanently failed (invalid key or payload). Paused until next session.")
                 } else {
                     if self.retryCount < self.maxRetries {
-                        let delay = self.retryDelays[min(self.retryCount, self.retryDelays.count - 1)]
+                        // A server-supplied Retry-After wins over our backoff schedule.
+                        // Otherwise: exponential base + jitter, so a fleet that was
+                        // throttled together does not retry in lockstep. Matches Android.
+                        let base = self.retryDelays[min(self.retryCount, self.retryDelays.count - 1)]
+                        let delay = self.apiClient.consumeRetryAfter() ?? Self.jittered(base)
                         self.retryCount += 1
-                        Log.debug("Flush failed, retrying in \(delay)s (attempt \(self.retryCount)/\(self.maxRetries))")
+                        Log.debug("Flush failed, retrying in \(String(format: "%.2f", delay))s (attempt \(self.retryCount)/\(self.maxRetries))")
                         DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
                             self?.flush()
                         }

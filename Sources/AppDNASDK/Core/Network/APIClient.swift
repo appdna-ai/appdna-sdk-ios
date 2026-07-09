@@ -35,8 +35,45 @@ final class APIClient {
     private let maxRetries = 3
     private let retryDelays: [TimeInterval] = [1, 2, 4]
 
-    /// Set to true when event upload gets a 4xx (retrying won't help).
+    /// HTTP statuses that look like 4xx but must be retried, never latched as permanent.
+    static let transientStatusCodes: Set<Int> = [408, 429]
+
+    /// Set to true when event upload gets a *permanent* 4xx (retrying won't help).
+    ///
+    /// 429 (rate limited) and 408 (request timeout) are explicitly NOT permanent —
+    /// they are the expected responses under load, and treating them as permanent
+    /// halted all uploads until app restart. Android has always retried them.
     private(set) var eventUploadPermanentlyFailed = false
+
+    /// Seconds the server asked us to wait, parsed from a `Retry-After` header on
+    /// the last 429/503. Consumed (and cleared) by `EventQueue` when scheduling its
+    /// next attempt. Capped so a hostile or mistaken header cannot park the queue.
+    private(set) var retryAfterSeconds: TimeInterval?
+
+    /// Upper bound on an honored `Retry-After`.
+    static let maxRetryAfter: TimeInterval = 120
+
+    /// Reads and clears the pending `Retry-After` hint.
+    func consumeRetryAfter() -> TimeInterval? {
+        defer { retryAfterSeconds = nil }
+        return retryAfterSeconds
+    }
+
+    /// Parses `Retry-After`, which RFC 9110 allows as either delta-seconds or an
+    /// HTTP-date. Returns nil for an absent, unparseable, or non-positive value.
+    static func parseRetryAfter(_ raw: String?) -> TimeInterval? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return nil }
+        if let seconds = TimeInterval(raw) {
+            return seconds > 0 ? min(seconds, maxRetryAfter) : nil
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "GMT")
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        guard let date = formatter.date(from: raw) else { return nil }
+        let delta = date.timeIntervalSinceNow
+        return delta > 0 ? min(delta, maxRetryAfter) : nil
+    }
 
     init(apiKey: String, environment: Environment) {
         self.apiKey = apiKey
@@ -152,6 +189,7 @@ final class APIClient {
             let statusCode = httpResponse.statusCode
             if (200..<300).contains(statusCode) {
                 eventUploadPermanentlyFailed = false
+                retryAfterSeconds = nil
                 return true
             }
             // Log the failure reason
@@ -159,10 +197,22 @@ final class APIClient {
             if statusCode == 401 {
                 Log.error("Event upload rejected: HTTP 401 — Invalid API key. Check your key in Console → Settings → SDK. Retrying won't help.")
                 eventUploadPermanentlyFailed = true
+            } else if Self.transientStatusCodes.contains(statusCode) {
+                // 429 rate-limited / 408 request-timeout are transient by definition.
+                // Honor Retry-After when the server sends one.
+                retryAfterSeconds = Self.parseRetryAfter(
+                    httpResponse.value(forHTTPHeaderField: "Retry-After")
+                )
+                let hint = retryAfterSeconds.map { " Retry-After: \($0)s." } ?? ""
+                Log.warning("Event upload throttled: HTTP \(statusCode).\(hint) Will retry.")
             } else if (400..<500).contains(statusCode) {
                 Log.error("Event upload rejected: HTTP \(statusCode) — \(body). Retrying won't help.")
                 eventUploadPermanentlyFailed = true
             } else {
+                // 5xx — also honor Retry-After (503 commonly sends one).
+                retryAfterSeconds = Self.parseRetryAfter(
+                    httpResponse.value(forHTTPHeaderField: "Retry-After")
+                )
                 Log.warning("Event upload failed: HTTP \(statusCode) — \(body). Will retry.")
             }
             return false
