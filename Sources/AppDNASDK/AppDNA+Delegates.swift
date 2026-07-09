@@ -169,3 +169,42 @@ public struct SurveyResponse {
         self.answer = answer
     }
 }
+
+// MARK: - Init-degraded delegate (SPEC-070-B PN row 2 / D-k)
+
+/// Surfaces a recoverable init failure — a missing `GoogleService-Info-AppDNA.plist`, a malformed
+/// bundle config, a subsystem that failed to start. The SDK stays usable; analytics keep flowing
+/// (SPEC-070-B AC-31(b)). Android has carried this since SPEC-070-A H.20 (`AppDNAInitDelegate`);
+/// iOS had no equivalent, so an iOS host could not tell a degraded SDK from a healthy one.
+///
+/// Implement on a host class and set `AppDNA.initDelegate = self`. Registering after a degraded
+/// init still delivers the pending error once, so late binding never misses the signal.
+public protocol AppDNAInitDelegate: AnyObject {
+    /// Fires on the main thread whenever `lastInitError` transitions from nil to non-nil, and once
+    /// on registration if the SDK is already degraded.
+    func onInitDegraded(reason: Error)
+}
+
+public extension AppDNAInitDelegate {
+    func onInitDegraded(reason: Error) {}
+}
+
+/// The errors `AppDNA.reportInitDegraded` records. Android reports a bare `Throwable`; iOS names
+/// the cases so a host can branch on them without string-matching a log line.
+public enum AppDNAInitError: Error, LocalizedError, Equatable {
+    /// No usable AppDNA Firebase configuration. Remote config (paywalls, experiments, flags,
+    /// onboarding) will not load; analytics still work.
+    case firebaseConfigMissing(String)
+    /// The bootstrap request failed. The SDK runs on cached config, if any.
+    case bootstrapFailed(String)
+    /// One subsystem failed to start. The others — analytics above all — are unaffected.
+    case subsystemFailed(name: String, message: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .firebaseConfigMissing(let detail): return "Firebase configuration missing: \(detail)"
+        case .bootstrapFailed(let detail): return "Bootstrap failed: \(detail)"
+        case .subsystemFailed(let name, let message): return "Subsystem '\(name)' failed to initialize: \(message)"
+        }
+    }
+}

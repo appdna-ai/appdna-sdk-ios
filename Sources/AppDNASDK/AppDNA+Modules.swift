@@ -45,7 +45,11 @@ extension AppDNA {
     /// Delegates to the configured `BillingBridgeProtocol` (StoreKit2, RevenueCat, or Adapty).
     public final class BillingModule: @unchecked Sendable {
         internal var bridge: BillingBridgeProtocol?
-        private var entitlementChangeHandlers: [([Entitlement]) -> Void] = []
+        /// SPEC-070-B PN row 3 (E3): keyed by token so a handler can be removed. An append-only array
+        /// had no removal method anywhere in the SDK, so a wrapper that re-`configure()`s (a React
+        /// Native reload does exactly that) accumulated handlers and delivered every change N-fold.
+        private var entitlementChangeHandlers: [UUID: ([Entitlement]) -> Void] = [:]
+        private let entitlementHandlerLock = NSLock()
         private var entitlementObserverToken: NSObjectProtocol?
 
         internal init() {}
@@ -172,11 +176,19 @@ extension AppDNA {
         /// Register a callback that fires when entitlements change.
         /// Listens to the internal `entitlementsChanged` notification.
         /// Only one NotificationCenter observer is registered; all callbacks are dispatched from it.
-        public func onEntitlementsChanged(_ callback: @escaping ([Entitlement]) -> Void) {
-            entitlementChangeHandlers.append(callback)
+        /// - Returns: a token for `removeEntitlementsChangedHandler`. Discardable, so existing
+        ///   native call sites keep compiling unchanged.
+        @discardableResult
+        public func onEntitlementsChanged(_ callback: @escaping ([Entitlement]) -> Void) -> UUID {
+            let token = UUID()
+            entitlementHandlerLock.lock()
+            defer { entitlementHandlerLock.unlock() }
+            entitlementChangeHandlers[token] = callback
 
-            // Register the observer only once (first callback registration)
-            guard entitlementObserverToken == nil else { return }
+            // Register the observer only once (first callback registration). The check and the
+            // assignment stay under the same lock — otherwise two concurrent first registrations both
+            // observe nil and each add an observer, and every change is then delivered twice.
+            guard entitlementObserverToken == nil else { return token }
             entitlementObserverToken = NotificationCenter.default.addObserver(
                 forName: .entitlementsChanged,
                 object: nil,
@@ -192,10 +204,28 @@ extension AppDNA {
                             productId: e.productId
                         )
                     }
-                    for handler in self.entitlementChangeHandlers {
+                    self.entitlementHandlerLock.lock()
+                    let handlers = Array(self.entitlementChangeHandlers.values)
+                    self.entitlementHandlerLock.unlock()
+                    for handler in handlers {
                         handler(infos)
                     }
                 }
+            }
+            return token
+        }
+
+        /// Remove a handler registered by `onEntitlementsChanged`. Removing the last one also tears
+        /// down the NotificationCenter observer, so nothing is retained after a wrapper invalidates.
+        public func removeEntitlementsChangedHandler(_ token: UUID) {
+            entitlementHandlerLock.lock()
+            entitlementChangeHandlers.removeValue(forKey: token)
+            let isEmpty = entitlementChangeHandlers.isEmpty
+            let observer = entitlementObserverToken
+            if isEmpty { entitlementObserverToken = nil }
+            entitlementHandlerLock.unlock()
+            if isEmpty, let observer {
+                NotificationCenter.default.removeObserver(observer)
             }
         }
 

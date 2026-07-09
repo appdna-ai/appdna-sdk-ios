@@ -143,6 +143,97 @@ public final class AppDNA: @unchecked Sendable {
     /// react_native); tagged on every event's device context. Defaults to "native".
     internal static var framework: String { shared.options.framework }
 
+    // MARK: - Screen attribution (SPEC-070-B PN row 1 / D-h)
+
+    /// The most recent screen name announced by `notifyScreenAppeared`, surfaced into every event
+    /// envelope as `context.screen`. Android has carried this since SPEC-070-A G.17; iOS never did,
+    /// so `context.screen` was hardcoded nil on every iOS event.
+    /// Written from any thread (a host may announce from a background task), read on the event queue.
+    private static let screenNameLock = NSLock()
+    private static var _lastScreenName: String?
+    internal static var lastScreenName: String? {
+        get { screenNameLock.lock(); defer { screenNameLock.unlock() }; return _lastScreenName }
+        set { screenNameLock.lock(); _lastScreenName = newValue; screenNameLock.unlock() }
+    }
+
+    /// Notify the SDK that a screen has appeared. UIKit hosts get this automatically once
+    /// `enableNavigationInterception()` is called; SwiftUI-only and React Native hosts must call it
+    /// themselves from the screen's `onAppear`.
+    public static func notifyScreenAppeared(_ screenName: String) {
+        lastScreenName = screenName
+        ScreenManager.shared.evaluateInterceptions(screenName: screenName, timing: "after")
+    }
+
+    // MARK: - Degraded init (SPEC-070-B PN row 2 / D-k)
+
+    /// The most recent non-fatal error raised during `configure()` or bootstrap. Non-nil means the
+    /// SDK started, but some subsystem did not. Analytics are the floor guarantee and keep working
+    /// (AC-31(b)); a host reads this to decide whether, say, remote config is trustworthy.
+    /// Mirrors Android's `AppDNA.lastInitError` (`AppDNA.kt:78`).
+    private static let initErrorLock = NSLock()
+    private static var _lastInitError: Error?
+    public static var lastInitError: Error? {
+        initErrorLock.lock(); defer { initErrorLock.unlock() }; return _lastInitError
+    }
+
+    private static var _initDelegate: AppDNAInitDelegate?
+    /// Register a delegate for `onInitDegraded`. If the SDK is already degraded when the delegate
+    /// registers, the pending error is delivered once — a late-binding host never misses it.
+    public static var initDelegate: AppDNAInitDelegate? {
+        get { initErrorLock.lock(); defer { initErrorLock.unlock() }; return _initDelegate }
+        set {
+            initErrorLock.lock()
+            _initDelegate = newValue
+            let pending = _lastInitError
+            initErrorLock.unlock()
+            if let pending, let newValue {
+                DispatchQueue.main.async { newValue.onInitDegraded(reason: pending) }
+            }
+        }
+    }
+
+    /// Clear the degraded-init state. Test seam — `shutdown()` does this too, but a test that only
+    /// wants a clean `lastInitError` should not have to tear the whole SDK down.
+    internal static func resetInitStateForTesting() {
+        initErrorLock.lock()
+        _lastInitError = nil
+        _initDelegate = nil
+        initErrorLock.unlock()
+    }
+
+    /// Record a non-fatal init error and notify the delegate on the main thread. Idempotent per
+    /// error: the delegate fires on every report, matching Android's `reportInitDegraded`.
+    internal static func reportInitDegraded(_ error: Error) {
+        initErrorLock.lock()
+        _lastInitError = error
+        let delegate = _initDelegate
+        initErrorLock.unlock()
+        Log.warning("AppDNA init degraded: \(error.localizedDescription)")
+        guard let delegate else { return }
+        DispatchQueue.main.async { delegate.onInitDegraded(reason: error) }
+    }
+
+    // MARK: - Subsystem init isolation (SPEC-070-B PN row 17 / W13 / AC-31(b))
+
+    /// Names of subsystems to fail on purpose. Test-only: AC-31(b) has to inject a failure to prove
+    /// the isolation holds, and a reporting seam that is never exercised is not isolation.
+    internal static var subsystemInitFailures: Set<String> = []
+
+    /// Build one subsystem in isolation. A subsystem that fails to start is reported as degraded and
+    /// left nil; the event pipeline — wired earlier, in `performConfigure` — keeps running either way.
+    /// Analytics is the floor guarantee, exactly as at Amplitude and Firebase.
+    private static func initSubsystem<T>(_ name: String, _ make: () throws -> T) -> T? {
+        do {
+            if subsystemInitFailures.contains(name) {
+                throw AppDNAInitError.subsystemFailed(name: name, message: "injected failure")
+            }
+            return try make()
+        } catch {
+            reportInitDegraded(AppDNAInitError.subsystemFailed(name: name, message: error.localizedDescription))
+            return nil
+        }
+    }
+
     // MARK: - Singleton
 
     private static let shared = AppDNA()
@@ -816,6 +907,16 @@ public final class AppDNA: @unchecked Sendable {
             if shared.experimentManager != nil { modules.append("experiments") }
             lines.append("║ ✅ Modules: \(modules.isEmpty ? "none" : modules.joined(separator: ", "))")
 
+            // SPEC-070-B PN row 14 + 16: the two settings whose effect is invisible until something
+            // goes wrong — a silently opted-out user, and a veto that timed out into its default.
+            let consent = ConsentStore.decision
+            let consentLabel = consent.map { $0 ? "granted" : "DENIED" } ?? "no decision yet"
+            lines.append("║ ℹ️ Analytics consent: \(consentLabel) (requireConsent=\(shared.options.requireConsent))")
+            lines.append("║ ℹ️ Veto timeout: \(Int(shared.options.vetoTimeout))s · timed out \(VetoTimeoutCounter.count) time(s)")
+            if let err = lastInitError {
+                lines.append("║ ⚠️ Init degraded: \(err.localizedDescription)")
+            }
+
             // Summary
             lines.append("╠══════════════════════════════════════════")
             let allGood = shared.apiKey != nil && hasBootstrap && FirebaseApp.app(name: "appdna") != nil
@@ -875,6 +976,10 @@ public final class AppDNA: @unchecked Sendable {
 
     /// Set analytics consent. When false, events are silently dropped.
     public static func setConsent(analytics: Bool) {
+        // SPEC-070-B PN row 14 (AC-36): persist FIRST and synchronously. A crash between the async
+        // hop and the write would otherwise lose a revocation, and the next launch would re-enable
+        // analytics for a user who opted out.
+        ConsentStore.decision = analytics
         shared.queue.async {
             shared.eventTracker?.setConsent(analytics: analytics)
             Log.info("Consent updated: analytics=\(analytics)")
@@ -929,6 +1034,8 @@ public final class AppDNA: @unchecked Sendable {
                 Log.info("✅ Firebase: Using secondary app 'appdna' (GoogleService-Info-AppDNA.plist)")
             } else {
                 Log.error("❌ Firebase: GoogleService-Info-AppDNA.plist found but failed to create secondary app. Check the plist content is valid.")
+                AppDNA.reportInitDegraded(AppDNAInitError.firebaseConfigMissing(
+                    "GoogleService-Info-AppDNA.plist is present but its contents are not a valid Firebase configuration"))
             }
             return
         }
@@ -957,6 +1064,8 @@ public final class AppDNA: @unchecked Sendable {
             \n→ See: https://docs.appdna.ai/sdks/ios/installation#firebase-configuration \
             \nRemote config (paywalls, experiments, flags, onboarding) will NOT work without this file.
             """)
+            AppDNA.reportInitDegraded(AppDNAInitError.firebaseConfigMissing(
+                "the host app has its own Firebase project but GoogleService-Info-AppDNA.plist is absent"))
             return
         }
 
@@ -967,6 +1076,8 @@ public final class AppDNA: @unchecked Sendable {
         \n→ Add it to your Xcode project \
         \n→ See: https://docs.appdna.ai/sdks/ios/installation#firebase-configuration
         """)
+        AppDNA.reportInitDegraded(AppDNAInitError.firebaseConfigMissing(
+            "no Firebase configuration found in the app bundle"))
     }
 
     // MARK: - Internal bootstrap
@@ -1013,6 +1124,14 @@ public final class AppDNA: @unchecked Sendable {
         )
         self.eventQueue = eq
         tracker.setEventQueue(eq)
+        // SPEC-070-B PN row 1: every envelope carries the last-announced screen. Reads the static
+        // through the lock, so a host announcing from a background thread is safe.
+        tracker.setScreenProvider { AppDNA.lastScreenName }
+
+        // SPEC-070-B PN row 14 (AC-36): resolve consent from the PERSISTED decision before anything
+        // can be tracked — including the pre-init buffer drain and `sdk_initialized`. A denied user
+        // used to be silently re-opted-in on every cold start.
+        tracker.setInitialConsent(analytics: ConsentStore.effectiveConsent(requireConsent: options.requireConsent))
 
         // SPEC-428 CL-10/D7 + F2: publish eventTracker UNDER preInitLock (mutually exclusive with the
         // facade track()'s buffer-vs-mint decision, so no event can be buffered after the drain and
@@ -1139,6 +1258,9 @@ public final class AppDNA: @unchecked Sendable {
             } else {
                 Log.error("❌ Bootstrap failed: \(desc) — SDK will operate in degraded mode with cached/bundled config")
             }
+            // SPEC-070-B PN row 2 (D-k): a failed bootstrap IS the degraded state. Surface it instead of
+            // leaving the host to infer it from a log line. Managers still initialize below (row 17).
+            AppDNA.reportInitDegraded(AppDNAInitError.bootstrapFailed(desc))
             queue.async { [weak self] in
                 guard let self else { return }
                 self.initializeManagers(
@@ -1197,39 +1319,51 @@ public final class AppDNA: @unchecked Sendable {
         // they can consult it for a running experiment targeting the surface+
         // entity being presented (treatment → render variant payload; control/
         // none → render the active entity through the normal path).
-        self.paywallManager = PaywallManager(
-            remoteConfigManager: remoteCfg,
-            billingBridge: self.billingBridge,
-            eventTracker: tracker,
-            experimentManager: experimentMgr
-        )
-
-        // v0.2 managers
-        self.onboardingFlowManager = OnboardingFlowManager(
-            remoteConfigManager: remoteCfg,
-            eventTracker: tracker,
-            experimentManager: experimentMgr
-        )
-
-        self.messageManager = MessageManager(
-            remoteConfigManager: remoteCfg,
-            eventTracker: tracker,
-            experimentManager: experimentMgr
-        )
-
-        // v0.3 managers
-        let surveyMgr = SurveyManager(
-            remoteConfigManager: remoteCfg,
-            eventTracker: tracker,
-            apiClient: self.apiClient,
-            experimentManager: experimentMgr
-        )
-        self.surveyManager = surveyMgr
-        remoteCfg.onSurveyConfigsUpdated { configs in
-            surveyMgr.updateConfigs(configs)
+        self.paywallManager = Self.initSubsystem("paywall") {
+            PaywallManager(
+                remoteConfigManager: remoteCfg,
+                billingBridge: self.billingBridge,
+                eventTracker: tracker,
+                experimentManager: experimentMgr
+            )
         }
 
-        self.webEntitlementManager = WebEntitlementManager(eventTracker: tracker)
+        // v0.2 managers
+        self.onboardingFlowManager = Self.initSubsystem("onboarding") {
+            OnboardingFlowManager(
+                remoteConfigManager: remoteCfg,
+                eventTracker: tracker,
+                experimentManager: experimentMgr
+            )
+        }
+
+        self.messageManager = Self.initSubsystem("in_app_messages") {
+            MessageManager(
+                remoteConfigManager: remoteCfg,
+                eventTracker: tracker,
+                experimentManager: experimentMgr
+            )
+        }
+
+        // v0.3 managers
+        let surveyMgr = Self.initSubsystem("surveys") {
+            SurveyManager(
+                remoteConfigManager: remoteCfg,
+                eventTracker: tracker,
+                apiClient: self.apiClient,
+                experimentManager: experimentMgr
+            )
+        }
+        self.surveyManager = surveyMgr
+        if let surveyMgr {
+            remoteCfg.onSurveyConfigsUpdated { configs in
+                surveyMgr.updateConfigs(configs)
+            }
+        }
+
+        self.webEntitlementManager = Self.initSubsystem("web_entitlements") {
+            WebEntitlementManager(eventTracker: tracker)
+        }
 
         // SPEC-203: per-user journey-triggered message listener. Renders
         // delivered messages via the same MessageRenderer used for
@@ -1327,6 +1461,12 @@ public final class AppDNA: @unchecked Sendable {
             shared.sessionManager = nil
             shared.apiClient = nil
             shared.isConfigured = false
+            // SPEC-070-B PN row 10 (iOS half): a static that outlives the instance must be reset, or a
+            // re-configure()d SDK attributes its first events to the previous run's last screen.
+            lastScreenName = nil
+            initErrorLock.lock()
+            _lastInitError = nil
+            initErrorLock.unlock()
 
             // Remove web entitlement observer
             if let token = webEntitlementObserverToken {

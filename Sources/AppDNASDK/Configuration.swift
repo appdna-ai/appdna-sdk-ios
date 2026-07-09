@@ -49,6 +49,20 @@ public struct AppDNAOptions: Sendable {
     /// instead of the native core version. nil for native hosts.
     public let frameworkVersion: String?
 
+    /// SPEC-070-B PN row 14 (AC-36) — when true, analytics stay OFF until the host calls
+    /// `setConsent(analytics:)`, and no event (including `sdk_initialized`) is emitted before that
+    /// decision. When false — the default, preserving today's behavior — analytics are opt-out.
+    ///
+    /// Either way the decision is now **persisted**: `setConsent(false)` used to be silently undone
+    /// by the next cold start.
+    public let requireConsent: Bool
+
+    /// SPEC-070-B PN row 16 (W12) — how long a wrapper waits for a host veto before applying the
+    /// hook's default. A legitimate veto (a server-side entitlement, fraud, or promo check) can
+    /// exceed 5 s on a bad network; past this timeout `onPromoCodeSubmit` silently rejects and the
+    /// seven default-allow hooks are silently bypassed. Surfaced through `diagnose()`.
+    public let vetoTimeout: TimeInterval
+
     public init(
         flushInterval: TimeInterval = 30,
         batchSize: Int = 20,
@@ -57,7 +71,9 @@ public struct AppDNAOptions: Sendable {
         logLevel: LogLevel = .warning,
         billingProvider: BillingProvider = .storeKit2,
         framework: String = "native",
-        frameworkVersion: String? = nil
+        frameworkVersion: String? = nil,
+        requireConsent: Bool = false,
+        vetoTimeout: TimeInterval = 5
     ) {
         self.flushInterval = flushInterval
         self.batchSize = batchSize
@@ -66,6 +82,8 @@ public struct AppDNAOptions: Sendable {
         self.billingProvider = billingProvider
         self.framework = framework
         self.frameworkVersion = frameworkVersion
+        self.requireConsent = requireConsent
+        self.vetoTimeout = vetoTimeout
     }
 }
 

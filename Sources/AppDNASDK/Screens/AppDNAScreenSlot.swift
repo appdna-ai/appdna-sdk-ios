@@ -121,10 +121,11 @@ public struct AppDNAScreenSlot: View {
         switch action {
         case .dismiss:
             break // Can't dismiss inline content
+        // SPEC-070-B PN row 18 (W11): config-driven URLs — scheme-checked before they reach the OS.
         case .openURL(let url):
-            if let url = URL(string: url) { UIApplication.shared.open(url) }
+            if let url = URLSafety.sanitized(url) { UIApplication.shared.open(url) }
         case .deepLink(let url):
-            if let url = URL(string: url) { UIApplication.shared.open(url) }
+            if let url = URLSafety.sanitized(url) { UIApplication.shared.open(url) }
         case .showScreen(let id):
             ScreenManager.shared.showScreen(id)
         case .showPaywall(let id):

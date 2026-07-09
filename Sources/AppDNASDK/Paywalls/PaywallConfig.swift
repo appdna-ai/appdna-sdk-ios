@@ -671,11 +671,28 @@ public struct PaywallContext {
     public let placement: String
     public let experiment: String?
     public let variant: String?
+    /// SPEC-070-B PN row 4 (D-s) — arbitrary per-presentation attributes. Merged into the
+    /// `paywall_view` event's properties, so they are queryable in the warehouse alongside
+    /// `paywall_id` and `placement`. Keys colliding with a reserved property are dropped and warned
+    /// about, never silently overwritten.
+    ///
+    /// This does NOT feed the `{{custom.*}}` template namespace: `TemplateContext` is a fixed struct
+    /// sourced from global singletons and has no arbitrary-key bag. That path is deferred.
+    public let customData: [String: Any]?
 
-    public init(placement: String, experiment: String? = nil, variant: String? = nil) {
+    /// Reserved `paywall_view` property names. `customData` may not shadow them.
+    internal static let reservedEventKeys: Set<String> = ["paywall_id", "placement"]
+
+    public init(
+        placement: String,
+        experiment: String? = nil,
+        variant: String? = nil,
+        customData: [String: Any]? = nil
+    ) {
         self.placement = placement
         self.experiment = experiment
         self.variant = variant
+        self.customData = customData
     }
 }
 

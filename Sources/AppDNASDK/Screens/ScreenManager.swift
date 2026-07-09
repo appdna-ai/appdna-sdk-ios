@@ -297,7 +297,8 @@ internal class ScreenManager {
             showScreen(targetScreenId)
 
         case .openURL(let url):
-            if let url = URL(string: url) {
+            // SPEC-070-B PN row 18 (W11): config-driven URL — scheme-checked before it reaches the OS.
+            if let url = URLSafety.sanitized(url) {
                 DispatchQueue.main.async { UIApplication.shared.open(url) }
             }
 

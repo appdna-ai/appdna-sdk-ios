@@ -105,11 +105,22 @@ final class PaywallManager {
             config = treatment
         }
 
-        // Track view event
-        eventTracker.track(event: "paywall_view", properties: [
+        // Track view event. SPEC-070-B PN row 4 (D-s): `customData` is merged in here — this is its
+        // only consumer, and a parameter with no consumer is a parameter that does nothing.
+        var viewProps: [String: Any] = [
             "paywall_id": id,
             "placement": context?.placement ?? "unknown",
-        ])
+        ]
+        if let customData = context?.customData {
+            for (key, value) in customData {
+                if PaywallContext.reservedEventKeys.contains(key) {
+                    Log.warning("PaywallContext.customData key '\(key)' is reserved and was dropped")
+                    continue
+                }
+                viewProps[key] = value
+            }
+        }
+        eventTracker.track(event: "paywall_view", properties: viewProps)
 
         // SPEC-203 follow-up — prefetch remote images before presenting so
         // the paywall renders fully loaded, no AsyncImage placeholder flash

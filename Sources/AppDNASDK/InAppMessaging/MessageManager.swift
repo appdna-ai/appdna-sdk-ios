@@ -312,7 +312,8 @@ final class MessageManager {
         case .dismiss, .unknown:
             break // dismiss handled by caller
         case .deep_link, .open_url:
-            if let urlString = action.url, let url = URL(string: urlString) {
+            // SPEC-070-B PN row 18 (W11): config-driven URL — scheme-checked before it reaches the OS.
+            if let urlString = action.url, let url = URLSafety.sanitized(urlString) {
                 DispatchQueue.main.async {
                     UIApplication.shared.open(url)
                 }

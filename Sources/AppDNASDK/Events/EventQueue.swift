@@ -192,7 +192,9 @@ final class EventQueue {
         // Remove stale from the in-memory working set only (NO count here); eventStore.pruneStale is the
         // SINGLE, meta-aware count source (the persisted copies of these events live on disk), so the loss
         // metric can't be double-incremented by the in-process flush AND the background upload both pruning.
-        pendingEvents.removeAll { nowMs - $0.ts_ms > redeliveryHorizonMs }
+        // SPEC-070-B PN row 19 (W14): the same clock-jump clamp the store uses — otherwise the
+        // in-memory set and the disk set disagree about what is stale.
+        pendingEvents.removeAll { EventStore.isStale(tsMs: $0.ts_ms, nowMs: nowMs, horizonMs: redeliveryHorizonMs) }
         eventStore.pruneStale(horizonMs: redeliveryHorizonMs)
     }
 

@@ -6,12 +6,29 @@ final class EventTracker {
     private weak var eventQueue: EventQueue?
     private var analyticsConsent = true
 
+    /// SPEC-070-B PN row 1 (D-h): lazy supplier of the currently-visible screen name, so every
+    /// envelope carries `context.screen`. Returns nil before any screen is announced. This is the
+    /// iOS half of a chain Android already had end to end (`EventTracker.kt:65`).
+    private var screenProvider: (() -> String?)?
+
     init(identityManager: IdentityManager) {
         self.identityManager = identityManager
     }
 
     func setEventQueue(_ queue: EventQueue) {
         self.eventQueue = queue
+    }
+
+    /// Wire the screen-name source. Passing nil disables the field (used in tests).
+    func setScreenProvider(_ provider: (() -> String?)?) {
+        self.screenProvider = provider
+    }
+
+    /// SPEC-070-B PN row 14 (AC-36): apply the persisted consent decision at `configure()` time.
+    /// Unlike `setConsent`, this does NOT purge the queue — events persisted during an earlier,
+    /// consented session are not a revocation, and startup is not the moment to delete them.
+    func setInitialConsent(analytics: Bool) {
+        analyticsConsent = analytics
     }
 
     /// Set analytics consent. When false, track() silently drops events AND any already-queued
@@ -55,6 +72,7 @@ final class EventTracker {
             identity: identity,
             sessionId: sessionId,
             analyticsConsent: analyticsConsent,
+            screen: screenProvider?(),
             clientSeq: clientSeq // SPEC-428 STEP-9: a pre-init event carries the seq it stamped at track() time
         )
 
@@ -72,7 +90,8 @@ final class EventTracker {
             properties: ["count": count],
             identity: identity,
             sessionId: sessionId,
-            analyticsConsent: analyticsConsent
+            analyticsConsent: analyticsConsent,
+            screen: screenProvider?()
         )
         // SPEC-428 STEP-4: decrement by exactly `count` ONLY after the meta is durably persisted (never a
         // zero-reset). Crash before persist → counter keeps `count` → re-emit (no under-count).
@@ -93,7 +112,8 @@ final class EventTracker {
             identity: identity,
             sessionId: sessionId,
             analyticsConsent: analyticsConsent,
-            experimentExposures: exposures
+            experimentExposures: exposures,
+            screen: screenProvider?()
         )
 
         eventQueue?.enqueue(sdkEvent)

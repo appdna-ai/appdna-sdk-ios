@@ -92,14 +92,30 @@ final class EventStore {
     /// server dedup window (double-count). This lives at the STORE so EVERY load path is protected — the
     /// in-process flush AND the background BGTask/WorkManager uploaders that "fire hours/days later" (the
     /// paths STEP-5 named). Counted (CL-1). Returns the number dropped.
+    /// SPEC-070-B PN row 19 (W14) — an age past this is not a stale event, it is a broken clock.
+    /// The horizon compares wall clocks, so a forward clock jump makes every queued event look older
+    /// than 7 days at once and prunes it **unsent**. Beyond this bound, and for any negative age (the
+    /// clock moved backwards), we keep the event: a retained event costs a retry, a pruned one is
+    /// gone. 30 days is ~4x the horizon — comfortably past a genuine long-offline device, well short
+    /// of the year-scale jumps a wrong RTC produces.
+    static let implausibleAgeMs: Int64 = 30 * 24 * 60 * 60 * 1000
+
+    /// True when `event` is genuinely past the horizon, as opposed to a victim of a clock jump.
+    static func isStale(tsMs: Int64, nowMs: Int64, horizonMs: Int64) -> Bool {
+        let age = nowMs - tsMs
+        guard age > horizonMs else { return false }
+        return age <= implausibleAgeMs
+    }
+
     @discardableResult
     func pruneStale(horizonMs: Int64 = EventStore.redeliveryHorizonMs) -> Int {
         queue.sync {
             let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
             let existing = loadFromDisk()
-            let stale = existing.filter { nowMs - $0.ts_ms > horizonMs }
+            let stale = existing.filter { Self.isStale(tsMs: $0.ts_ms, nowMs: nowMs, horizonMs: horizonMs) }
             guard !stale.isEmpty else { return 0 }
-            writeToDisk(existing.filter { nowMs - $0.ts_ms <= horizonMs })
+            let staleIds = Set(stale.map(\.event_id))
+            writeToDisk(existing.filter { !staleIds.contains($0.event_id) })
             appendsSinceCompaction = 0
             // SPEC-428 STEP-4: count the loss meta-aware — 1 per normal event, but the carried N for an
             // evicted `_sdk_events_dropped` meta (so a meta aged past the horizon doesn't lose its N).

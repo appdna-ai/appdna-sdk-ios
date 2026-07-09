@@ -175,6 +175,9 @@ enum EventEnvelopeBuilder {
         sessionId: String,
         analyticsConsent: Bool,
         experimentExposures: [ExperimentExposure]? = nil,
+        // SPEC-070-B PN row 1: the currently-visible screen, supplied by EventTracker's screenProvider.
+        // Mirrors Android's `screen = screenProvider?.invoke()` (EventTracker.kt:116).
+        screen: String? = nil,
         // SPEC-428 STEP-9/§4.E: a PRE-STAMPED client_seq (a pre-init event stamped its seq at facade
         // track() time). When present, buildEnvelope MUST use it verbatim and NOT re-mint at drain — else
         // a post-configure event minting during the drain window gets a LOWER seq than an earlier pre-init
@@ -204,7 +207,7 @@ enum EventEnvelopeBuilder {
             device: device,
             context: EventContext(
                 session_id: sessionId,
-                screen: nil,
+                screen: screen,
                 experiment_exposures: experimentExposures,
                 // SPEC-428 CL-3/D6/STEP-9: stamp the monotonic sequence at the single choke point every
                 // event's envelope is built. ts_ms stays but is no longer the ordering key. A pre-init
