@@ -1514,8 +1514,13 @@ struct PaywallRenderer: View {
                         }
                     }
                 } else {
-                    // No delegate configured — basic non-empty check fallback
-                    promoState = promoCode.isEmpty ? .error : .success
+                    // No delegate configured — we cannot validate the code, so we must
+                    // NOT report success. The old "any non-empty string is valid"
+                    // fallback showed "Code applied!" for anything the user typed, and
+                    // then folded that unvalidated string into purchase metadata as
+                    // `promo_code`. Rejecting matches every delegate default.
+                    Log.warning("Promo code submitted but no AppDNAPaywallDelegate is registered — rejecting. Implement onPromoCodeSubmit to validate codes.")
+                    promoState = .error
                 }
             } label: {
                 if case .loading = promoState {
