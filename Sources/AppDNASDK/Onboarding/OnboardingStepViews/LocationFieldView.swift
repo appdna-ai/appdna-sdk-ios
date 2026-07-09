@@ -165,7 +165,9 @@ struct LocationFieldView: View {
                 if !city.isEmpty {
                     query = Self.formatDisplay(city: city, state: state, country: country)
                 }
-                print("[AppDNA] LocationField restored: \(dict)")
+                // Never log the restored dict — it carries city/state/country and
+                // (for placemark-backed values) coordinates.
+                Log.debug("LocationField restored a saved value")
             }
             // Pre-warm the iOS keyboard subsystem so the first keystroke
             // doesn't show the 200-400ms lag customers see on empty-field
@@ -229,7 +231,7 @@ struct LocationFieldView: View {
                 isExpanded = !decoded.isEmpty
             }
         } catch {
-            print("[AppDNA] Location autocomplete failed: \(error)")
+            Log.warning("Location autocomplete failed: \(error.localizedDescription)")
         }
     }
 
@@ -256,17 +258,10 @@ struct LocationFieldView: View {
         isExpanded = false
         isFocused = false  // dismiss keyboard
 
-        // Debug print for Xcode console
-        print("""
-        [AppDNA] Location selected:
-          city:      \(suggestion.city)
-          state:     \(suggestion.state)
-          country:   \(suggestion.country)
-          timezone:  \(suggestion.timezone)
-          latitude:  \(suggestion.latitude)
-          longitude: \(suggestion.longitude)
-          display:   \(display)
-        """)
+        // Log the fact of a selection, never the user's location. A raw `print`
+        // here is unconditional — it reaches release builds and the host's crash
+        // reporter / device console.
+        Log.debug("Location suggestion selected")
     }
 
     private func clearSelection() {

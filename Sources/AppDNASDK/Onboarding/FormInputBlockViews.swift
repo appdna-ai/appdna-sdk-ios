@@ -1962,7 +1962,7 @@ struct FormInputLocationPlaceholderBlock: View {
                 text = fallback
                 DispatchQueue.main.async { isRestoringFromSaved = false }
                 inputValues[fieldId] = ["address": fallback]
-                print("[AppDNA] Location (no placemark): \(fallback)")
+                Log.debug("Location resolved without a placemark")
                 return
             }
             let placemark = mapItem.placemark
@@ -2001,17 +2001,9 @@ struct FormInputLocationPlaceholderBlock: View {
                 text = display
                 DispatchQueue.main.async { isRestoringFromSaved = false }
 
-                // Debug print for Xcode console — user explicitly asked for this
-                print("""
-                [AppDNA] Location selected:
-                  city:      \(city)
-                  state:     \(state)
-                  country:   \(country)
-                  timezone:  \(resolvedTimezone)
-                  latitude:  \(coordinate.latitude)
-                  longitude: \(coordinate.longitude)
-                  display:   \(display)
-                """)
+                // Never log city/state/country/coordinates. A raw `print` is
+                // unconditional and reaches release builds.
+                Log.debug("Location selected (timezone resolved: \(!resolvedTimezone.isEmpty))")
             }
 
             if let tz = placemark.timeZone?.identifier {
@@ -2024,7 +2016,7 @@ struct FormInputLocationPlaceholderBlock: View {
                 geocoder.reverseGeocodeLocation(location) { placemarks, error in
                     let tz = placemarks?.first?.timeZone?.identifier ?? "UTC"
                     if let error = error {
-                        print("[AppDNA] Reverse geocode timezone lookup failed: \(error.localizedDescription), defaulting to UTC")
+                        Log.warning("Reverse geocode timezone lookup failed: \(error.localizedDescription), defaulting to UTC")
                     }
                     finalize(tz)
                 }

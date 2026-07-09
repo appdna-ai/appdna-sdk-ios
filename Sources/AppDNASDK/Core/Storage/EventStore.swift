@@ -27,7 +27,29 @@ final class EventStore {
             ?? FileManager.default.temporaryDirectory)
         let dir = base.appendingPathComponent("ai.appdna.sdk", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        Self.excludeFromBackup(dir)
         self.fileURL = dir.appendingPathComponent(fileName)
+    }
+
+    /// Marks the SDK's storage directory as excluded from iCloud/iTunes backup.
+    ///
+    /// The pending-event log is plaintext NDJSON containing whatever properties
+    /// and traits the host chose to send. Application Support is backed up by
+    /// default, so without this the queue is copied into the user's iCloud backup.
+    /// Setting the flag on the directory covers every file we create inside it.
+    ///
+    /// Idempotent: safe to call on every `EventStore` init.
+    static func excludeFromBackup(_ url: URL) {
+        var target = url
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        do {
+            try target.setResourceValues(values)
+        } catch {
+            // Non-fatal: the directory may not exist yet on a first-run race, or the
+            // volume may not support the attribute. Never block event storage on it.
+            Log.warning("Could not exclude SDK storage from backup: \(error.localizedDescription)")
+        }
     }
 
     /// Returns the current disk size of the event store file in bytes.
