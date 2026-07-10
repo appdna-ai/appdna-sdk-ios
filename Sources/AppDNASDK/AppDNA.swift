@@ -1491,7 +1491,13 @@ public final class AppDNA: @unchecked Sendable {
         }
     }
 
-    internal static func topViewController() -> UIViewController? {
+    /// The top-most presented view controller, resolved from the key window.
+    ///
+    /// `public` for cross-platform wrappers (SPEC-070-B): a React Native / Flutter host has no
+    /// `UIViewController` of its own to hand `presentPaywall(placement:from:)`, and the SDK already
+    /// uses this exact resolver internally (`PaywallModule.present` at `AppDNA+Modules.swift`). A
+    /// wrapper needs the same entry point rather than reimplementing key-window traversal.
+    public static func topViewController() -> UIViewController? {
         // UIApplication.shared must be accessed on the main thread
         if Thread.isMainThread {
             return _findTopViewController()
