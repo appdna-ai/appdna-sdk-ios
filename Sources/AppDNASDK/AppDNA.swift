@@ -213,6 +213,18 @@ public final class AppDNA: @unchecked Sendable {
         DispatchQueue.main.async { delegate.onInitDegraded(reason: error) }
     }
 
+    // MARK: - Veto-timeout accounting (SPEC-070-B PN row 16 / W12)
+
+    /// Record that a host veto timed out and fell back to its default.
+    ///
+    /// The counter is internal to this module, and the only code that can observe a veto timing out
+    /// lives in a wrapper — the SDK itself awaits a veto forever. So the counter shipped with a
+    /// reader (`diagnose()`) and no writer, and its line read `timed out 0 time(s)` no matter what.
+    /// This is the writer.
+    public static func recordVetoTimeout() {
+        VetoTimeoutCounter.increment()
+    }
+
     // MARK: - Subsystem init isolation (SPEC-070-B PN row 17 / W13 / AC-31(b))
 
     /// Names of subsystems to fail on purpose. Test-only: AC-31(b) has to inject a failure to prove
