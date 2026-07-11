@@ -11,6 +11,15 @@ struct OnboardingFlowHost: View {
     let onFlowCompleted: (_ responses: [String: Any]) -> Void
     let onFlowDismissed: (_ lastStepId: String, _ lastStepIndex: Int) -> Void
 
+    /// A transient error shown over the flow.
+    ///
+    /// The auth actions (`email_login`, `login`, `request_otp`, …) need the HOST to perform the side
+    /// effect — the SDK cannot sign anyone in. With no delegate registered it stays on the step, and
+    /// it used to do so in complete silence: "Continue with email" was a dead button — tap it,
+    /// nothing happens, no error, ever. The log line is for the developer; this is for the person
+    /// holding the phone.
+    @State private var errorToastMessage: String?
+
     @State private var currentIndex = 0
     @State private var navigationHistory: [Int] = [] // Stack of visited step indices for back navigation
     @State private var responses: [String: Any] = [:]
@@ -42,6 +51,30 @@ struct OnboardingFlowHost: View {
     @State private var interactionInFlight = false
 
     var body: some View {
+        content.overlay(alignment: .bottom) {
+            if let message = errorToastMessage {
+                Text(message)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(12)
+                    .padding(.bottom, 100)
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    /// Show a transient error. Auto-hides on the same 2.5 s timer the validation pill uses.
+    private func showErrorToast(_ message: String) {
+        withAnimation { errorToastMessage = message }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            withAnimation { errorToastMessage = nil }
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             // Progress bar (hidden per-step via hide_progress while still counting in total)
             if flow.settings.show_progress && !(currentIndex < flow.steps.count && flow.steps[currentIndex].hide_progress == true) {
@@ -553,9 +586,10 @@ struct OnboardingFlowHost: View {
             // Server-side hook (P1)
             executeServerHook(step: step, data: data, hookConfig: hook)
         } else if requiresDelegate {
-            // Auth/account action without a delegate: do NOT auto-advance.
-            // The app must implement AppDNAOnboardingDelegate to handle the side effect.
+            // Auth/account action without a delegate: do NOT auto-advance — the SDK has nowhere to
+            // route the credentials and advancing would skip authentication entirely. But SAY SO.
             Log.warning("[Onboarding] '\(actionString)' action received but no delegate is set. Implement AppDNAOnboardingDelegate to handle the action.")
+            showErrorToast("Sign-in isn't available right now. Please try again later.")
         } else {
             // No hook — advance immediately
             advanceOrComplete()
