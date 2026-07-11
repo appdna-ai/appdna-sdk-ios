@@ -648,13 +648,24 @@ public final class AppDNA: @unchecked Sendable {
             return false
         }
 
+        // 🔴 Same fallback as `presentPaywall`, and it matters MORE here.
+        //
+        // `delegate` defaults to nil and a wrapper has no Swift delegate object to pass, so Flutter and
+        // React Native ran onboarding with NO delegate: `onOnboardingStarted`, `onOnboardingStepChanged`,
+        // `onOnboardingCompleted` and `onOnboardingDismissed` never fired for them.
+        //
+        // And the renderer branches on `delegate != nil` for the AUTH-ACTION gate — so "Continue with
+        // email" stayed on the step for every wrapper host even when that host HAD registered an
+        // onboarding delegate in JS. The delegate was there; native just never saw it.
+        let resolved = delegate ?? AppDNA.onboarding.delegate
+
         var result = false
         // Must present on main thread
         if Thread.isMainThread {
-            result = shared.onboardingFlowManager?.present(flowId: flowId, from: vc, delegate: delegate) ?? false
+            result = shared.onboardingFlowManager?.present(flowId: flowId, from: vc, delegate: resolved) ?? false
         } else {
             DispatchQueue.main.sync {
-                result = shared.onboardingFlowManager?.present(flowId: flowId, from: vc, delegate: delegate) ?? false
+                result = shared.onboardingFlowManager?.present(flowId: flowId, from: vc, delegate: resolved) ?? false
             }
         }
         return result
