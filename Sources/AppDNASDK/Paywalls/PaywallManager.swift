@@ -280,15 +280,12 @@ final class PaywallManager {
                 // locale. `error_type` is the stable discriminator that lets analytics separate a user
                 // cancel from a real failure, and lets a host retry only what is retryable.
                 let errorType = billingErrorType(error)
-                // `plan.productId` is `String?`; putting the Optional straight into a [String: Any]
-                // box wraps it, so a nil product serialized as the literal "nil" rather than being
-                // absent/empty. `?? ""` matches the value handed to `bridge.purchase` above.
-                eventTracker.track(event: "purchase_failed", properties: [
-                    "paywall_id": paywallId,
-                    "product_id": plan.productId ?? "",
-                    "error": error.localizedDescription,
-                    "error_type": errorType,
-                ])
+                eventTracker.track(event: "purchase_failed", properties: PurchaseFailedProps.build(
+                    paywallId: paywallId,
+                    productId: plan.productId,
+                    error: error,
+                    errorType: errorType
+                ))
                 DispatchQueue.main.async { [weak self] in
                     delegate?.onPaywallPurchaseFailed(
                         paywallId: paywallId,
@@ -505,5 +502,28 @@ enum PaywallPlacementResolver {
                 guard pw.audience_rules != nil else { return true } // No rules = matches all
                 return AudienceRuleEvaluator.evaluate(rules: pw.audience_rules, traits: traits)
             }
+    }
+}
+
+// MARK: - purchase_failed event props
+
+/// The `purchase_failed` analytics payload, built in one pure place so it is assertable.
+///
+/// `plan.productId` is `String?`, and an Optional dropped straight into a `[String: Any]` box stays
+/// wrapped — a nil product then serialized as the literal string "nil" instead of an empty value.
+/// `product_id` is the column that answers "WHICH product failed"; it has to be right.
+enum PurchaseFailedProps {
+    static func build(
+        paywallId: String,
+        productId: String?,
+        error: Error,
+        errorType: String
+    ) -> [String: Any] {
+        [
+            "paywall_id": paywallId,
+            "product_id": productId ?? "",
+            "error": error.localizedDescription,
+            "error_type": errorType,
+        ]
     }
 }

@@ -20,11 +20,130 @@ public enum LogLevel: Int, Comparable, Sendable {
 }
 
 /// Billing provider for paywall purchase flows.
-public enum BillingProvider: Sendable {
+///
+/// Wire format (SPEC-070-B / fixture `dto_parsing/billing_provider_adapty_tagged_map`): the value-less
+/// cases cross a wrapper channel as BARE STRINGS (`"storeKit2"`, `"revenueCat"`, `"none"`), while
+/// `adapty` — the only case with an associated value — crosses as the TAGGED MAP
+/// `{"type": "adapty", "apiKey": "..."}`. Read from Android `Configuration.kt:71/:95`
+/// (`fromWire` / `toWire`); the tags, the key spelling (`apiKey`, not `api_key`), and the
+/// bare-vs-tagged split are matched EXACTLY. iOS had none of this — the enum wasn't even `Codable`,
+/// so an Adapty key handed to a wrapper had nowhere to go.
+public enum BillingProvider: Sendable, Codable, Equatable {
     case revenueCat
     case storeKit2
     case adapty(apiKey: String)
     case none
+
+    /// The wire tag. Identical strings on both platforms — these ARE the contract.
+    public var type: String {
+        switch self {
+        case .storeKit2: return "storeKit2"
+        case .revenueCat: return "revenueCat"
+        case .adapty: return "adapty"
+        case .none: return "none"
+        }
+    }
+
+    /// The Adapty publishable key, when this is `.adapty`. Nil otherwise.
+    public var apiKey: String? {
+        if case .adapty(let key) = self { return key }
+        return nil
+    }
+
+    /// Decode the wrapper wire form: a bare string for the value-less cases, or a tagged map for
+    /// `adapty`. Returns nil on anything else — including a BARE `"adapty"`, which carries no apiKey
+    /// and therefore cannot be honored — so the caller decides between a default and an error rather
+    /// than having one silently chosen for it. Mirrors Android `BillingProvider.fromWire`.
+    public static func fromWire(_ value: Any?) -> BillingProvider? {
+        if let provider = value as? BillingProvider { return provider }
+        if let string = value as? String {
+            switch string {
+            case "storeKit2": return .storeKit2
+            case "revenueCat": return .revenueCat
+            case "none": return .none
+            default: return nil
+            }
+        }
+        if let map = value as? [String: Any] {
+            guard let type = map["type"] as? String else { return nil }
+            switch type {
+            case "adapty":
+                guard let apiKey = map["apiKey"] as? String, !apiKey.isEmpty else { return nil }
+                return .adapty(apiKey: apiKey)
+            case "storeKit2": return .storeKit2
+            case "revenueCat": return .revenueCat
+            case "none": return .none
+            default: return nil
+            }
+        }
+        return nil
+    }
+
+    /// Re-encode to the wire form. Lossless round-trip with `fromWire`. Mirrors Android `toWire()`.
+    public func toWire() -> Any {
+        switch self {
+        case .adapty(let apiKey):
+            return ["type": "adapty", "apiKey": apiKey] as [String: Any]
+        default:
+            return type
+        }
+    }
+
+    // MARK: Codable — same shape as fromWire/toWire, so JSON and channel maps agree.
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case apiKey
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let single = try? decoder.singleValueContainer(),
+           let raw = try? single.decode(String.self) {
+            guard let provider = BillingProvider.fromWire(raw) else {
+                throw DecodingError.dataCorruptedError(
+                    in: single,
+                    debugDescription: "Unknown BillingProvider tag '\(raw)' (a bare \"adapty\" carries no apiKey)"
+                )
+            }
+            self = provider
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
+        case "adapty":
+            let apiKey = try container.decode(String.self, forKey: .apiKey)
+            guard !apiKey.isEmpty else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .apiKey,
+                    in: container,
+                    debugDescription: "BillingProvider.adapty requires a non-empty apiKey"
+                )
+            }
+            self = .adapty(apiKey: apiKey)
+        case "storeKit2": self = .storeKit2
+        case "revenueCat": self = .revenueCat
+        case "none": self = .none
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .type,
+                in: container,
+                debugDescription: "Unknown BillingProvider type '\(type)'"
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .adapty(let apiKey):
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode("adapty", forKey: .type)
+            try container.encode(apiKey, forKey: .apiKey)
+        default:
+            var container = encoder.singleValueContainer()
+            try container.encode(type)
+        }
+    }
 }
 
 /// Configuration options for the AppDNA SDK.

@@ -1822,11 +1822,30 @@ private class OnboardingPaywallBridge: AppDNAPaywallDelegate {
     func onPaywallPurchaseFailed(paywallId: String, error: Error) {
         // Legacy entry point (direct callers). Derives the discriminator so the host always receives
         // the typed callback, whichever entry point fired.
-        onPaywallPurchaseFailed(paywallId: paywallId, error: error, errorType: billingErrorType(error))
+        onPaywallPurchaseFailed(
+            paywallId: paywallId,
+            error: error,
+            errorType: billingErrorType(error),
+            productId: nil
+        )
     }
 
     func onPaywallPurchaseFailed(paywallId: String, error: Error, errorType: String) {
-        forwardOnMain { $0.onPaywallPurchaseFailed(paywallId: paywallId, error: error, errorType: errorType) }
+        onPaywallPurchaseFailed(paywallId: paywallId, error: error, errorType: errorType, productId: nil)
+    }
+
+    /// The full variant the SDK actually calls. The bridge MUST override this one: the protocol's
+    /// default would forward down to the three-argument method and drop `productId` on the floor
+    /// before it ever reached the host — the exact bug this parameter exists to fix.
+    func onPaywallPurchaseFailed(paywallId: String, error: Error, errorType: String, productId: String?) {
+        forwardOnMain {
+            $0.onPaywallPurchaseFailed(
+                paywallId: paywallId,
+                error: error,
+                errorType: errorType,
+                productId: productId
+            )
+        }
         // Paywall stays on screen (iOS convention — error toast, retry
         // allowed). Mark the intent; the onboarding router decides what
         // to do if `on_fail_target` requests navigating away.
