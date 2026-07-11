@@ -591,7 +591,20 @@ public final class AppDNA: @unchecked Sendable {
                 id: id,
                 from: viewController,
                 context: context,
-                delegate: delegate
+                // 🔴 Fall back to the delegate the host registered with `AppDNA.paywall.setDelegate`.
+                //
+                // This parameter defaults to nil, and a caller that does not pass one — every wrapper,
+                // because a wrapper has no Swift delegate object to hand over — got a paywall with NO
+                // delegate at all. On a device: the paywall rendered, and `onPaywallPresented`,
+                // `onPaywallDismissed`, `onPaywallAction` and every purchase callback never fired.
+                //
+                // Worse, `PaywallManager.present` passes `onPromoCodeSubmit: delegate == nil ? nil : …`,
+                // so a nil delegate ALSO dropped the promo-code path into its no-delegate fallback —
+                // the revenue defect this SDK has already been bitten by once.
+                //
+                // A per-call delegate still wins when one is passed; this only supplies the registered
+                // one when the caller has none.
+                delegate: delegate ?? AppDNA.paywall.delegate
             )
         }
     }
@@ -614,7 +627,9 @@ public final class AppDNA: @unchecked Sendable {
                 placement: placement,
                 from: viewController,
                 context: PaywallContext(placement: placement, experiment: context?.experiment, variant: context?.variant),
-                delegate: delegate
+                // Same fallback as `presentPaywall` — see the note there. A wrapper has no Swift
+                // delegate to pass, so without this the placement path is delegate-less too.
+                delegate: delegate ?? AppDNA.paywall.delegate
             )
         }
     }
