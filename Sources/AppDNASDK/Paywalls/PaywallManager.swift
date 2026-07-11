@@ -51,22 +51,11 @@ final class PaywallManager {
         let allPaywalls = remoteConfigManager.getAllPaywalls()
         let userTraits = AppDNA.getUserTraits()
 
-        // Filter by placement, then by audience rules, sort by priority
-        let candidates = allPaywalls.values
-            .filter { $0.placement == placement }
-            .sorted {
-                let p0 = ($0.audience_rules?.value as? [String: Any])?["priority"] as? Int ?? 0
-                let p1 = ($1.audience_rules?.value as? [String: Any])?["priority"] as? Int ?? 0
-                return p0 > p1
-            }
-
-        // Find first that matches audience rules
-        let match = candidates.first { pw in
-            guard pw.audience_rules != nil else { return true } // No rules = matches all
-            return AudienceRuleEvaluator.evaluate(rules: pw.audience_rules, traits: userTraits)
-        }
-
-        guard let config = match else {
+        guard let config = PaywallPlacementResolver.pick(
+            from: Array(allPaywalls.values),
+            placement: placement,
+            traits: userTraits
+        ) else {
             Log.warning("No paywall found for placement: \(placement)")
             return
         }
@@ -88,7 +77,7 @@ final class PaywallManager {
                 code: 404,
                 userInfo: [NSLocalizedDescriptionKey: "Paywall config not found"]
             )
-            delegate?.onPaywallPurchaseFailed(paywallId: id, error: error)
+            delegate?.onPaywallPurchaseFailed(paywallId: id, error: error, errorType: billingErrorType(error))
             return
         }
 
@@ -280,15 +269,21 @@ final class PaywallManager {
                     )
                 }
             } catch {
+                // `error` is the localized human string — useless for branching, and different in every
+                // locale. `error_type` is the stable discriminator that lets analytics separate a user
+                // cancel from a real failure, and lets a host retry only what is retryable.
+                let errorType = billingErrorType(error)
                 eventTracker.track(event: "purchase_failed", properties: [
                     "paywall_id": paywallId,
                     "product_id": plan.productId,
                     "error": error.localizedDescription,
+                    "error_type": errorType,
                 ])
                 DispatchQueue.main.async { [weak self] in
                     delegate?.onPaywallPurchaseFailed(
                         paywallId: paywallId,
-                        error: error
+                        error: error,
+                        errorType: errorType
                     )
                     // Post-purchase failure action
                     self?.handlePostPurchaseFailure(
@@ -473,5 +468,31 @@ final class PaywallManager {
                 }
             }
         }
+    }
+}
+
+// MARK: - Placement selection
+
+/// Picks WHICH paywall a `placement` shows. Extracted from `PaywallManager.presentByPlacement`,
+/// which read `audience_rules` only as a dictionary: when the console wrote the ARRAY shape, the
+/// evaluator short-circuited to `true` (every paywall "matched") and `priority` read 0 for all of
+/// them, so the winner was whatever order the config dictionary happened to iterate in.
+/// `AudienceRuleEvaluator` now understands both shapes; this resolver is the seam that proves it.
+enum PaywallPlacementResolver {
+    static func pick(
+        from paywalls: [PaywallConfig],
+        placement: String,
+        traits: [String: Any]
+    ) -> PaywallConfig? {
+        paywalls
+            .filter { $0.placement == placement }
+            .sorted {
+                AudienceRuleEvaluator.priority(rules: $0.audience_rules)
+                    > AudienceRuleEvaluator.priority(rules: $1.audience_rules)
+            }
+            .first { pw in
+                guard pw.audience_rules != nil else { return true } // No rules = matches all
+                return AudienceRuleEvaluator.evaluate(rules: pw.audience_rules, traits: traits)
+            }
     }
 }

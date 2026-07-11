@@ -720,6 +720,12 @@ public protocol AppDNAPaywallDelegate: AnyObject {
     func onPaywallPurchaseStarted(paywallId: String, productId: String)
     func onPaywallPurchaseCompleted(paywallId: String, productId: String, transaction: TransactionInfo)
     func onPaywallPurchaseFailed(paywallId: String, error: Error)
+    /// Typed variant of `onPaywallPurchaseFailed`. `errorType` is a stable, non-localized
+    /// discriminator ("userCancelled", "networkError", "verificationFailed", …) — `error` alone is
+    /// untyped, so a host (and every cross-platform wrapper) could not tell a user cancel from a card
+    /// decline. The SDK calls THIS method; its default implementation forwards to the two-argument
+    /// one, so hosts that only implement the old method keep working unchanged.
+    func onPaywallPurchaseFailed(paywallId: String, error: Error, errorType: String)
     func onPaywallDismissed(paywallId: String)
     /// AC-037: Validate a promo code entered by the user. Call the completion handler with `true` if valid, `false` otherwise.
     func onPromoCodeSubmit(paywallId: String, code: String, completion: @escaping (Bool) -> Void)
@@ -747,6 +753,9 @@ public extension AppDNAPaywallDelegate {
     func onPaywallPurchaseStarted(paywallId: String, productId: String) {}
     func onPaywallPurchaseCompleted(paywallId: String, productId: String, transaction: TransactionInfo) {}
     func onPaywallPurchaseFailed(paywallId: String, error: Error) {}
+    func onPaywallPurchaseFailed(paywallId: String, error: Error, errorType: String) {
+        onPaywallPurchaseFailed(paywallId: paywallId, error: error)
+    }
     func onPaywallDismissed(paywallId: String) {}
     func onPromoCodeSubmit(paywallId: String, code: String, completion: @escaping (Bool) -> Void) { completion(false) }
     func onPostPurchaseDeepLink(paywallId: String, url: String) {}

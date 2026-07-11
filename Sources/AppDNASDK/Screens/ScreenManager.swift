@@ -13,6 +13,10 @@ internal class ScreenManager {
     private let maxNestingDepth = 5
     private let lock = NSLock()
 
+    /// The only way a screen action reaches the OS. Injectable so a test can assert that a vetoed
+    /// action opens nothing; production keeps calling `UIApplication.shared.open`.
+    internal var urlOpener: (URL) -> Void = { UIApplication.shared.open($0) }
+
     // MARK: - Config Loading
 
     func updateIndex(_ index: ScreenIndex) {
@@ -253,7 +257,10 @@ internal class ScreenManager {
 
     // MARK: - Action Handling
 
-    private func handleAction(_ action: SectionAction, screenId: String, startTime: Date, completion: ((ScreenResult) -> Void)?) {
+    /// Internal (not private) and routed through `urlOpener` below so the D10 veto gate can be
+    /// exercised without UIKit — a vetoed action that still opened its URL would otherwise only be
+    /// detectable on a device.
+    internal func handleAction(_ action: SectionAction, screenId: String, startTime: Date, completion: ((ScreenResult) -> Void)?) {
         // SPEC-070-C D10 — veto gate, consulted before performing ANY action.
         //
         // (1) SYNC delegate veto: `onScreenAction` returns `Bool`. This was
@@ -306,20 +313,20 @@ internal class ScreenManager {
         case .openURL(let url):
             // SPEC-070-B PN row 18 (W11): config-driven URL — scheme-checked before it reaches the OS.
             if let url = URLSafety.sanitized(url) {
-                DispatchQueue.main.async { UIApplication.shared.open(url) }
+                DispatchQueue.main.async { [urlOpener = self.urlOpener] in urlOpener(url) }
             }
 
         case .openWebview(let url):
             if let url = URL(string: url) {
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [urlOpener = self.urlOpener] in
                     // SFSafariViewController would be used here
-                    UIApplication.shared.open(url)
+                    urlOpener(url)
                 }
             }
 
         case .openAppSettings:
             if let url = URL(string: UIApplication.openSettingsURLString) {
-                DispatchQueue.main.async { UIApplication.shared.open(url) }
+                DispatchQueue.main.async { [urlOpener = self.urlOpener] in urlOpener(url) }
             }
 
         case .share(let text):
@@ -330,7 +337,7 @@ internal class ScreenManager {
 
         case .deepLink(let url):
             if let url = URL(string: url) {
-                DispatchQueue.main.async { UIApplication.shared.open(url) }
+                DispatchQueue.main.async { [urlOpener = self.urlOpener] in urlOpener(url) }
             }
 
         case .showPaywall(let id):

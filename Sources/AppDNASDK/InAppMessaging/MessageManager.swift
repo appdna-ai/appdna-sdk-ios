@@ -111,7 +111,17 @@ final class MessageManager {
     // MARK: - Presentation
 
     private func present(messageId: String, activeConfig: MessageConfig, triggerEvent: String) {
-        guard !isPresenting else { return }
+        // SPEC-400 / SPEC-404 — the three synchronous suppression rules (already-presenting, SDK
+        // runtime-locked, host `shouldShowMessage` veto), consulted BEFORE any analytics tracking or
+        // view construction so a suppressed message produces no `in_app_message_shown` event. The
+        // gate now also runs ahead of the experiment resolution below, which records an exposure as a
+        // side effect — a message the host vetoed was never seen, so it must not count as exposed.
+        guard MessagePresentationGate.shouldPresent(
+            messageId: messageId,
+            isPresenting: isPresenting,
+            runtimeLocked: AppDNA.runtimeLock != nil,
+            delegate: AppDNA.inAppMessages.delegate
+        ) else { return }
 
         // SPEC-036-F §1.2 — experiment-aware presentation, attached inside the
         // candidate/present path (not a host present() call). A running in-app-
@@ -123,24 +133,6 @@ final class MessageManager {
            let treatment = remoteConfigManager.decodeMessagePayload(payload) {
             Log.info("In-app message \(messageId) rendering experiment treatment variant")
             config = treatment
-        }
-
-        // SPEC-404 — pause new in-app message presentation while the SDK is
-        // backend-locked (per-key suspended day 20+ OR org cancelled).
-        // Messages already shown stay visible. No analytics event emitted.
-        if AppDNA.runtimeLock != nil {
-            Log.debug("In-app message \(messageId) suppressed — SDK in runtime-locked mode")
-            return
-        }
-
-        // SPEC-400 — `shouldShowMessage` veto. Run BEFORE any analytics
-        // tracking or view construction so a vetoed message produces no
-        // `in_app_message_shown` event. The protocol's default extension
-        // returns `true`, so hosts that don't implement this method are
-        // unaffected. Reading the delegate fresh on every call.
-        if let host = AppDNA.inAppMessages.delegate, host.shouldShowMessage(messageId: messageId) == false {
-            Log.debug("In-app message \(messageId) suppressed by host shouldShowMessage veto")
-            return
         }
 
         // SPEC-070-C D10 — OPTIONAL async wrapper-veto. Awaited in ADDITION to
@@ -319,5 +311,37 @@ final class MessageManager {
                 }
             }
         }
+    }
+}
+
+// MARK: - In-app message presentation gate (SPEC-400 / SPEC-404)
+
+/// The synchronous "may this message be shown at all?" decision. Extracted from
+/// `MessageManager.present` because the three rules it folds together (already-presenting,
+/// SDK runtime-locked, host `shouldShowMessage` veto) each suppress a message SILENTLY — a
+/// regression in any of them is invisible except as a message that stops appearing on a device.
+///
+/// The async wrapper-veto (`asyncShouldShowMessage`) is deliberately NOT part of this gate: it is
+/// awaited, so it cannot be a pure decision.
+enum MessagePresentationGate {
+    static func shouldPresent(
+        messageId: String,
+        isPresenting: Bool,
+        runtimeLocked: Bool,
+        delegate: AppDNAInAppMessageDelegate?
+    ) -> Bool {
+        if isPresenting { return false }
+        // Messages already shown stay visible; no analytics event is emitted for the suppressed one.
+        if runtimeLocked {
+            Log.debug("In-app message \(messageId) suppressed — SDK in runtime-locked mode")
+            return false
+        }
+        // The protocol's default extension returns `true`, so hosts that don't implement this method
+        // are unaffected. The delegate is read fresh on every call by the caller.
+        if let delegate, delegate.shouldShowMessage(messageId: messageId) == false {
+            Log.debug("In-app message \(messageId) suppressed by host shouldShowMessage veto")
+            return false
+        }
+        return true
     }
 }

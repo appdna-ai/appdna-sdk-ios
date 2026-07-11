@@ -1185,16 +1185,8 @@ struct ContentBlockRendererView: View {
             return btnStyle == "outlined" ? 1.5 : 0
         }()
         return Button {
-            // The email provider in a social_login block is not actually OAuth — emit
-            // `email_login` so hosts can branch their auth handler cleanly. We also
-            // dual-emit the legacy `social_login` action this release so existing
-            // handlers that switch on `social_login` + value=="email" keep working.
-            // The legacy emit will be removed in v1.1.0.
-            if providerType == "email" {
-                onAction("email_login", providerType)
-                onAction("social_login", providerType) // deprecated; remove in v1.1.0
-            } else {
-                onAction("social_login", providerType)
+            for emit in SocialLoginActionDispatcher.actions(forProviderType: providerType) {
+                onAction(emit.action, emit.value)
             }
         } label: {
             HStack(spacing: 10) {
@@ -1940,5 +1932,27 @@ struct ContentBlockRendererView: View {
             .foregroundColor(.secondary)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(8)
+    }
+}
+
+// MARK: - Social-login action dispatch
+
+/// Which host actions a social-login provider button fires, in order.
+///
+/// The email provider in a `social_login` block is not actually OAuth — it emits `email_login` so
+/// hosts can branch their auth handler cleanly. The legacy `social_login` action is dual-emitted this
+/// release so existing handlers that switch on `social_login` + value == "email" keep working; the
+/// legacy emit is removed in v1.1.0. Extracted from the button closure because a dual-emit that
+/// silently degrades to a single emit is invisible to every test that can't reach inside a SwiftUI
+/// `Button` action.
+enum SocialLoginActionDispatcher {
+    static func actions(forProviderType providerType: String) -> [(action: String, value: String?)] {
+        if providerType == "email" {
+            return [
+                ("email_login", providerType),
+                ("social_login", providerType), // deprecated; remove in v1.1.0
+            ]
+        }
+        return [("social_login", providerType)]
     }
 }

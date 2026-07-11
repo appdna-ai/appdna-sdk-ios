@@ -26,6 +26,7 @@ public enum BillingError: LocalizedError {
     case networkError(Error)
     case serverError(String)
     case providerNotAvailable(String)
+    case userCancelled
 
     public var errorDescription: String? {
         switch self {
@@ -34,8 +35,48 @@ public enum BillingError: LocalizedError {
         case .networkError(let error): return "Network error: \(error.localizedDescription)"
         case .serverError(let msg): return "Server error: \(msg)"
         case .providerNotAvailable(let msg): return msg
+        case .userCancelled: return "Purchase was cancelled"
         }
     }
+
+    /// Stable, non-localized discriminator. `errorDescription` is a human string that changes with
+    /// wording and locale, so a host (and every cross-platform wrapper, which only ever receives an
+    /// untyped `Error` across the bridge) had no way to tell "user cancelled" from "card declined".
+    public var errorType: String {
+        switch self {
+        case .productNotFound: return "productNotFound"
+        case .verificationFailed: return "verificationFailed"
+        case .networkError: return "networkError"
+        case .serverError: return "serverError"
+        case .providerNotAvailable: return "providerNotAvailable"
+        case .userCancelled: return "userCancelled"
+        }
+    }
+}
+
+/// Map ANY billing error — `BillingError`, the active `StoreKit2Bridge`'s `StoreKit2Error`, a raw
+/// `SKError`, or a transport failure — onto the same discriminator vocabulary. Unrecognized errors
+/// are "unknown" rather than being force-fit into a category the host would act on wrongly.
+internal func billingErrorType(_ error: Error) -> String {
+    if let billingError = error as? BillingError {
+        return billingError.errorType
+    }
+    if let skError = error as? StoreKit2Error {
+        switch skError {
+        case .productNotFound: return "productNotFound"
+        case .userCancelled: return "userCancelled"
+        case .purchasePending: return "purchasePending"
+        case .verificationFailed: return "verificationFailed"
+        case .unknown: return "unknown"
+        }
+    }
+    if let skError = error as? SKError, skError.code == .paymentCancelled {
+        return "userCancelled"
+    }
+    if error is URLError {
+        return "networkError"
+    }
+    return "unknown"
 }
 
 /// Product info from StoreKit.

@@ -126,5 +126,6 @@ final class EventTracker {
         )
 
         eventQueue?.enqueue(sdkEvent)
+        eventSink?(sdkEvent)
     }
 }

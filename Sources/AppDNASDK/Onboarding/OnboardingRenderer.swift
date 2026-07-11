@@ -483,35 +483,7 @@ struct OnboardingFlowHost: View {
     // MARK: - Config overrides (SPEC-083)
 
     private func applyOverrides(to config: StepConfig, stepId: String) -> StepConfig {
-        guard let override = configOverrides[stepId] else { return config }
-        let fieldDefaults = override.fieldDefaults?.mapValues { AnyCodable($0) }
-        return StepConfig(
-            title: override.title ?? config.title,
-            subtitle: override.subtitle ?? config.subtitle,
-            image_url: config.image_url,
-            cta_text: override.ctaText ?? config.cta_text,
-            skip_enabled: config.skip_enabled,
-            options: config.options,
-            selection_mode: config.selection_mode,
-            items: config.items,
-            layout: config.layout,
-            fields: config.fields,
-            validation_mode: config.validation_mode,
-            field_defaults: fieldDefaults,
-            content_blocks: config.content_blocks,
-            layout_variant: config.layout_variant,
-            background: config.background,
-            text_style: config.text_style,
-            element_style: config.element_style,
-            animation: config.animation,
-            localizations: config.localizations,
-            default_locale: config.default_locale,
-            next_step_rules: config.next_step_rules,
-            progress_color: config.progress_color,
-            permission_type: config.permission_type,
-            show_settings_fallback_on_denied: config.show_settings_fallback_on_denied,
-            settings_fallback_label: config.settings_fallback_label
-        )
+        StepConfigOverrideMerger.apply(configOverrides[stepId], to: config)
     }
 
     // MARK: - Element interaction (SPEC-419 STEP-2)
@@ -763,46 +735,7 @@ struct OnboardingFlowHost: View {
     }
 
     private func parseWebhookResponse(_ data: Data, hookConfig: StepHookConfig) -> StepAdvanceResult {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let action = json["action"] as? String else {
-            return .block(message: hookConfig.error_text ?? "Invalid server response.")
-        }
-
-        let responseData = json["data"] as? [String: Any]
-        let message = json["message"] as? String
-        let targetStepId = json["target_step_id"] as? String
-
-        switch action {
-        case "proceed":
-            if let responseData {
-                return .proceedWithData(responseData)
-            }
-            return .proceed
-
-        case "proceed_with_data":
-            return .proceedWithData(responseData ?? [:])
-
-        case "block":
-            return .block(message: message ?? hookConfig.error_text ?? "Request blocked by server.")
-
-        case "stay":
-            // Server can return action: "stay" to keep the user on the step.
-            // Optional `message` field renders in success styling. Empty/nil message
-            // is silent (server-side handler did its work; SDK shows nothing).
-            return .stay(message: message)
-
-        case "skip_to":
-            guard let targetStepId else {
-                return .proceed
-            }
-            if let responseData {
-                return .skipToWithData(stepId: targetStepId, data: responseData)
-            }
-            return .skipTo(stepId: targetStepId)
-
-        default:
-            return .proceed
-        }
+        WebhookResponseParser.parse(data, errorText: hookConfig.error_text)
     }
 
     // MARK: - Variable interpolation (SPEC-083 §6.5, SPEC-088: delegates to shared TemplateEngine)
@@ -861,14 +794,7 @@ struct OnboardingFlowHost: View {
     }
 
     private func resultName(_ result: StepAdvanceResult) -> String {
-        switch result {
-        case .proceed: return "proceed"
-        case .proceedWithData: return "proceed_with_data"
-        case .block: return "block"
-        case .stay: return "stay"
-        case .skipTo: return "skip_to"
-        case .skipToWithData: return "skip_to"
-        }
+        StepAdvanceResultNaming.name(result)
     }
 
     // MARK: - Navigation helpers
@@ -1321,18 +1247,16 @@ struct OnboardingFlowHost: View {
             return
         }
         let triggerData = resolvePaywallTriggerData(target)
-        let onSuccessTarget = (triggerData?["on_success_target"] as? String)?.isEmpty == false
-            ? triggerData?["on_success_target"] as? String : nil
-        // SPEC-403 — explicit skip-when-subscribed target. Empty / missing
-        // falls back to onSuccessTarget (preserving SPEC-401 1.0.61 flows
-        // that used on_success_target as a workaround) and then to the
-        // legacy "continue" edge follow inside routeOutcome below.
-        let onSubscribedSkipTarget = (triggerData?["on_subscribed_skip_target"] as? String)?.isEmpty == false
-            ? triggerData?["on_subscribed_skip_target"] as? String : nil
-        let onFailTarget = (triggerData?["on_fail_target"] as? String)?.isEmpty == false
-            ? triggerData?["on_fail_target"] as? String : nil
-        let onDismissTarget = (triggerData?["on_dismiss_target"] as? String)?.isEmpty == false
-            ? triggerData?["on_dismiss_target"] as? String : nil
+        let onSuccessTarget = PaywallTriggerSkipResolver.nonEmpty(triggerData?["on_success_target"])
+        let onFailTarget = PaywallTriggerSkipResolver.nonEmpty(triggerData?["on_fail_target"])
+        let onDismissTarget = PaywallTriggerSkipResolver.nonEmpty(triggerData?["on_dismiss_target"])
+        // SPEC-403 — the skip-when-subscribed decision (gate + target chain). Resolved OUTSIDE the
+        // Task below so the raw `triggerData` dictionary is never captured by the concurrent closure.
+        let skipIfSubscribed = PaywallTriggerSkipResolver.skipIfSubscribed(triggerData: triggerData)
+        let subscribedSkip = PaywallTriggerSkipResolver.decision(
+            triggerData: triggerData,
+            hasActiveSubscription: true
+        )
         // Legacy fallback: on_dismiss enum + next_target edge.
         let legacyDismiss = triggerData?["on_dismiss"] as? String ?? "continue"
         let edgeTarget = triggerData?["next_target"] as? String
@@ -1368,14 +1292,7 @@ struct OnboardingFlowHost: View {
             }
         }
 
-        let legacyDismissDefault: String = {
-            switch legacyDismiss {
-            case "block": return "complete_flow"
-            case "skip_to_end": return "complete_flow"
-            case "continue": return "continue"
-            default: return "continue"
-            }
-        }()
+        let legacyDismissDefault = PaywallTriggerSkipResolver.legacyDismissDefault(legacyDismiss)
 
         // SPEC-404 — runtime lock skip. When the backend has signalled the
         // SDK is in locked mode (per-key suspended at day 20+ or org
@@ -1390,7 +1307,7 @@ struct OnboardingFlowHost: View {
                 "paywall_id": paywallId,
                 "reason": "sdk_runtime_locked",
             ])
-            routeOutcome(onSubscribedSkipTarget ?? onSuccessTarget, "continue", "sdk_runtime_locked")
+            routeOutcome(subscribedSkip.skipTarget, "continue", "sdk_runtime_locked")
             return
         }
 
@@ -1403,7 +1320,6 @@ struct OnboardingFlowHost: View {
         // the cache isn't loaded yet, falls through false → paywall
         // presents normally (acceptable defensive fallback per spec edge
         // cases).
-        let skipIfSubscribed = triggerData?["skip_if_subscribed"] as? Bool ?? true
         Task { @MainActor in
             // Pull the entitlement state into a `let` first — `&&` is an
             // autoclosure and Swift forbids `await` inside it. Short-
@@ -1413,15 +1329,16 @@ struct OnboardingFlowHost: View {
                 ? await AppDNA.billing.hasActiveSubscription()
                 : false
             if skipIfSubscribed && isSubscribed {
+                let reason = subscribedSkip.reason ?? "user_already_subscribed"
                 tracker?.track(event: "onboarding_paywall_skip", properties: [
                     "flow_id": flowId,
                     "paywall_id": paywallId,
-                    "reason": "user_already_subscribed",
+                    "reason": reason,
                 ])
                 // SPEC-403 resolver chain: on_subscribed_skip_target wins,
                 // falls back to on_success_target (back-compat with SPEC-401
                 // 1.0.61 workaround flows), then to "continue" (legacy edge).
-                routeOutcome(onSubscribedSkipTarget ?? onSuccessTarget, "continue", "user_already_subscribed")
+                routeOutcome(subscribedSkip.skipTarget, "continue", reason)
                 return
             }
             // 0.1s present delay preserved — matches pre-SPEC-401 timing
@@ -2138,7 +2055,7 @@ private class OnboardingPaywallBridge: AppDNAPaywallDelegate {
         self.onDismissedWithoutPurchase = onDismissedWithoutPurchase
     }
 
-    // MARK: - AppDNAPaywallDelegate (12 methods, forward then route)
+    // MARK: - AppDNAPaywallDelegate (forward then route)
 
     func onPaywallPresented(paywallId: String) {
         forwardOnMain { $0.onPaywallPresented(paywallId: paywallId) }
@@ -2158,7 +2075,13 @@ private class OnboardingPaywallBridge: AppDNAPaywallDelegate {
     }
 
     func onPaywallPurchaseFailed(paywallId: String, error: Error) {
-        forwardOnMain { $0.onPaywallPurchaseFailed(paywallId: paywallId, error: error) }
+        // Legacy entry point (direct callers). Derives the discriminator so the host always receives
+        // the typed callback, whichever entry point fired.
+        onPaywallPurchaseFailed(paywallId: paywallId, error: error, errorType: billingErrorType(error))
+    }
+
+    func onPaywallPurchaseFailed(paywallId: String, error: Error, errorType: String) {
+        forwardOnMain { $0.onPaywallPurchaseFailed(paywallId: paywallId, error: error, errorType: errorType) }
         // Paywall stays on screen (iOS convention — error toast, retry
         // allowed). Mark the intent; the onboarding router decides what
         // to do if `on_fail_target` requests navigating away.
@@ -2284,5 +2207,159 @@ struct NavGlyph: View {
         Text(glyph)
             .font(.system(size: size, weight: .semibold))
             .foregroundColor(color)
+    }
+}
+
+// MARK: - Webhook response parsing
+
+/// Pure translation of a step webhook's JSON body into a `StepAdvanceResult`. Extracted from
+/// `OnboardingFlowHost.parseWebhookResponse` so the contract (which server `action` produces which
+/// advance result, and which error text wins) is testable without a live SwiftUI host + URLSession.
+enum WebhookResponseParser {
+    static func parse(_ data: Data, errorText: String?) -> StepAdvanceResult {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let action = json["action"] as? String else {
+            return .block(message: errorText ?? "Invalid server response.")
+        }
+
+        let responseData = json["data"] as? [String: Any]
+        let message = json["message"] as? String
+        let targetStepId = json["target_step_id"] as? String
+
+        switch action {
+        case "proceed":
+            if let responseData {
+                return .proceedWithData(responseData)
+            }
+            return .proceed
+
+        case "proceed_with_data":
+            return .proceedWithData(responseData ?? [:])
+
+        case "block":
+            return .block(message: message ?? errorText ?? "Request blocked by server.")
+
+        case "stay":
+            // Server can return action: "stay" to keep the user on the step.
+            // Optional `message` field renders in success styling. Empty/nil message
+            // is silent (server-side handler did its work; SDK shows nothing).
+            return .stay(message: message)
+
+        case "skip_to":
+            guard let targetStepId else {
+                return .proceed
+            }
+            if let responseData {
+                return .skipToWithData(stepId: targetStepId, data: responseData)
+            }
+            return .skipTo(stepId: targetStepId)
+
+        default:
+            return .proceed
+        }
+    }
+}
+
+// MARK: - Step advance result naming
+
+/// The analytics name of a `StepAdvanceResult`. Extracted so the wire names emitted on
+/// `onboarding_hook_*` events are pinned by a test — they are consumed by BigQuery and cannot drift.
+enum StepAdvanceResultNaming {
+    static func name(_ result: StepAdvanceResult) -> String {
+        switch result {
+        case .proceed: return "proceed"
+        case .proceedWithData: return "proceed_with_data"
+        case .block: return "block"
+        case .stay: return "stay"
+        case .skipTo: return "skip_to"
+        case .skipToWithData: return "skip_to"
+        }
+    }
+}
+
+// MARK: - Step config override merge (SPEC-083)
+
+/// Field-by-field merge of a host-supplied `StepConfigOverride` onto a step's authored `StepConfig`.
+/// Extracted from the view so the "which fields an override may replace" contract is testable — an
+/// override that silently stops applying is otherwise only visible on a device.
+enum StepConfigOverrideMerger {
+    static func apply(_ override: StepConfigOverride?, to config: StepConfig) -> StepConfig {
+        guard let override else { return config }
+        let fieldDefaults = override.fieldDefaults?.mapValues { AnyCodable($0) }
+        return StepConfig(
+            title: override.title ?? config.title,
+            subtitle: override.subtitle ?? config.subtitle,
+            image_url: config.image_url,
+            cta_text: override.ctaText ?? config.cta_text,
+            skip_enabled: config.skip_enabled,
+            options: config.options,
+            selection_mode: config.selection_mode,
+            items: config.items,
+            layout: config.layout,
+            fields: config.fields,
+            validation_mode: config.validation_mode,
+            field_defaults: fieldDefaults,
+            content_blocks: config.content_blocks,
+            layout_variant: config.layout_variant,
+            background: config.background,
+            text_style: config.text_style,
+            element_style: config.element_style,
+            animation: config.animation,
+            localizations: config.localizations,
+            default_locale: config.default_locale,
+            next_step_rules: config.next_step_rules,
+            progress_color: config.progress_color,
+            permission_type: config.permission_type,
+            show_settings_fallback_on_denied: config.show_settings_fallback_on_denied,
+            settings_fallback_label: config.settings_fallback_label
+        )
+    }
+}
+
+// MARK: - Paywall trigger skip resolver (SPEC-401 / SPEC-403)
+
+/// Decides whether a `paywall_trigger` node presents its paywall or auto-skips, and where an
+/// auto-skip routes. Extracted from `presentPaywallTrigger`'s Task closure — the closure is
+/// unreachable from a test, which is why the SPEC-403 chain was previously covered by a test that
+/// re-implemented the ternaries instead of calling them.
+enum PaywallTriggerSkipResolver {
+    /// A trigger field is "set" only when it is a non-empty string; the console writes "" for cleared
+    /// dropdowns, and "" must fall through the chain rather than route to a nonexistent node.
+    static func nonEmpty(_ raw: Any?) -> String? {
+        guard let s = raw as? String, !s.isEmpty else { return nil }
+        return s
+    }
+
+    /// Default `true` matches the SDK contract: paywalls auto-skip for already-subscribed users
+    /// unless the author explicitly opts out (upsell paywalls). Older flows that never authored the
+    /// field resolve to nil → true.
+    static func skipIfSubscribed(triggerData: [String: Any]?) -> Bool {
+        triggerData?["skip_if_subscribed"] as? Bool ?? true
+    }
+
+    /// `skipTarget` is the SPEC-403 resolver chain (on_subscribed_skip_target → on_success_target →
+    /// nil, i.e. follow the legacy "continue" edge). It is resolved regardless of `present` because
+    /// the SPEC-404 runtime-lock skip routes through the same chain without consulting the
+    /// subscription state.
+    static func decision(
+        triggerData: [String: Any]?,
+        hasActiveSubscription: Bool
+    ) -> (present: Bool, skipTarget: String?, reason: String?) {
+        let target = nonEmpty(triggerData?["on_subscribed_skip_target"])
+            ?? nonEmpty(triggerData?["on_success_target"])
+        if skipIfSubscribed(triggerData: triggerData) && hasActiveSubscription {
+            return (false, target, "user_already_subscribed")
+        }
+        return (true, target, nil)
+    }
+
+    /// Legacy `on_dismiss` enum → routeOutcome default behavior.
+    static func legacyDismissDefault(_ legacyDismiss: String?) -> String {
+        switch legacyDismiss {
+        case "block": return "complete_flow"
+        case "skip_to_end": return "complete_flow"
+        case "continue": return "continue"
+        default: return "continue"
+        }
     }
 }

@@ -1,99 +1,116 @@
 import XCTest
 @testable import AppDNASDK
 
-/// SPEC-403 — paywall_trigger skip-target resolver chain tests.
+/// SPEC-401 / SPEC-403 — paywall_trigger skip gate + skip-target resolver chain.
 ///
-/// The actual resolver lives inside `presentPaywallTrigger` (private to
-/// OnboardingRenderer.swift), wired into a Task closure that calls
-/// `routeOutcome(onSubscribedSkipTarget ?? onSuccessTarget, "continue",
-/// "user_already_subscribed")`. We can't invoke that closure directly from
-/// a unit test (no exposed seam), so this test file mirrors the resolver
-/// as a pure function and asserts the chain produces the expected first
-/// argument to `routeOutcome` for each input.
+/// This file used to MIRROR the resolver as a private helper, because the real one lived inside a
+/// Task closure in `presentPaywallTrigger` with no seam to call. It now drives the production
+/// `PaywallTriggerSkipResolver` that `OnboardingFlowHost` calls.
 ///
-/// End-to-end behavior (resolver → routeOutcome → flowCompleted vs. edge
-/// follow vs. specific target) is covered by the shared behavioral
-/// fixtures at `packages/sdk-shared-fixtures/billing/`:
-///   - onboarding_paywall_skip_to_end.fixture.json
-///   - onboarding_paywall_skip_backcompat.fixture.json
-/// loaded by `SharedFixtureTests.swift` and the equivalent Android/Flutter/RN
-/// runners.
+/// End-to-end behavior (resolver → routeOutcome → flowCompleted vs. edge follow vs. specific target)
+/// is covered by the shared behavioral fixtures at `packages/sdk-shared-fixtures/billing/`.
 final class PaywallTriggerSkipTargetTests: XCTestCase {
 
-    /// Pure mirror of `presentPaywallTrigger`'s resolver chain on line
-    /// ~1274 after SPEC-403:
-    ///
-    ///     routeOutcome(onSubscribedSkipTarget ?? onSuccessTarget,
-    ///                  "continue", "user_already_subscribed")
-    ///
-    /// `routeOutcome`'s first param has signature `(String?, String, String)
-    /// -> Void`. The resolver may produce `nil`, in which case the second
-    /// `defaultBehavior` arg (`"continue"`) kicks in. This helper returns
-    /// the EFFECTIVE first arg (post resolver, pre default-behavior fallback).
-    private func resolveSkipTarget(onSubscribedSkipTarget: String?, onSuccessTarget: String?) -> String? {
-        // Mirror the SDK ternaries: empty string → nil before resolver.
-        let resolvedSubSkip = (onSubscribedSkipTarget?.isEmpty == false) ? onSubscribedSkipTarget : nil
-        let resolvedSuccess = (onSuccessTarget?.isEmpty == false) ? onSuccessTarget : nil
-        return resolvedSubSkip ?? resolvedSuccess
+    private func skipTarget(onSubscribedSkipTarget: String?, onSuccessTarget: String?) -> String? {
+        var triggerData: [String: Any] = [:]
+        if let onSubscribedSkipTarget { triggerData["on_subscribed_skip_target"] = onSubscribedSkipTarget }
+        if let onSuccessTarget { triggerData["on_success_target"] = onSuccessTarget }
+        return PaywallTriggerSkipResolver.decision(
+            triggerData: triggerData,
+            hasActiveSubscription: true
+        ).skipTarget
     }
+
+    // MARK: - Resolver chain
 
     /// Case 1 — explicit on_subscribed_skip_target wins.
     func testResolverPicksOnSubscribedSkipTargetWhenSet() {
-        let resolved = resolveSkipTarget(
-            onSubscribedSkipTarget: "complete_flow",
-            onSuccessTarget: "step_some_other"
+        XCTAssertEqual(
+            skipTarget(onSubscribedSkipTarget: "complete_flow", onSuccessTarget: "step_some_other"),
+            "complete_flow"
         )
-        XCTAssertEqual(resolved, "complete_flow")
     }
 
-    /// Case 2 — back-compat: empty on_subscribed_skip_target falls back to
-    /// on_success_target (SPEC-401 1.0.61 workaround behavior preserved).
+    /// Case 2 — back-compat: empty on_subscribed_skip_target falls back to on_success_target
+    /// (SPEC-401 1.0.61 workaround behavior preserved).
     func testResolverFallsBackToOnSuccessTargetWhenSkipTargetEmpty() {
-        let resolved = resolveSkipTarget(
-            onSubscribedSkipTarget: "",
-            onSuccessTarget: "complete_flow"
+        XCTAssertEqual(
+            skipTarget(onSubscribedSkipTarget: "", onSuccessTarget: "complete_flow"),
+            "complete_flow"
         )
-        XCTAssertEqual(resolved, "complete_flow")
     }
 
     func testResolverFallsBackToOnSuccessTargetWhenSkipTargetNil() {
-        let resolved = resolveSkipTarget(
-            onSubscribedSkipTarget: nil,
-            onSuccessTarget: "step_welcome_back"
+        XCTAssertEqual(
+            skipTarget(onSubscribedSkipTarget: nil, onSuccessTarget: "step_welcome_back"),
+            "step_welcome_back"
         )
-        XCTAssertEqual(resolved, "step_welcome_back")
     }
 
-    /// Case 3 — legacy: both empty → nil → routeOutcome falls through to
-    /// its `defaultBehavior` argument ("continue") and follows the edge.
-    /// This is the pre-SPEC-403 behavior, preserved for back-compat with
-    /// existing flows authored before SPEC-403 ships.
+    /// Case 3 — legacy: both empty → nil → routeOutcome falls through to its `defaultBehavior`
+    /// argument ("continue") and follows the edge. Pre-SPEC-403 behavior, preserved.
     func testResolverReturnsNilWhenBothEmptyOrNil() {
-        XCTAssertNil(resolveSkipTarget(onSubscribedSkipTarget: nil, onSuccessTarget: nil))
-        XCTAssertNil(resolveSkipTarget(onSubscribedSkipTarget: "", onSuccessTarget: ""))
-        XCTAssertNil(resolveSkipTarget(onSubscribedSkipTarget: "", onSuccessTarget: nil))
-        XCTAssertNil(resolveSkipTarget(onSubscribedSkipTarget: nil, onSuccessTarget: ""))
+        XCTAssertNil(skipTarget(onSubscribedSkipTarget: nil, onSuccessTarget: nil))
+        XCTAssertNil(skipTarget(onSubscribedSkipTarget: "", onSuccessTarget: ""))
+        XCTAssertNil(skipTarget(onSubscribedSkipTarget: "", onSuccessTarget: nil))
+        XCTAssertNil(skipTarget(onSubscribedSkipTarget: nil, onSuccessTarget: ""))
     }
 
     /// Case 4 — author opts into chain-of-paywalls via explicit "continue".
-    /// SPEC-403 lets authors keep the legacy edge-follow behavior; the
-    /// dropdown surfaces it as "Follow downstream edge".
     func testResolverPicksExplicitContinue() {
-        let resolved = resolveSkipTarget(
-            onSubscribedSkipTarget: "continue",
-            onSuccessTarget: nil
-        )
-        XCTAssertEqual(resolved, "continue")
+        XCTAssertEqual(skipTarget(onSubscribedSkipTarget: "continue", onSuccessTarget: nil), "continue")
     }
 
-    /// Case 5 — author picks a specific node id (e.g., a "welcome back"
-    /// screen for subscribed users that's different from the post-purchase
-    /// target).
+    /// Case 5 — author picks a specific node id.
     func testResolverPicksSpecificNodeId() {
-        let resolved = resolveSkipTarget(
-            onSubscribedSkipTarget: "step_welcome_back",
-            onSuccessTarget: "step_thank_you"
+        XCTAssertEqual(
+            skipTarget(onSubscribedSkipTarget: "step_welcome_back", onSuccessTarget: "step_thank_you"),
+            "step_welcome_back"
         )
-        XCTAssertEqual(resolved, "step_welcome_back")
+    }
+
+    // MARK: - Skip gate (SPEC-401 Fix 1A)
+
+    /// Default `true`: a flow authored before the field existed still auto-skips for subscribers.
+    func testSubscribedUserSkipsByDefault() {
+        let decision = PaywallTriggerSkipResolver.decision(
+            triggerData: ["on_subscribed_skip_target": "step_welcome_back"],
+            hasActiveSubscription: true
+        )
+        XCTAssertFalse(decision.present)
+        XCTAssertEqual(decision.skipTarget, "step_welcome_back")
+        XCTAssertEqual(decision.reason, "user_already_subscribed")
+    }
+
+    /// Upsell paywalls opt out — a subscriber must still SEE them.
+    func testSubscribedUserStillSeesPaywallWhenSkipDisabled() {
+        let decision = PaywallTriggerSkipResolver.decision(
+            triggerData: ["skip_if_subscribed": false, "on_subscribed_skip_target": "step_welcome_back"],
+            hasActiveSubscription: true
+        )
+        XCTAssertTrue(decision.present)
+        XCTAssertNil(decision.reason)
+        // The chain is still resolved: the SPEC-404 runtime-lock skip routes through it without
+        // consulting the subscription state.
+        XCTAssertEqual(decision.skipTarget, "step_welcome_back")
+    }
+
+    func testNonSubscribedUserAlwaysSeesPaywall() {
+        let decision = PaywallTriggerSkipResolver.decision(
+            triggerData: ["on_subscribed_skip_target": "step_welcome_back"],
+            hasActiveSubscription: false
+        )
+        XCTAssertTrue(decision.present)
+        XCTAssertNil(decision.reason)
+    }
+
+    // MARK: - Legacy on_dismiss default
+
+    func testLegacyDismissDefaults() {
+        XCTAssertEqual(PaywallTriggerSkipResolver.legacyDismissDefault("block"), "complete_flow")
+        XCTAssertEqual(PaywallTriggerSkipResolver.legacyDismissDefault("skip_to_end"), "complete_flow")
+        XCTAssertEqual(PaywallTriggerSkipResolver.legacyDismissDefault("continue"), "continue")
+        XCTAssertEqual(PaywallTriggerSkipResolver.legacyDismissDefault(nil), "continue")
+        XCTAssertEqual(PaywallTriggerSkipResolver.legacyDismissDefault("garbage"), "continue")
     }
 }
