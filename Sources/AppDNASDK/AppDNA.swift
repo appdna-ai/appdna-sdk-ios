@@ -675,12 +675,24 @@ public final class AppDNA: @unchecked Sendable {
         NavigationInterceptor.shared.disable()
     }
 
-    /// Preview a screen from raw JSON (debug builds only).
-    #if DEBUG
-    public static func previewScreen(json: String, completion: ((ScreenResult) -> Void)? = nil) {
+    /// Preview a screen from raw JSON, bypassing remote config. Console preview / QA.
+    ///
+    /// 🔴 This was inside `#if DEBUG`, and both wrappers call it unconditionally. A wrapper compiles
+    /// in whatever configuration the HOST app is built in — so in a Release archive the symbol did
+    /// not exist and the pod failed to compile: `type 'AppDNA' has no member 'previewScreen'`.
+    /// Nothing caught it because nothing had ever built a wrapper in Release: both build bridges and
+    /// both examples build Debug. The Flutter plugin already on pub.dev carries the same call, so it
+    /// cannot be archived by a customer either.
+    ///
+    /// Android never had the guard, so this also broke parity in the one dimension nobody inspects:
+    /// the build configuration. Returns whether the JSON parsed and a screen was presented, matching
+    /// Android's Bool.
+    @discardableResult
+    public static func previewScreen(json: String, completion: ((ScreenResult) -> Void)? = nil) -> Bool {
         ScreenManager.shared.previewScreen(json: json, completion: completion)
     }
 
+    #if DEBUG
     /// SPEC-419 D6 — the applied (fetched + parsed) onboarding config version, for the
     /// structural parity harness's readiness poll. The host app surfaces this into a hidden
     /// `accessibilityIdentifier("adn.appliedConfigVersion")` label that the harness polls

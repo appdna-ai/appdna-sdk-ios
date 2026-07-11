@@ -90,26 +90,33 @@ internal class ScreenManager {
         }
     }
 
-    // MARK: - Preview (Debug)
+    // MARK: - Preview
 
-    #if DEBUG
-    func previewScreen(json: String, completion: ((ScreenResult) -> Void)? = nil) {
+    /// Render a screen straight from JSON. Returns whether the JSON parsed and a screen was
+    /// presented — the same Bool Android returns, so a caller can branch on it.
+    ///
+    /// NOT `#if DEBUG`. It used to be, on both this and the `AppDNA` facade, and the wrappers call
+    /// it unconditionally — a wrapper compiles in the HOST's configuration, so a Release archive
+    /// could not compile the pod at all. See `AppDNA.previewScreen`.
+    @discardableResult
+    func previewScreen(json: String, completion: ((ScreenResult) -> Void)? = nil) -> Bool {
         guard let data = json.data(using: .utf8) else {
-            print("[SDUI] Invalid JSON string for preview")
+            Log.error("[SDUI] Invalid JSON string for preview")
             completion?(ScreenResult(screenId: "preview", dismissed: true, error: .configParseError))
-            return
+            return false
         }
 
         do {
             let config = try JSONDecoder().decode(ScreenConfig.self, from: data)
             let startTime = Date()
             presentScreen(config, screenId: config.id ?? "preview", startTime: startTime, completion: completion)
+            return true
         } catch {
-            print("[SDUI] Failed to parse preview JSON: \(error)")
+            Log.error("[SDUI] Failed to parse preview JSON: \(error)")
             completion?(ScreenResult(screenId: "preview", dismissed: true, error: .configParseError))
+            return false
         }
     }
-    #endif
 
     // MARK: - Presentation
 
