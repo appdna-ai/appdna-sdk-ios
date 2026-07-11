@@ -277,7 +277,20 @@ public final class AppDNA: @unchecked Sendable {
     private var screenManager: ScreenManager?
 
     private var bootstrapData: BootstrapData?
+
+    /// Double-`configure()` guard. Set the INSTANT `configure()` is entered, long before the SDK can
+    /// do anything — so it must never be used to answer "is the SDK usable yet".
     private var isConfigured = false
+
+    /// What `onReady` actually waits for: bootstrap has settled and the managers are wired.
+    ///
+    /// This used to be `isConfigured`, and one flag doing both jobs is why `onReady` fired
+    /// immediately: the guard is set before `performConfigure` even runs. A host that did
+    /// `await onReady(); getRemoteConfig(k)` got `nil` — the config had not been fetched yet — and
+    /// nothing failed loudly, so it read as "that key isn't set". Android already keeps the two
+    /// separate and fires ready inside its bootstrap; iOS now matches it.
+    private var isReady = false
+
     private var readyCallbacks: [() -> Void] = []
 
     private init() {}
@@ -1003,7 +1016,9 @@ public final class AppDNA: @unchecked Sendable {
     /// Register a callback that fires when the SDK is fully initialized.
     public static func onReady(_ callback: @escaping () -> Void) {
         shared.queue.async {
-            if shared.isConfigured {
+            // `isReady`, NOT `isConfigured` — see the flag's definition. The guard flag is true
+            // before bootstrap has even been dispatched.
+            if shared.isReady {
                 DispatchQueue.main.async { callback() }
             } else {
                 shared.readyCallbacks.append(callback)
@@ -1425,8 +1440,10 @@ public final class AppDNA: @unchecked Sendable {
         // Load config bundle version (v1.0 offline-first)
         self.loadConfigBundle()
 
-        // Mark ready
-        self.isConfigured = true
+        // Mark ready. Reached from BOTH performBootstrap exits — success and failure — so an offline
+        // launch still becomes ready (with cached/bundled config) rather than hanging every host that
+        // awaits it.
+        self.isReady = true
         tracker.track(event: "sdk_initialized", properties: nil)
         Log.info("SDK ready")
 
@@ -1473,6 +1490,7 @@ public final class AppDNA: @unchecked Sendable {
             shared.sessionManager = nil
             shared.apiClient = nil
             shared.isConfigured = false
+            shared.isReady = false
             // SPEC-070-B PN row 10 (iOS half): a static that outlives the instance must be reset, or a
             // re-configure()d SDK attributes its first events to the previous run's last screen.
             lastScreenName = nil
