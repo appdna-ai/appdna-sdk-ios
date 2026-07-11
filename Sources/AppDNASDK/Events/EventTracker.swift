@@ -24,6 +24,13 @@ final class EventTracker {
         self.screenProvider = provider
     }
 
+    /// Test-only observation seam. The built envelope is otherwise unobservable — it goes straight
+    /// into `EventQueue` (a concrete final class that needs an APIClient + EventStore), so a test can
+    /// never see what the SDK actually emitted. That is why the shared-fixture runner used to MIRROR
+    /// the SDK's logic instead of calling it, which meant the fixtures asserted against the test's own
+    /// copy of the rules, not the SDK's. Nil in production: zero cost, no behavior change.
+    internal var eventSink: ((SDKEvent) -> Void)?
+
     /// SPEC-070-B PN row 14 (AC-36): apply the persisted consent decision at `configure()` time.
     /// Unlike `setConsent`, this does NOT purge the queue — events persisted during an earlier,
     /// consented session are not a revocation, and startup is not the moment to delete them.
@@ -77,6 +84,7 @@ final class EventTracker {
         )
 
         eventQueue?.enqueue(sdkEvent)
+        eventSink?(sdkEvent)
         Log.debug("Tracked event: \(event)")
     }
 
@@ -96,6 +104,7 @@ final class EventTracker {
         // SPEC-428 STEP-4: decrement by exactly `count` ONLY after the meta is durably persisted (never a
         // zero-reset). Crash before persist → counter keeps `count` → re-emit (no under-count).
         eventQueue?.enqueue(ev, onPersisted: { DroppedEventsCounter.subtract(count) })
+        eventSink?(ev)
         Log.debug("Emitted _sdk_events_dropped meta-event (count=\(count))")
     }
 
