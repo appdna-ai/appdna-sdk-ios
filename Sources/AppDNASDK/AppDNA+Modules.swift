@@ -504,9 +504,21 @@ extension AppDNA {
         /// native hosts → dispatch synchronously exactly as before.
         public var asyncShouldOpen: ((URL, [String: String]) async -> Bool)?
 
+        /// Analytics sink. A seam, not a feature: `AppDNA.track` needs a configured SDK, so without
+        /// this the `deep_link_handled` emission below could not be asserted without standing up the
+        /// whole SDK — which is exactly why iOS shipped for months without emitting it at all.
+        internal var trackEvent: (String, [String: Any]) -> Void = { name, props in
+            AppDNA.track(event: name, properties: props)
+        }
+
         init() {}
 
         /// Handle an incoming URL.
+        ///
+        /// Emits `deep_link_handled` — iOS never did, while Android always has
+        /// (`AppDNAModules.kt:676`), so every deep-link-attributed session was invisible in iOS
+        /// analytics. Event name and props (`{"url": <absolute string>}`) are Android's, verbatim.
+        /// A vetoed URL (`asyncShouldOpen` → false) emits nothing, exactly as on Android.
         public func handleURL(_ url: URL) {
             let params = url.queryParameters
             if let asyncVeto = asyncShouldOpen {
@@ -514,10 +526,12 @@ extension AppDNA {
                     let allow = await asyncVeto(url, params)
                     guard allow else { return }
                     self?.delegate?.onDeepLinkReceived(url: url, params: params)
+                    self?.trackEvent(DeepLinkAnalytics.event, DeepLinkAnalytics.props(url: url))
                 }
                 return
             }
             delegate?.onDeepLinkReceived(url: url, params: params)
+            trackEvent(DeepLinkAnalytics.event, DeepLinkAnalytics.props(url: url))
         }
 
         /// Set a delegate for deep link events.
@@ -616,5 +630,20 @@ private extension URL {
             params[item.name] = item.value ?? ""
         }
         return params
+    }
+}
+
+// MARK: - Deep link analytics
+
+/// The `deep_link_handled` contract, pinned in one place so iOS and Android cannot drift again.
+///
+/// Read from Android `AppDNAModules.kt:676` — `AppDNA.track("deep_link_handled", mapOf("url" to url))`.
+/// Same event name, same single `url` prop. A divergent prop name here would be the same bug in a new
+/// place: the BigQuery column would split in two and neither platform's number would be right.
+enum DeepLinkAnalytics {
+    static let event = "deep_link_handled"
+
+    static func props(url: URL) -> [String: Any] {
+        ["url": url.absoluteString]
     }
 }

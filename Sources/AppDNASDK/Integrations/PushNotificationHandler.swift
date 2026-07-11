@@ -48,14 +48,28 @@ public class PushNotificationHandler: NSObject, UNUserNotificationCenterDelegate
         let tappedAction = actionIdentifier == UNNotificationDefaultActionIdentifier ? nil : actionIdentifier
         AppDNA.pushDelegate?.onPushTapped(notification: payload, actionId: tappedAction)
 
-        // SPEC-089c: Auto-show server-driven screen from push action (AC-076).
-        // When a BUTTON was tapped, route on that button's own action — routing every button tap
-        // through the body action would send every button to the same destination.
-        let routed = payload.actions.first { $0.id == tappedAction } ?? payload.action
-        if let routed, routed.type == "show_screen" {
+        // SPEC-089c: Auto-route the tapped action (AC-076). When a BUTTON was tapped, route on that
+        // button's own action — routing every button tap through the body action would send every
+        // button to the same destination.
+        switch PushTapRouter.route(payload: payload, tappedActionId: tappedAction) {
+        case .showScreen(let screenId):
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                AppDNA.showScreen(routed.value)
+                AppDNA.showScreen(screenId)
             }
+        case .deepLink(let urlString):
+            // iOS used to route ONLY `show_screen`, so a push whose action was a deep link did
+            // nothing at all: no `onDeepLinkReceived`, no `deep_link_handled`. Android has always
+            // routed it (`AppDNA.kt:1391/1397` → `deepLinks.handleURL`). Same 0.5 s settle delay as
+            // the screen route so the app is foregrounded before the host is asked to navigate.
+            if let url = URL(string: urlString) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    AppDNA.deepLinks.handleURL(url)
+                }
+            } else {
+                Log.warning("[Push] deep link action carried an unparseable URL: \(urlString)")
+            }
+        case .ignored:
+            break
         }
 
         completionHandler()
@@ -164,5 +178,39 @@ enum PushPayloadParser {
             action: action ?? actions.first,
             actions: actions
         )
+    }
+}
+
+// MARK: - Push tap routing
+
+/// Which built-in destination a push tap resolves to. Pure, so the routing table is assertable
+/// without a `UNNotificationResponse` (which cannot be constructed in a unit test — which is exactly
+/// how iOS shipped for months routing `show_screen` and silently dropping `deep_link`).
+///
+/// Mirrors Android's auto-route ladder in `AppDNA.handlePushTap` (`AppDNA.kt:1382-1404`): screen wins,
+/// then deep link. Android additionally routes `show_paywall` / `show_survey` from a push — iOS does
+/// not, and that gap is NOT closed here (it needs the same delegate/veto treatment as a screen and is
+/// out of scope for this pass).
+enum PushTapRoute: Equatable {
+    case showScreen(String)
+    case deepLink(String)
+    /// No built-in destination (dismiss, a custom action the host owns, or no action at all).
+    case ignored
+}
+
+enum PushTapRouter {
+    /// Resolve the action to route on: the tapped BUTTON's own action when a button was tapped,
+    /// otherwise the notification-body action.
+    static func route(payload: PushPayload, tappedActionId: String?) -> PushTapRoute {
+        let action = payload.actions.first { $0.id == tappedActionId } ?? payload.action
+        guard let action, !action.value.isEmpty else { return .ignored }
+        switch action.type {
+        case "show_screen":
+            return .showScreen(action.value)
+        case "deep_link", "open_url":
+            return .deepLink(action.value)
+        default:
+            return .ignored
+        }
     }
 }

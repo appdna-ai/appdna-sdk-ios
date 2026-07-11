@@ -747,38 +747,52 @@ struct OnboardingFlowHost: View {
 
     // MARK: - Hook result handling
 
+    /// Folds a hook result through the pure `OnboardingAdvance` state machine and executes the
+    /// resulting outcome. The decision logic itself is no longer in the view — see
+    /// `Onboarding/OnboardingAdvance.swift` (mirrors Android `OnboardingAdvance.kt`).
     private func handleHookResult(_ result: StepAdvanceResult, step: OnboardingStep) {
-        switch result {
-        case .proceed:
-            advanceOrComplete()
+        applyOutcome(OnboardingAdvance.apply(
+            result: result,
+            flow: flow,
+            currentIndex: currentIndex,
+            responses: responses,
+            configOverrides: configOverrides,
+            previousStepId: previousStepId
+        ))
+    }
 
-        case .proceedWithData(let extraData):
-            mergeData(extraData, forStepId: step.id)
-            // SPEC-088: Persist computed data for cross-module access
-            SessionDataStore.shared.mergeComputedData(extraData)
-            advanceOrComplete()
-
-        case .block(let message):
-            errorMessage = message
-            withAnimation { showError = true }
-
-        case .stay(let message):
-            // Stay on current step. If a non-empty message is provided, render
-            // it in success styling. Otherwise truly silent — host has handled
-            // the UI (e.g., presented their own popup) before returning.
-            if let msg = message, !msg.isEmpty {
-                successMessage = msg
+    /// Execute an `OnboardingAdvance.Outcome`: the ONLY place the pure machine's decisions become
+    /// side effects (state write-back, SessionDataStore, analytics, banner, navigation).
+    private func applyOutcome(_ outcome: OnboardingAdvance.Outcome) {
+        if outcome.responsesChanged {
+            responses = outcome.responses
+        }
+        // SPEC-088: Persist computed data for cross-module access.
+        if let computed = outcome.computedData {
+            SessionDataStore.shared.mergeComputedData(computed)
+        }
+        for event in outcome.events {
+            eventTracker?.track(event: event.name, properties: event.props)
+        }
+        if let banner = outcome.banner {
+            switch banner {
+            case .error(let message):
+                errorMessage = message
+                withAnimation { showError = true }
+            case .success(let message):
+                successMessage = message
                 withAnimation { showSuccess = true }
             }
-
-        case .skipTo(let targetStepId):
-            skipToStep(targetStepId)
-
-        case .skipToWithData(let targetStepId, let extraData):
-            mergeData(extraData, forStepId: step.id)
-            // SPEC-088: Persist computed data for cross-module access
-            SessionDataStore.shared.mergeComputedData(extraData)
-            skipToStep(targetStepId)
+        }
+        switch outcome.navigation {
+        case .stay:
+            break
+        case .goToIndex(let index):
+            navigate(to: index)
+        case .completeFlow(let finalResponses):
+            onFlowCompleted(finalResponses)
+        case .presentPaywallTrigger(let nodeId):
+            presentPaywallTrigger(nodeId)
         }
     }
 
@@ -804,82 +818,16 @@ struct OnboardingFlowHost: View {
         advanceOrComplete()
     }
 
+    /// Evaluate next-step rules and route. All decision logic lives in the pure
+    /// `OnboardingAdvance` state machine; this is the execute half.
     private func advanceOrComplete() {
-        let currentStep = flow.steps[currentIndex]
-        let effectiveConfig = applyOverrides(to: currentStep.config, stepId: currentStep.id)
-
-        // Prefer layout.next_step_rules (has Logic panel conditions) over step-level rules
-        let stepRules = currentStep.next_step_rules ?? []
-        let layoutRules = effectiveConfig.next_step_rules ?? []
-        let hasLayoutConditions = layoutRules.contains { $0.conditions != nil && !($0.conditions?.isEmpty ?? true) }
-        let hasStepConditions = stepRules.contains { $0.conditions != nil && !($0.conditions?.isEmpty ?? true) }
-        let rules: [NextStepRule] = hasLayoutConditions && !hasStepConditions ? layoutRules : stepRules
-
-        let stepResponses = responses[currentStep.id] as? [String: Any] ?? [:]
-        Log.debug("[Onboarding] advanceOrComplete step=\(currentStep.id), responses=\(stepResponses), usingLayoutRules=\(hasLayoutConditions && !hasStepConditions)")
-        if !rules.isEmpty {
-            Log.debug("[Onboarding] Evaluating \(rules.count) rules")
-            for (ruleIdx, rule) in rules.enumerated() {
-                let ruleMatch = evaluateRule(rule, stepId: currentStep.id)
-                Log.debug("[Onboarding] Rule \(ruleIdx): target=\(rule.target_step_id), match=\(ruleMatch), conditions=\(String(describing: rule.conditions?.map { $0.value }))")
-                // Evaluate condition(s) before following this rule
-                if !ruleMatch {
-                    continue // Condition not met, try next rule
-                }
-                let target = rule.target_step_id
-
-                // Resolve the graph-node type (if any) so we can route by
-                // type instead of relying on ID prefix. The editor now
-                // generates short IDs (`paywall1`, `analytics2`, `end1`)
-                // that no longer carry the legacy prefix; both forms must
-                // route correctly.
-                let nodeType = graphNodeType(for: target)
-
-                // Analytics event node — fire event, then follow downstream edge
-                if target.hasPrefix("analytics_event_") || nodeType == "analytics_event" {
-                    // Get event details from graph_nodes
-                    let nodeData = resolveGraphNode(target)
-                    let eventName = nodeData?["event_name"] as? String ?? "onboarding_analytics"
-                    eventTracker?.track(event: eventName, properties: [
-                        "flow_id": flow.id, "node_id": target, "step_id": currentStep.id,
-                    ])
-                    // Follow downstream edge if available
-                    if let nextTarget = nodeData?["next_target"] as? String,
-                       let targetIndex = flow.steps.firstIndex(where: { $0.id == nextTarget }) {
-                        navigate(to: targetIndex)
-                        return
-                    }
-                    // No downstream target — continue to next rule
-                    continue
-                }
-
-                // Paywall trigger node — extracted so post-dismiss outcome
-                // routing (winback chains) can re-enter the same code path.
-                if target.hasPrefix("paywall_trigger_") || nodeType == "paywall_trigger" {
-                    presentPaywallTrigger(target)
-                    return
-                }
-
-                // End node
-                if target.hasPrefix("end_") || nodeType == "end" {
-                    onFlowCompleted(responses)
-                    return
-                }
-
-                // Navigate to a specific step
-                if let targetIndex = flow.steps.firstIndex(where: { $0.id == target }) {
-                    navigate(to: targetIndex)
-                    return
-                }
-            }
-        }
-
-        // Default: sequential advance
-        if currentIndex + 1 >= flow.steps.count {
-            onFlowCompleted(responses)
-        } else {
-            navigate(to: currentIndex + 1)
-        }
+        applyOutcome(OnboardingAdvance.advance(
+            flow: flow,
+            currentIndex: currentIndex,
+            responses: responses,
+            configOverrides: configOverrides,
+            previousStepId: previousStepId
+        ))
     }
 
     // MARK: - Navigation with image preload
@@ -965,69 +913,7 @@ struct OnboardingFlowHost: View {
         return urls
     }
 
-    // MARK: - Condition Evaluation
-
-    /// Evaluate whether a navigation rule's conditions are met based on current responses.
-    private func evaluateRule(_ rule: NextStepRule, stepId: String) -> Bool {
-        // Prefer `conditions` array, fall back to single `condition`
-        let conditionList: [Any]
-        if let conditions = rule.conditions {
-            conditionList = conditions.map { $0.value }
-        } else if let condition = rule.condition {
-            conditionList = [condition.value]
-        } else {
-            return true // No condition = always match
-        }
-
-        let logic = rule.logic ?? "and"
-        let stepResponses = responses[stepId] as? [String: Any] ?? [:]
-        // Look up the step so id↔value aliasing for input_select options can resolve.
-        let step = flow.steps.first(where: { $0.id == stepId })
-
-        for cond in conditionList {
-            let matches: Bool
-            if let condStr = cond as? String {
-                matches = condStr == "always"
-            } else if let condDict = cond as? [String: Any] {
-                matches = evaluateCondition(condDict, responses: stepResponses, step: step)
-            } else {
-                matches = true
-            }
-
-            if logic == "or" && matches { return true }
-            if logic == "and" && !matches { return false }
-        }
-
-        return logic == "and" // All passed for "and", none passed for "or"
-    }
-
-    /// Look up the option id↔value aliases for a given field on a step. Returns
-    /// a tuple of (idToValue, valueToId) maps. Empty when the field isn't an
-    /// input_select block (so callers naturally no-op). This fixes the case
-    /// where console-authored rules match on `option.id` (e.g. "opt_1") but
-    /// the SDK stored `option.value` (e.g. "by_learning_...") as the response,
-    /// which caused all rules to miss and the SDK to fall through to the first
-    /// linear target (Dream Decode/Aria) regardless of the user's pick.
-    private func optionAliases(forField field: String, in step: OnboardingStep?) -> (idToValue: [String: String], valueToId: [String: String]) {
-        guard let step = step else { return ([:], [:]) }
-        // content_blocks can live under layout.content_blocks (canonical) or step.config.content_blocks
-        let blocks: [ContentBlock] = step.config.content_blocks ?? []
-        guard let block = blocks.first(where: { $0.field_id == field && $0.type.rawValue.hasPrefix("input_") }),
-              let options = block.field_options else {
-            return ([:], [:])
-        }
-        var idToVal: [String: String] = [:]
-        var valToId: [String: String] = [:]
-        for opt in options {
-            let id = opt.id ?? ""
-            let val = opt.value ?? id
-            if !id.isEmpty && !val.isEmpty {
-                idToVal[id] = val
-                valToId[val] = id
-            }
-        }
-        return (idToVal, valToId)
-    }
+    // MARK: - Condition evaluation inputs
 
     /// The step ID the user navigated FROM to reach the current step, or nil
     /// if there is no previous step (i.e. this is the first step).
@@ -1037,128 +923,6 @@ struct OnboardingFlowHost: View {
         return flow.steps[lastIdx].id
     }
 
-    /// Evaluate a single condition dict against step responses.
-    /// - Parameter step: The step owning `responses`; used to resolve id↔value
-    ///   aliases when the console built a rule on `option.id` but the SDK
-    ///   stored `option.value` as the response.
-    private func evaluateCondition(_ cond: [String: Any], responses: [String: Any], step: OnboardingStep? = nil) -> Bool {
-        guard let type = cond["type"] as? String else { return true }
-        // Console saves "answer_key", SDK also checks "field" for backward compat
-        let field = cond["answer_key"] as? String ?? cond["field"] as? String ?? ""
-
-        // Helpers: lazily resolved aliases.  Only the cases that need them
-        // (answer_equals / answer_contains) touch the step's options.
-        func aliasesForField() -> (idToValue: [String: String], valueToId: [String: String]) {
-            optionAliases(forField: field, in: step)
-        }
-
-        /// True when `expectedIdOrValue` equals `actualValue` either directly
-        /// or via the id↔value alias table on the current step's options.
-        func aliasedEquals(expected: String, actual: String) -> Bool {
-            if expected == actual { return true }
-            let (idToVal, valToId) = aliasesForField()
-            // Rule said "opt_1" and we stored the prose value? Look up what
-            // opt_1 maps to, then compare.
-            if let expectedAsValue = idToVal[expected], expectedAsValue == actual { return true }
-            // Rule said the prose value and we stored the id? Reverse.
-            if let actualAsId = valToId[actual], actualAsId == expected { return true }
-            return false
-        }
-
-        switch type {
-        case "always":
-            return true
-        case "answer_equals":
-            let expected = cond["value"]
-            let actual = responses[field]
-            // Handle array values (multiselect stores ["opt_2"] not "opt_2")
-            if let actualArray = actual as? [String], let expectedStr = expected as? String {
-                if actualArray.contains(expectedStr) { return true }
-                // id↔value alias sweep for multi-select too
-                for item in actualArray where aliasedEquals(expected: expectedStr, actual: item) { return true }
-                return false
-            }
-            if isEqual(actual, expected) { return true }
-            // Single-select id↔value alias fallback
-            if let expectedStr = expected as? String, let actualStr = actual as? String {
-                return aliasedEquals(expected: expectedStr, actual: actualStr)
-            }
-            return false
-        case "answer_contains":
-            let expected = cond["value"] as? String ?? ""
-            let actual = responses[field] as? String ?? ""
-            if actual.contains(expected) { return true }
-            // Legacy flows that paired `answer_contains` with an option id
-            // (now auto-migrated to `answer_equals` in the console — see
-            // StepLogicEditor.renderValuePicker) still round-trip: aliases
-            // bridge rule.value (opt_1) to response (by_learning_...).
-            let (idToVal, _) = aliasesForField()
-            if let mapped = idToVal[expected], !mapped.isEmpty {
-                return actual.contains(mapped)
-            }
-            return false
-        case "answer_not_equals":
-            let expected = cond["value"]
-            let actual = responses[field]
-            if let actualArray = actual as? [String], let expectedStr = expected as? String {
-                return !actualArray.contains(expectedStr)
-            }
-            return !isEqual(actual, expected)
-        case "not_empty":
-            let actual = responses[field]
-            if let str = actual as? String { return !str.isEmpty }
-            return actual != nil
-        case "empty":
-            let actual = responses[field]
-            if let str = actual as? String { return str.isEmpty }
-            return actual == nil
-        case "previous_step_equals":
-            // Match if the step the user came FROM equals the given step ID.
-            // Used for conditional paywall routing: "if came from 12a → paywall_a".
-            guard let prevId = previousStepId else { return false }
-            let expected = cond["value"] as? String ?? ""
-            return prevId == expected
-        case "previous_step_in":
-            // Match if the previous step ID is one of the listed IDs.
-            guard let prevId = previousStepId else { return false }
-            // Console saves as "previous_step_ids" array. AnyCodable decodes JSON arrays
-            // as [Any] under the hood, so we accept both [String] and [Any] casts.
-            if let ids = cond["previous_step_ids"] as? [String] {
-                return ids.contains(prevId)
-            }
-            if let anyArray = cond["previous_step_ids"] as? [Any] {
-                let ids = anyArray.compactMap { $0 as? String }
-                return ids.contains(prevId)
-            }
-            // Fallback: comma-separated string in "value" (legacy/manual edit)
-            if let csv = cond["value"] as? String {
-                let ids = csv.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-                return ids.contains(prevId)
-            }
-            return false
-        default:
-            return true // Unknown condition type = pass
-        }
-    }
-
-    private func isEqual(_ a: Any?, _ b: Any?) -> Bool {
-        if a == nil && b == nil { return true }
-        if let aStr = a as? String, let bStr = b as? String { return aStr == bStr }
-        if let aNum = a as? Double, let bNum = b as? Double { return aNum == bNum }
-        if let aInt = a as? Int, let bInt = b as? Int { return aInt == bInt }
-        if let aBool = a as? Bool, let bBool = b as? Bool { return aBool == bBool }
-        return String(describing: a) == String(describing: b)
-    }
-
-    /// Resolve any graph node data by ID from graph_nodes.
-    private func resolveGraphNode(_ nodeId: String) -> [String: Any]? {
-        if let graphNodes = flow.graph_nodes?.value as? [String: Any],
-           let node = graphNodes[nodeId] as? [String: Any] {
-            return node
-        }
-        return nil
-    }
-
     /// Look up a graph node's `type` from `graph_nodes` (the lightweight
     /// extract synced for runtime). Lets the renderer route by type
     /// instead of by ID prefix — necessary because the editor switched
@@ -1166,7 +930,7 @@ struct OnboardingFlowHost: View {
     /// and the prefix check would silently fall through. Returns nil
     /// when the ID is unknown (legacy flows or actual step IDs).
     private func graphNodeType(for nodeId: String) -> String? {
-        return resolveGraphNode(nodeId)?["type"] as? String
+        return OnboardingAdvance.graphNodeType(for: nodeId, flow: flow)
     }
 
     /// Resolve paywall ID from a paywall_trigger graph node.
@@ -1190,16 +954,6 @@ struct OnboardingFlowHost: View {
             return node["data"] as? [String: Any]
         }
         return nil
-    }
-
-    private func skipToStep(_ targetStepId: String) {
-        guard let targetIndex = flow.steps.firstIndex(where: { $0.id == targetStepId }) else {
-            advanceOrComplete()
-            return
-        }
-        // Route through navigate(to:) so images for the target step are
-        // prefetched before the transition animates.
-        navigate(to: targetIndex)
     }
 
     /// Route to any target — step id, paywall_trigger node, end node, or
@@ -1365,15 +1119,6 @@ struct OnboardingFlowHost: View {
                 }
             )
             AppDNA.presentPaywall(id: paywallId, from: presenter, delegate: bridge)
-        }
-    }
-
-    private func mergeData(_ extraData: [String: Any], forStepId stepId: String) {
-        if var existing = responses[stepId] as? [String: Any] {
-            existing.merge(extraData) { _, new in new }
-            responses[stepId] = existing
-        } else {
-            responses[stepId] = extraData
         }
     }
 }

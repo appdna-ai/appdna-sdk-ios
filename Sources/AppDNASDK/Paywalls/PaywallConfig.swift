@@ -723,9 +723,16 @@ public protocol AppDNAPaywallDelegate: AnyObject {
     /// Typed variant of `onPaywallPurchaseFailed`. `errorType` is a stable, non-localized
     /// discriminator ("userCancelled", "networkError", "verificationFailed", …) — `error` alone is
     /// untyped, so a host (and every cross-platform wrapper) could not tell a user cancel from a card
-    /// decline. The SDK calls THIS method; its default implementation forwards to the two-argument
-    /// one, so hosts that only implement the old method keep working unchanged.
+    /// decline. Its default implementation forwards to the two-argument one, so hosts that only
+    /// implement the old method keep working unchanged.
     func onPaywallPurchaseFailed(paywallId: String, error: Error, errorType: String)
+    /// Full variant — THIS is the method the SDK calls. `productId` is the product the user was
+    /// trying to buy; without it a paywall selling two products reported "a purchase failed" with no
+    /// way to tell WHICH, so a host could not retry the right one or attribute the failure. It is
+    /// `nil` only when the failure happened before a product was resolved (e.g. the paywall config
+    /// itself was missing). Defaults forward down the chain — `productId` → `errorType` → the
+    /// original two-argument method — so every existing conformer keeps compiling and keeps working.
+    func onPaywallPurchaseFailed(paywallId: String, error: Error, errorType: String, productId: String?)
     func onPaywallDismissed(paywallId: String)
     /// AC-037: Validate a promo code entered by the user. Call the completion handler with `true` if valid, `false` otherwise.
     func onPromoCodeSubmit(paywallId: String, code: String, completion: @escaping (Bool) -> Void)
@@ -755,6 +762,9 @@ public extension AppDNAPaywallDelegate {
     func onPaywallPurchaseFailed(paywallId: String, error: Error) {}
     func onPaywallPurchaseFailed(paywallId: String, error: Error, errorType: String) {
         onPaywallPurchaseFailed(paywallId: paywallId, error: error)
+    }
+    func onPaywallPurchaseFailed(paywallId: String, error: Error, errorType: String, productId: String?) {
+        onPaywallPurchaseFailed(paywallId: paywallId, error: error, errorType: errorType)
     }
     func onPaywallDismissed(paywallId: String) {}
     func onPromoCodeSubmit(paywallId: String, code: String, completion: @escaping (Bool) -> Void) { completion(false) }

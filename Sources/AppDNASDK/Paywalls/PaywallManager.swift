@@ -77,7 +77,14 @@ final class PaywallManager {
                 code: 404,
                 userInfo: [NSLocalizedDescriptionKey: "Paywall config not found"]
             )
-            delegate?.onPaywallPurchaseFailed(paywallId: id, error: error, errorType: billingErrorType(error))
+            // No config → no plan → no product was ever resolved. `productId: nil` says exactly that,
+            // rather than inventing an empty string the host would have to special-case.
+            delegate?.onPaywallPurchaseFailed(
+                paywallId: id,
+                error: error,
+                errorType: billingErrorType(error),
+                productId: nil
+            )
             return
         }
 
@@ -273,9 +280,12 @@ final class PaywallManager {
                 // locale. `error_type` is the stable discriminator that lets analytics separate a user
                 // cancel from a real failure, and lets a host retry only what is retryable.
                 let errorType = billingErrorType(error)
+                // `plan.productId` is `String?`; putting the Optional straight into a [String: Any]
+                // box wraps it, so a nil product serialized as the literal "nil" rather than being
+                // absent/empty. `?? ""` matches the value handed to `bridge.purchase` above.
                 eventTracker.track(event: "purchase_failed", properties: [
                     "paywall_id": paywallId,
-                    "product_id": plan.productId,
+                    "product_id": plan.productId ?? "",
                     "error": error.localizedDescription,
                     "error_type": errorType,
                 ])
@@ -283,7 +293,8 @@ final class PaywallManager {
                     delegate?.onPaywallPurchaseFailed(
                         paywallId: paywallId,
                         error: error,
-                        errorType: errorType
+                        errorType: errorType,
+                        productId: plan.productId
                     )
                     // Post-purchase failure action
                     self?.handlePostPurchaseFailure(

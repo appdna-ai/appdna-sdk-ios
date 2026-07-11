@@ -114,6 +114,26 @@ func measurementSnapshot(
     return MeasurementSnapshot(inputValues: iv, payload: payload, snappedBase: snappedBase, display: display)
 }
 
+/// The `value` a measurement commit hands to `onElementInteraction` as its (stringly-typed) value
+/// argument. `onInteract` is `(blockId, action, value: String?)` on both platforms, so the base scalar
+/// crosses as a string and the richer `{display_value, unit}` reach the delegate through `inputValues`
+/// (`<field>_display_value` / `<field>_display_unit`), which the fire-seam passes verbatim.
+///
+/// Mirrors Android `MeasurementWheel.kt:367` — `snap.payload["value"]?.toString()`. An Int stays
+/// integral ("70", never "70.0") so `answer_equals` numeric routing stays type-exact across platforms.
+func measurementInteractionValue(_ snapshot: MeasurementSnapshot) -> String? {
+    switch snapshot.payload["value"] {
+    case let i as Int: return String(i)
+    case let d as Double: return String(d)
+    default: return nil
+    }
+}
+
+/// The action name a measurement commit fires. Pinned to Android's `"value_changed"`
+/// (`MeasurementWheel.kt:367`) — the wheel and the legacy drum emit the same action, so a host that
+/// switches on it does not have to know which renderer the console picked.
+let measurementInteractionAction = "value_changed"
+
 /// Resolved measurement configuration parsed from `field_config`.
 struct MeasurementConfig {
     let type: String
@@ -210,6 +230,13 @@ struct MeasurementWheelBlockView: View {
     let block: ContentBlock
     let config: MeasurementConfig
     @Binding var inputValues: [String: Any]
+    /// SPEC-419 STEP-2 — fired `("value_changed", <base value>)` on a real user commit (a pick from any
+    /// style, or a unit switch), NEVER on the pristine onAppear seed and never per drag tick.
+    ///
+    /// This used to be dead: `writeSnapshot()` computed `snap.payload` and threw it away
+    /// (`_ = snap.payload`), so no host on any device ever received a measurement interaction even
+    /// though Android fired one (`MeasurementWheel.kt:367`).
+    var onInteract: (String, String, String?) -> Void = { _, _, _ in }
 
     // NB: the SDK defines a public `enum Environment` (Configuration.swift) that
     // shadows SwiftUI's `@Environment` property wrapper here — fully qualify it.
@@ -545,12 +572,12 @@ struct MeasurementWheelBlockView: View {
         }
     }
 
-    /// A pick from ANY style: converts the chosen display value → base, holds it,
-    /// marks interaction, and performs the single wrapper-owned persist.
+    /// A pick from ANY style: converts the chosen display value → base, holds it, marks interaction,
+    /// and performs the single wrapper-owned persist + the delegate fire (commit-level).
     private func pick(_ displayValue: Double) {
         hasUserInteracted = true
         holdBase = measurementToBase(displayValue, currentUnit)
-        writeSnapshot()
+        fireCommit(writeSnapshot())
     }
 
     private func selectUnit(_ idx: Int) {
@@ -558,10 +585,13 @@ struct MeasurementWheelBlockView: View {
         hasUserInteracted = true
         unitIndex = idx
         // Base held constant; display recomputes + re-clamps inside the snapshot.
-        writeSnapshot()
+        fireCommit(writeSnapshot())
     }
 
-    private func writeSnapshot() {
+    /// Persist + return the snapshot so callers can fire the delegate. The `onAppear` seed calls this
+    /// WITHOUT firing (a render-time seed is not a user interaction) — matches Android.
+    @discardableResult
+    private func writeSnapshot() -> MeasurementSnapshot {
         let snap = measurementSnapshot(
             fieldId: fieldId,
             base: holdBase,
@@ -569,10 +599,14 @@ struct MeasurementWheelBlockView: View {
             displayUnit: currentUnit
         )
         for (k, v) in snap.inputValues { inputValues[k] = v }
-        // `onElementInteraction` payload = { value, display_value, unit }. The live
-        // host-fire wiring is a shared STEP-2 across all EPIC-11 elements (deferred);
-        // the payload derivation is unit-tested via `measurementSnapshot`.
-        _ = snap.payload
+        return snap
+    }
+
+    /// Hand the commit to the step scope, which awaits `onElementInteraction` and folds the result.
+    /// The delegate sees `{value: base}` here plus `{display_value, unit}` via the freshly-written
+    /// `inputValues` — the same three facts Android sends.
+    private func fireCommit(_ snap: MeasurementSnapshot) {
+        onInteract(block.id, measurementInteractionAction, measurementInteractionValue(snap))
     }
 
     private func doubleFromInput(_ v: Any?) -> Double? {

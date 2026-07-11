@@ -1693,7 +1693,9 @@ struct WheelPickerBlockView: View {
         // wrapper (unit toggle + ruler/gauge/dial/wheel visual, base-owned persist).
         // Otherwise the legacy drum below renders UNCHANGED.
         if let mcfg = parseMeasurementConfig(block) {
-            MeasurementWheelBlockView(block: block, config: mcfg, inputValues: $inputValues)
+            // The measurement wrapper fires the same ("value_changed", base) interaction the legacy
+            // drum does — routing `onInteract` through was the missing half of the EPIC-11 seam.
+            MeasurementWheelBlockView(block: block, config: mcfg, inputValues: $inputValues, onInteract: onInteract)
         } else {
             legacyBody
         }
