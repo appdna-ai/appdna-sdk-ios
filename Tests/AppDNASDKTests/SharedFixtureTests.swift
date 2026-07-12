@@ -270,10 +270,14 @@ final class SharedFixtureTests: XCTestCase {
                 "productId": productId,
             ])
         }
-        func onPaywallPurchaseFailed(paywallId: String, error: Error, errorType: String) {
+        /// The 4-arg form IS the protocol requirement the SDK calls (`PaywallManager.swift:290`).
+        /// Implementing only the 3-arg overload would silently take the protocol-extension default and
+        /// throw `productId` away — which is exactly how the fixture caught it reporting null.
+        func onPaywallPurchaseFailed(paywallId: String, error: Error, errorType: String, productId: String?) {
             harness?.recordDelegate("onPaywallPurchaseFailed", [
                 "paywallId": paywallId,
                 "errorType": errorType,
+                "productId": SharedFixtureTests.orNull(productId),
             ])
         }
         func onPaywallDismissed(paywallId: String) {
@@ -288,6 +292,52 @@ final class SharedFixtureTests: XCTestCase {
                 "productIds": productIds,
                 "restoredCount": productIds.count,
             ])
+        }
+    }
+
+    /// The SDK's own onboarding delegate. `OnboardingCompletion.complete` is what invokes
+    /// `onOnboardingCompleted` on it — the runner never calls it directly.
+    final class OnboardingDelegateSpy: AppDNAOnboardingDelegate {
+        private weak var harness: Harness?
+        /// The measurement wheel's field id — the wheel hands `onElementInteraction` the BLOCK id plus
+        /// an `inputValues` snapshot keyed by field id; the fixtures speak field ids.
+        private let fieldId: String?
+
+        init(harness: Harness, fieldId: String? = nil) {
+            self.harness = harness
+            self.fieldId = fieldId
+        }
+
+        func onOnboardingCompleted(flowId: String, responses: [String: Any]) {
+            harness?.recordDelegate("onOnboardingCompleted", [
+                "flowId": flowId,
+                "responses": responses,
+            ])
+        }
+
+        /// Invoked BY the SDK (`fireElementInteraction`), not by the test. Every recorded value is one
+        /// the SDK handed over: `value` is the wheel's own stringly-typed base scalar, and the display
+        /// pair rides in the `inputValues` snapshot the wheel wrote.
+        func onElementInteraction(
+            flowId: String,
+            stepId: String,
+            blockId: String,
+            action: String,
+            value: String?,
+            inputValues: [String: Any]
+        ) async -> ElementInteractionResult? {
+            var args: [String: Any] = [
+                "block_id": blockId,
+                "action": action,
+                "value": SharedFixtureTests.orNull(value.flatMap { Double($0) } ?? nil),
+            ]
+            if let fieldId {
+                args["field_id"] = fieldId
+                args["display_value"] = SharedFixtureTests.orNull(inputValues["\(fieldId)_display_value"])
+                args["unit"] = SharedFixtureTests.orNull(inputValues["\(fieldId)_display_unit"])
+            }
+            harness?.recordDelegate("onElementInteraction", args)
+            return nil
         }
     }
 
@@ -376,13 +426,13 @@ final class SharedFixtureTests: XCTestCase {
 
     // MARK: - Umbrella test
 
-    func testAllSharedFixtures() throws {
+    func testAllSharedFixtures() async throws {
         let fixtures = try loadFixtures()
         XCTAssertFalse(fixtures.isEmpty, "No iOS-applicable fixtures found")
 
         for fixture in fixtures {
             let harness = Harness()
-            drive(fixture: fixture, harness: harness)
+            await drive(fixture: fixture, harness: harness)
             assertExpectations(fixture: fixture, harness: harness)
         }
 
@@ -390,7 +440,7 @@ final class SharedFixtureTests: XCTestCase {
     }
 
     /// Dispatch. A kind with no driver FAILS — the whole point of this file.
-    private func drive(fixture: Fixture, harness: Harness) {
+    private func drive(fixture: Fixture, harness: Harness) async {
         switch fixture.action.kind {
         case "evaluate_audience":              runEvaluateAudience(fixture, harness)
         case "interpolate_template":           runInterpolateTemplate(fixture, harness)
@@ -403,7 +453,7 @@ final class SharedFixtureTests: XCTestCase {
         case "restore_purchases":              runRestorePurchases(fixture, harness)
         case "show_message":                   runShowMessage(fixture, harness)
         case "tap_link":                       runTapLink(fixture, harness)
-        case "pick_measurement":               runPickMeasurement(fixture, harness)
+        case "pick_measurement":               await runPickMeasurement(fixture, harness)
         case "fetch_remote_config":            runFetchRemoteConfig(fixture, harness)
         case "identify":                       runIdentify(fixture, harness)
         case "track_event":                    runTrackEvent(fixture, harness)
@@ -488,12 +538,204 @@ final class SharedFixtureTests: XCTestCase {
         }
     }
 
+    // MARK: - The onboarding flow the fixture describes
+    //
+    // REAL: OnboardingFlowConfig / OnboardingStep / StepConfig — the SDK's own Codable models. The
+    // runner does not hand-build steps; it hands the fixture's document to the SDK's decoder, exactly
+    // as RemoteConfigManager does with a Firestore document.
+
+    /// Reshape the fixture's step document into the shape the SDK's decoder expects (`step_id` → `id`;
+    /// a single-step fixture's flat body IS the step's `config`), then let the SDK decode it. Mirrors
+    /// Android's `flowFromSetup()`.
+    private func onboardingFlow(_ f: Fixture) -> OnboardingFlowConfig? {
+        guard let cfg = f.setup.config?.objectValue else { return nil }
+        let flat = cfg.mapValues { $0.foundation }
+
+        var stepDicts: [[String: Any]] = []
+        if let steps = cfg["steps"]?.arrayValue {
+            for entry in steps {
+                guard var m = entry.objectValue?.mapValues({ $0.foundation }) else { continue }
+                if let sid = m["step_id"] { m["id"] = sid }
+                stepDicts.append(m)
+            }
+        } else {
+            // A single-step fixture: the config IS the step.
+            var m = flat
+            if let sid = m["step_id"] { m["id"] = sid }
+            if m["config"] == nil { m["config"] = flat }
+            stepDicts.append(m)
+        }
+        guard !stepDicts.isEmpty else { return nil }
+
+        func decode(_ steps: [[String: Any]]) -> OnboardingFlowConfig? {
+            var flowDict: [String: Any] = [
+                "id": flat["id"] as? String ?? "fixture_flow",
+                "name": flat["name"] as? String ?? "fixture",
+                "version": 1,
+                "steps": steps,
+            ]
+            if let graphNodes = flat["graph_nodes"] { flowDict["graph_nodes"] = graphNodes }
+            guard let data = try? JSONSerialization.data(withJSONObject: flowDict),
+                  let flow = try? JSONDecoder().decode(OnboardingFlowConfig.self, from: data) else {
+                return nil
+            }
+            return flow
+        }
+
+        guard let flow = decode(stepDicts) else { return nil }
+
+        // A fixture whose next_step_rules point at steps it does not spell out (`welcome_step`,
+        // `next_step`) is describing a FLOW, not a step. Materialise the referenced STEP targets so the
+        // SDK's real rule evaluator has somewhere to route — otherwise every rule "misses" and the
+        // fixture would silently assert the sequential fallback instead of the route it names. Graph
+        // nodes (paywall_trigger / analytics_event / end) are NOT steps; the SDK's own routing
+        // predicates in OnboardingAdvance decide which is which, so the runner does not guess.
+        let existing = Set(flow.steps.map(\.id))
+        let referenced = flow.steps
+            .flatMap { ($0.next_step_rules ?? []) + ($0.config.next_step_rules ?? []) }
+            .map(\.target_step_id)
+            .filter { target in
+                guard !existing.contains(target) else { return false }
+                guard OnboardingAdvance.graphNodeType(for: target, flow: flow) == nil else { return false }
+                return !target.hasPrefix("paywall_trigger_")
+                    && !target.hasPrefix("analytics_event_")
+                    && !target.hasPrefix("end_")
+            }
+        guard !referenced.isEmpty else { return flow }
+
+        var seen = Set<String>()
+        let stubs: [[String: Any]] = referenced.compactMap { target in
+            guard seen.insert(target).inserted else { return nil }
+            return ["id": target, "type": "value_prop", "config": [String: Any]()]
+        }
+        return decode(stepDicts + stubs) ?? flow
+    }
+
+    private func sessionResponses(_ f: Fixture) -> [String: Any] {
+        (f.setup.session_data?.objectValue?["responses"]?.objectValue ?? [:]).mapValues { $0.foundation }
+    }
+
+    // MARK: - The step-advance state machine
+    //
+    // REAL, END TO END: OnboardingAdvance.apply(result:flow:currentIndex:responses:…) — the extracted
+    // machine OnboardingFlowHost now calls. It owns the next_step_rules evaluation, the graph-node
+    // routing, the skip_to jump (+ its `step_skipped` event), the response merge and the banners.
+    // REAL: OnboardingCompletion.complete(…) — what the SDK DOES with a `.completeFlow`: the
+    // `onboarding_flow_completed` event, the SPEC-088 persist, and `onOnboardingCompleted`.
+    //
+    // PLUMBING: `trackHookEvent` is a closure inside the SwiftUI host, so the runner performs the
+    // `onboarding_hook_completed` emission — but the event's `result` discriminator comes from the
+    // SDK's own StepAdvanceResultNaming, so a rename there breaks these fixtures, which is the point.
+
+    private func applyAdvance(
+        _ f: Fixture,
+        _ h: Harness,
+        flow: OnboardingFlowConfig,
+        currentIndex: Int,
+        responses: [String: Any],
+        result: StepAdvanceResult,
+        hookRan: Bool
+    ) {
+        let currentStep = (currentIndex >= 0 && currentIndex < flow.steps.count) ? flow.steps[currentIndex] : nil
+
+        if hookRan {
+            var props: [String: Any] = [
+                "flow_id": flow.id,
+                "result": StepAdvanceResultNaming.name(result),   // REAL
+            ]
+            if let currentStep { props["step_id"] = currentStep.id }
+            if case let .skipTo(target) = result { props["target_step_id"] = target }
+            if case let .skipToWithData(target, _) = result { props["target_step_id"] = target }
+            h.tracker.track(event: "onboarding_hook_completed", properties: props)
+        }
+
+        let outcome = OnboardingAdvance.apply(                     // REAL
+            result: result,
+            flow: flow,
+            currentIndex: currentIndex,
+            responses: responses
+        )
+
+        // The events the machine says the SDK must emit (e.g. `step_skipped`), through the real tracker.
+        for event in outcome.events {
+            h.tracker.track(event: event.name, properties: event.props)
+        }
+
+        switch outcome.navigation {
+        case .goToIndex(let index):
+            h.state["current_step_index"] = index
+            h.state["current_step_id"] = SharedFixtureTests.orNull(
+                (index >= 0 && index < flow.steps.count) ? flow.steps[index].id : nil
+            )
+            h.state["advancement_paused"] = false
+
+        case .stay:
+            h.state["current_step_index"] = currentIndex
+            h.state["current_step_id"] = SharedFixtureTests.orNull(currentStep?.id)
+            h.state["advancement_paused"] = true
+
+        case .completeFlow(let finalResponses):
+            h.state["current_step_index"] = currentIndex
+            h.state["is_presenting"] = false
+            h.state["flow_completed"] = true
+            // The SDK owns the completion contract — event name, props, and the delegate call.
+            OnboardingCompletion.complete(
+                flowId: flow.id,
+                totalSteps: flow.steps.count,
+                durationMs: 0,
+                responses: finalResponses,
+                track: { name, props in h.tracker.track(event: name, properties: props) },
+                delegate: OnboardingDelegateSpy(harness: h)
+            )
+
+        case .presentPaywallTrigger(let nodeId):
+            h.state["paywall_trigger_node"] = nodeId
+        }
+
+        h.state["responses"] = outcome.responses
+        switch outcome.banner {
+        case .success(let message):
+            h.state["show_success_banner"] = true
+            h.state["show_error_banner"] = false
+            h.state["success_message"] = message
+        case .error(let message):
+            h.state["show_success_banner"] = false
+            h.state["show_error_banner"] = true
+            h.state["error_message"] = message
+        case nil:
+            h.state["show_success_banner"] = false
+            h.state["show_error_banner"] = false
+        }
+    }
+
+    /// `{action, ...inputValues}` — the payload the SDK hands the host through `onNext`, which is what
+    /// `onBeforeStepAdvance` receives and what the fixtures call `onAction`. Reshaped into the
+    /// fixture's `{action, value}` pair; nothing here decides anything.
+    private func recordActionEmission(_ emitted: [String: Any]?, _ h: Harness) {
+        guard let data = emitted, let name = data["action"] as? String else { return }
+        var rest = data
+        rest.removeValue(forKey: "action")
+        let value: Any
+        if rest.isEmpty {
+            value = SharedFixtureTests.orNull(data["action_value"])
+        } else if rest.count == 1, let actionValue = rest["action_value"] {
+            value = actionValue
+        } else {
+            rest.removeValue(forKey: "action_value")
+            value = rest
+        }
+        h.recordDelegate("onAction", ["action": name, "value": value])
+    }
+
     // MARK: - Driver: tap_button
     //
     // REAL: SocialLoginActionDispatcher.actions(forProviderType:) — the dual-emit rule the
     // social-login button's SwiftUI action closure runs (ContentBlockRendererView:1188).
+    // REAL: emitPermissionAction(…) — the permission CTA's type resolution + safe-fallback decision,
+    // and the host emission it performs (`OnboardingRenderer` `case permissionActionName`).
     // REAL: AuthActionPolicy.delegateRequiredActions — the set that decides whether the SDK is allowed
     // to advance past a credential step without a delegate.
+    // REAL: OnboardingAdvance — the advance half.
 
     private func runTapButton(_ f: Fixture, _ h: Harness) {
         let config = f.setup.config?.objectValue ?? [:]
@@ -511,86 +753,121 @@ final class SharedFixtureTests: XCTestCase {
             return
         }
 
-        // (b) step primary button carrying a typed action.
-        guard let button = config["primary_button"]?.objectValue,
-              let buttonAction = button["action"]?.stringValue else {
-            XCTFail("""
-            [\(f.id)] no iOS driver: this tap_button fixture is neither a social_login block nor a step
-            with a `primary_button.action`. iOS routes step buttons through
-            OnboardingFlowHost.handleBlockAction, which is a private method on a SwiftUI view — extract
-            it (as SocialLoginActionDispatcher was) or drop 'ios' from this fixture.
-            """)
-            return
+        guard let flow = onboardingFlow(f) else {
+            return XCTFail("[\(f.id)] setup.config does not decode as an OnboardingFlowConfig with steps")
         }
+        let stepId = action["step_id"]?.stringValue ?? ""
+        let currentIndex = max(flow.steps.firstIndex(where: { $0.id == stepId }) ?? 0, 0)
+        let step = flow.steps[currentIndex]
+        let button = config["primary_button"]?.objectValue
+        let buttonAction = action["action"]?.stringValue
+            ?? button?["action"]?.stringValue
+            ?? ""
+        let buttonValue = button?["value"]?.stringValue
+        let formData = (action["form_data"]?.objectValue ?? [:]).mapValues { $0.foundation }
 
-        // Value handed to the host: submitted form data when the button collects credentials,
-        // otherwise the button's own static `value`.
-        let value: Any = {
-            if let formData = action["form_data"]?.objectValue { return formData.mapValues { $0.foundation } }
-            if let v = button["value"]?.stringValue { return v }
-            return NSNull()
-        }()
-        h.recordDelegate("onAction", ["action": buttonAction, "value": value])
+        switch buttonAction {
+        // (b) permission CTA — the REAL emitPermissionAction seam. On the safe-fallback path (an
+        // unsupported or blank permission type) the emission IS the advance: the host is told what was
+        // asked for and the user is never stranded on a dead button.
+        case permissionActionName:
+            let decision = emitPermissionAction(
+                configType: step.config.permission_type,
+                layoutType: step.config.layout?["permission_type"]?.value as? String,
+                actionValue: buttonValue,
+                inputValues: formData,
+                onNext: { payload in self.recordActionEmission(payload, h) }
+            )
+            guard case .safeFallbackAdvance = decision else {
+                return XCTFail("""
+                [\(f.id)] this permission type is SUPPORTED, so the real SDK hands off to the OS
+                permission pipeline — which needs a live UIViewController and the OS prompt. This
+                fixture asserts the SAFE-FALLBACK path; it must name an unsupported type.
+                """)
+            }
+            applyAdvance(f, h, flow: flow, currentIndex: currentIndex,
+                         responses: formData, result: .proceed, hookRan: false)
 
-        // REAL decision: does this action require the host to act before the SDK may advance?
-        let paused = AuthActionPolicy.delegateRequiredActions.contains(buttonAction)
-        h.state["advancement_paused"] = paused
-        if paused {
-            h.state["current_step_index"] = 0
-            return
+        // (c) auth-class button — the SDK refuses to advance without a host that can perform the side
+        // effect. `AuthActionPolicy` is the REAL set that decides that.
+        case let auth where AuthActionPolicy.delegateRequiredActions.contains(auth):
+            // EMISSION SITE NOT EXTRACTED: `emitAuthAction` is a private method on the SwiftUI host
+            // (OnboardingRenderer:1469) and reads its @State `inputValues`. It emits
+            // `{...inputValues, action}`; the fixture's `form_data` IS those inputValues.
+            var payload = formData
+            payload["action"] = auth
+            if formData.isEmpty, let buttonValue { payload["action_value"] = buttonValue }
+            recordActionEmission(payload, h)
+            h.state["advancement_paused"] = true
+            h.state["current_step_index"] = currentIndex
+            h.state["current_step_id"] = step.id
+
+        // (d) natural advance / completion — the REAL OnboardingAdvance machine. No hook ran, so no
+        // hook event: the only events are the ones the machine itself produces.
+        case "next", "complete", "":
+            applyAdvance(f, h, flow: flow, currentIndex: currentIndex,
+                         responses: sessionResponses(f), result: .proceed, hookRan: false)
+
+        default:
+            XCTFail("[\(f.id)] no iOS driver for button action='\(buttonAction)'.")
         }
-
-        XCTFail("""
-        [\(f.id)] no iOS driver for the ADVANCE half of a '\(buttonAction)' button.
-        `advanceOrComplete()` / `skipToStep(_:)` / the next_step_rules resolver are private methods on
-        OnboardingFlowHost (a SwiftUI view) and read private @State (currentIndex, responses), so no
-        test can drive them. Re-implementing them here is exactly the mirror this runner exists to
-        remove. GAP: extract the step-advance state machine (handleHookResult + advanceOrComplete +
-        skipToStep + mergeData) into a pure type the view calls, then this fixture — and every
-        submit_form fixture's `state_after` — can be driven for real.
-        """)
     }
 
     // MARK: - Driver: submit_form
     //
-    // REAL: the `StepAdvanceResult` enum + StepAdvanceResultNaming.name(_:) — the wire names that land
-    // on `onboarding_hook_completed` in BigQuery.
-    //
-    // EMISSION SITE NOT EXTRACTED: `trackHookEvent` is a private method on OnboardingFlowHost, so the
-    // harness feeds the real result name into the real EventTracker. Every value under test
-    // (`result`) is the SDK's.
-    //
-    // STATE MACHINE NOT EXTRACTED: what a result DOES (advance / banner / skip / merge) lives in the
-    // view's private `handleHookResult`, so `state_after` cannot be driven — see the XCTFail below.
+    // REAL: StepAdvanceResult + StepAdvanceResultNaming.name(_:) — the wire names that land on
+    // `onboarding_hook_completed` in BigQuery — then the REAL OnboardingAdvance machine.
 
     private func runSubmitForm(_ f: Fixture, _ h: Harness) {
+        guard let flow = onboardingFlow(f) else {
+            return XCTFail("[\(f.id)] setup.config does not decode as an OnboardingFlowConfig with steps")
+        }
         let action = f.action.raw
         let stepId = action["step_id"]?.stringValue ?? ""
+        let currentIndex = max(flow.steps.firstIndex(where: { $0.id == stepId }) ?? 0, 0)
+        let data = (action["data"]?.objectValue ?? [:]).mapValues { $0.foundation }
+
+        // An `action_dispatch` fixture is about the DISPATCH: a submitted form whose `data` carries an
+        // auth `action` (reset_password, login, …) is what the host receives through `onNext`. A
+        // `step_advance` fixture asserts only the advance machine — the dispatch already happened
+        // before its hook fired.
+        if f.category == "action_dispatch", data["action"] is String {
+            recordActionEmission(data, h)
+        }
+
         guard let hook = action["hook_result"]?.objectValue else {
-            return XCTFail("[\(f.id)] submit_form fixture has no hook_result — no iOS driver.")
+            return XCTFail("[\(f.id)] submit_form fixture has no hook_result — the SDK's advance path needs a StepAdvanceResult.")
         }
         guard let result = stepAdvanceResult(from: hook) else {
             return XCTFail("[\(f.id)] hook_result.kind='\(hook["kind"]?.stringValue ?? "?")' is not a StepAdvanceResult case.")
         }
 
-        let name = StepAdvanceResultNaming.name(result)
-        var props: [String: Any] = ["result": name, "step_id": stepId, "hook_type": "client"]
-        if case let .skipTo(target) = result { props["target_step_id"] = target }
-        if case let .skipToWithData(target, _) = result { props["target_step_id"] = target }
-        h.tracker.track(event: "onboarding_hook_completed", properties: props)
-
-        failForMissingStepAdvanceStateMachine(f, result: name)
+        // The submitted step data is already in `responses[stepId]` by the time the hook returns —
+        // `onNext(data)` writes it before onBeforeStepAdvance is awaited. Hook-merged data lands on top
+        // of it, which is exactly what OnboardingAdvance.mergeData is being asked to prove.
+        var responses = sessionResponses(f)
+        if !data.isEmpty, !stepId.isEmpty { responses[stepId] = data }
+        applyAdvance(f, h, flow: flow, currentIndex: currentIndex,
+                     responses: responses, result: result, hookRan: true)
     }
 
     // MARK: - Driver: fire_hook
     //
     // REAL: WebhookResponseParser.parse(_:errorText:) — the server `action` discriminator → the
-    // StepAdvanceResult case, and which error text wins. This is the parser
-    // `OnboardingFlowHost.parseWebhookResponse` calls.
+    // StepAdvanceResult case — then the REAL OnboardingAdvance machine.
 
     private func runFireHook(_ f: Fixture, _ h: Harness) {
+        guard let flow = onboardingFlow(f) else {
+            return XCTFail("[\(f.id)] setup.config does not decode as an OnboardingFlowConfig with steps")
+        }
         let action = f.action.raw
+        let hookName = action["hook"]?.stringValue ?? ""
+        guard hookName == "onBeforeStepAdvance" else {
+            return XCTFail("[\(f.id)] no iOS driver for hook='\(hookName)'.")
+        }
         let stepId = action["step_id"]?.stringValue ?? ""
+        let currentIndex = max(flow.steps.firstIndex(where: { $0.id == stepId }) ?? 0, 0)
+
         guard let response = action["webhook_response"]?.objectValue,
               let body = response["body"] else {
             return XCTFail("[\(f.id)] fire_hook fixture has no webhook_response.body.")
@@ -602,37 +879,9 @@ final class SharedFixtureTests: XCTestCase {
             return XCTFail("[\(f.id)] webhook_response.body is not serializable JSON.")
         }
 
-        let result = WebhookResponseParser.parse(data, errorText: errorText)
-        let name = StepAdvanceResultNaming.name(result)
-
-        h.tracker.track(event: "onboarding_hook_completed", properties: [
-            "result": name,
-            "step_id": stepId,
-            "hook_type": "server",
-        ])
-        h.state["current_step_id"] = stepId // the hook has not advanced anyone yet
-
-        failForMissingStepAdvanceStateMachine(f, result: name)
-    }
-
-    /// The one seam this runner is missing, stated once. `state_after` on every step-advance fixture
-    /// describes what the SDK DOES with a `StepAdvanceResult` — advance, show the success banner, show
-    /// the error banner, merge responses, jump to a step. All of it lives in
-    /// `OnboardingFlowHost.handleHookResult` and friends: private methods on a SwiftUI view, mutating
-    /// private @State. There is no seam, and writing one here would be the mirror this file exists to
-    /// delete.
-    private func failForMissingStepAdvanceStateMachine(_ f: Fixture, result: String) {
-        guard let expected = f.expect.state_after?.objectValue, !expected.isEmpty else { return }
-        XCTFail("""
-        [\(f.id)] the `onboarding_hook_completed` event IS driven by real SDK code (result='\(result)'
-        from StepAdvanceResultNaming), but `state_after` (\(expected.keys.sorted().joined(separator: ", ")))
-        cannot be: applying a StepAdvanceResult — advance / success banner / error banner / responses
-        merge / skipTo — happens in OnboardingFlowHost.handleHookResult, a private method on a SwiftUI
-        view mutating private @State (currentIndex, responses, showSuccess, showError).
-        GAP → extract it into a pure `StepAdvanceStateMachine` the view calls (the same mechanical move
-        made for WebhookResponseParser / StepConfigOverrideMerger / PaywallTriggerSkipResolver) and this
-        assertion becomes real. Until then this runner refuses to fake it.
-        """)
+        let result = WebhookResponseParser.parse(data, errorText: errorText)   // REAL
+        applyAdvance(f, h, flow: flow, currentIndex: currentIndex,
+                     responses: sessionResponses(f), result: result, hookRan: true)
     }
 
     /// Build the REAL SDK enum from the fixture's hook_result.
@@ -847,13 +1096,21 @@ final class SharedFixtureTests: XCTestCase {
                 """)
             }
             let errorType = billingErrorType(error) // REAL
-            h.tracker.track(event: "purchase_failed", properties: [
-                "paywall_id": paywallId,
-                "product_id": productId,
-                "error": error.localizedDescription,
-                "error_type": errorType,
-            ])
-            delegate.onPaywallPurchaseFailed(paywallId: paywallId, error: error, errorType: errorType)
+            // REAL: PurchaseFailedProps.build — the exact prop map PaywallManager ships (:281).
+            h.tracker.track(event: "purchase_failed", properties: PurchaseFailedProps.build(
+                paywallId: paywallId,
+                productId: productId,
+                error: error,
+                errorType: errorType
+            ))
+            // The 4-arg delegate is the one the SDK calls (PaywallManager:290). `productId` answers
+            // "WHICH plan failed" — a paywall selling two plans could not tell the host before.
+            delegate.onPaywallPurchaseFailed(
+                paywallId: paywallId,
+                error: error,
+                errorType: errorType,
+                productId: productId
+            )
             h.state["is_presenting_paywall"] = true
 
         default:
@@ -997,7 +1254,7 @@ final class SharedFixtureTests: XCTestCase {
     // REAL: parseMeasurementConfig(_:) + measurementToBase + measurementSnapshot — the exact chain
     // MeasurementWheelBlockView.pick() runs (view line 549-576).
 
-    private func runPickMeasurement(_ f: Fixture, _ h: Harness) {
+    private func runPickMeasurement(_ f: Fixture, _ h: Harness) async {
         let action = f.action.raw
         guard let fieldId = action["field_id"]?.stringValue,
               let displayValue = action["display_value"]?.doubleValue,
@@ -1029,19 +1286,21 @@ final class SharedFixtureTests: XCTestCase {
         )
         for (key, value) in snapshot.inputValues { h.state[key] = value }
 
-        XCTFail("""
-        [\(f.id)] `state_after` IS driven by real SDK code (parseMeasurementConfig → measurementToBase →
-        measurementSnapshot), but the expected `onElementInteraction` delegate call DOES NOT HAPPEN on
-        iOS. MeasurementWheelBlockView.writeSnapshot() derives the payload and then throws it away:
-
-            _ = snap.payload   // MeasurementWheelBlockView.swift:575
-
-        with the comment "the live host-fire wiring is a shared STEP-2 across all EPIC-11 elements
-        (deferred)". So no host ever receives a measurement interaction from a device. That is a real
-        SDK gap, not a test gap: wire writeSnapshot() into the onboarding host's `performInteraction`
-        (fireElementInteraction) — or drop the delegate_call from this fixture. This runner will not
-        record a delegate call the SDK never makes.
-        """)
+        // The commit path: the wheel hands (blockId, action, value) + the freshly-written inputValues
+        // to the step scope, which awaits the host through the REAL `fireElementInteraction`. The
+        // delegate below is invoked BY the SDK — the runner does not call it. (Until SPEC-070-B the
+        // wheel did `_ = snap.payload` and threw the commit away, so no host on any device ever
+        // received a measurement interaction.)
+        _ = await fireElementInteraction(
+            delegate: OnboardingDelegateSpy(harness: h, fieldId: fieldId),
+            flowId: f.setup.config?.objectValue?["id"]?.stringValue ?? "fixture_flow",
+            stepId: f.setup.config?.objectValue?["id"]?.stringValue ?? "fixture_step",
+            blockId: block.id,
+            action: measurementInteractionAction,                  // REAL
+            value: measurementInteractionValue(snapshot),          // REAL
+            inputValues: snapshot.inputValues,
+            overrides: [:]
+        )
     }
 
     // MARK: - Driver: fetch_remote_config (DTO round-trips)
@@ -1055,17 +1314,23 @@ final class SharedFixtureTests: XCTestCase {
         }
         let path = f.action.raw["config_path"]?.stringValue ?? ""
 
+        // REAL: BillingProvider.fromWire / .toWire — the wrapper-channel wire format (a tagged map for
+        // the one case with an associated value, bare strings for the rest). iOS gained it in
+        // SPEC-070-B; before that an Adapty key handed to a wrapper had nowhere to go.
         if path.hasPrefix("options/billing_provider") {
-            XCTFail("""
-            [\(f.id)] NOT DRIVABLE ON iOS — `BillingProvider` is a plain Swift enum
-            (Configuration.swift:23) with NO Codable conformance and no tagged-map encoding anywhere in
-            the SDK: on iOS the provider is set in code (`AppDNAOptions.billingProvider`), never parsed
-            from a config document. There is nothing to assert a lossless
-            {"type":"adapty","apiKey":"…"} round-trip against.
-            DECIDE: either add Codable to BillingProvider (encoding adapty as the tagged map and the
-            value-less cases as bare strings, which is what the Flutter/RN channel already expects), or
-            drop 'ios' from this fixture's platforms.
-            """)
+            let provider = BillingProvider.fromWire(config["billing_provider"]?.foundation)
+            h.state["parse_succeeded"] = (provider != nil)
+            h.state["parsed_billing_provider_type"] = SharedFixtureTests.orNull(provider?.type)
+            h.state["parsed_billing_provider_api_key"] = SharedFixtureTests.orNull(provider?.apiKey)
+
+            let reencoded = provider?.toWire() as? [String: Any]
+            h.state["reencoded_billing_provider_type"] = SharedFixtureTests.orNull(reencoded?["type"])
+            h.state["reencoded_billing_provider_api_key"] = SharedFixtureTests.orNull(reencoded?["apiKey"])
+
+            for bare in (config["billing_provider_bare_cases"]?.arrayValue ?? []) {
+                guard let name = bare.stringValue else { continue }
+                h.state["parsed_bare_\(name)"] = SharedFixtureTests.orNull(BillingProvider.fromWire(name)?.type)
+            }
             return
         }
 
@@ -1101,10 +1366,11 @@ final class SharedFixtureTests: XCTestCase {
             h.state["parsed_post_purchase_success_confetti"] = SharedFixtureTests.orNull(paywall.post_purchase?.on_success?.confetti)
             h.state["parsed_post_purchase_failure_action"] = SharedFixtureTests.orNull(paywall.post_purchase?.on_failure?.action)
             h.state["parsed_post_purchase_failure_allow_dismiss"] = SharedFixtureTests.orNull(paywall.post_purchase?.on_failure?.allow_dismiss)
-            // NOTE: iOS `PaywallConfig` has no top-level `reviews` and no `cta_style` (its CTA model is
-            // `cta`). If the fixture asserts `parsed_reviews_count` / `parsed_cta_corner_radius` the
-            // assertion phase fails them with "no real SDK value produced" — the honest signal that the
-            // fixture describes fields this SDK's model does not carry.
+            // Reviews live INSIDE a section's data (`PaywallSectionData.reviews`), and the CTA's corner
+            // radius comes off the real `cta` model's resolver — both are console-published shapes, both
+            // are read from the SDK's decoded object, neither is a top-level field.
+            h.state["parsed_reviews_count"] = paywall.sections.reduce(0) { $0 + ($1.data?.reviews?.count ?? 0) }
+            h.state["parsed_cta_corner_radius"] = SharedFixtureTests.orNull(paywall.cta?.resolvedCornerRadius)
             return
         }
 

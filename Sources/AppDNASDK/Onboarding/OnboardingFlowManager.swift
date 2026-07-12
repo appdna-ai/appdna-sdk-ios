@@ -101,15 +101,18 @@ final class OnboardingFlowManager {
             },
             onFlowCompleted: { [weak self] responses in
                 let durationMs = Int(Date().timeIntervalSince(startTime) * 1000)
-                self?.eventTracker.track(event: "onboarding_flow_completed", properties: [
-                    "flow_id": flow.id,
-                    "total_steps": flow.steps.count,
-                    "total_duration_ms": durationMs,
-                    "responses": responses,
-                ])
-                // SPEC-088: Persist onboarding responses for cross-module access
-                SessionDataStore.shared.setOnboardingResponses(responses)
-                delegate?.onOnboardingCompleted(flowId: flow.id, responses: responses)
+                // SPEC-070-B: the completion contract (event name, props, track → persist → delegate
+                // ordering) lives in `OnboardingCompletion` so it is reachable — and provable —
+                // without a UIViewController. This closure used to BE the contract, which meant the
+                // funnel's denominator had no test seam at all.
+                OnboardingCompletion.complete(
+                    flowId: flow.id,
+                    totalSteps: flow.steps.count,
+                    durationMs: durationMs,
+                    responses: responses,
+                    track: { name, props in self?.eventTracker.track(event: name, properties: props) },
+                    delegate: delegate
+                )
                 viewController.dismiss(animated: true)
             },
             onFlowDismissed: { [weak self] lastStepId, lastStepIndex in

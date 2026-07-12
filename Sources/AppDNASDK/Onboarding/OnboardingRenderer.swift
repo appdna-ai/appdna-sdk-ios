@@ -1430,13 +1430,24 @@ struct OnboardingStepRouter: View {
                 data[key] = value
             }
             onNext(data)
-        case "permission":
-            // SPEC-421: Fire the real OS permission prompt (async), capture grant/deny safely,
-            // emit analytics + delegate hooks, store the result for next-step routing, then advance.
-            // Type source of truth = the step's `layout.permission_type` (the only console-authorable
-            // path). If absent/unsupported the pipeline emits `permission_unavailable` + advances.
-            let permissionType = effectiveConfig.permission_type ?? (effectiveConfig.layout?["permission_type"]?.value as? String) ?? ""
-            runPermissionPipeline(permissionType)
+        case permissionActionName:
+            // SPEC-421 + SPEC-070-B: resolve the type (config → layout → the BUTTON'S OWN value, which
+            // this used to ignore), tell the host the permission CTA was acted on (every other CTA
+            // does; this one never did), and only then decide.
+            //   • supported type  → the real OS pipeline owns the advance (it must wait for the OS).
+            //   • unsupported/blank → `emitPermissionAction` has already emitted, and that emission IS
+            //     the advance, so a typo'd permission can never dead-end the flow on an inert button.
+            let permissionDecision = emitPermissionAction(
+                configType: effectiveConfig.permission_type,
+                layoutType: effectiveConfig.layout?["permission_type"]?.value as? String,
+                actionValue: actionValue,
+                toggleValues: toggleValues,
+                inputValues: inputValues,
+                onNext: { onNext($0) }
+            )
+            if case .runPipeline(let permissionType) = permissionDecision {
+                runPermissionPipeline(permissionType)
+            }
 
         // MARK: Auth actions (entry)
         case "login", "register", "reset_password", "magic_link",

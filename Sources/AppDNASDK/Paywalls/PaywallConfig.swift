@@ -486,6 +486,52 @@ struct PaywallPlan: Codable, Identifiable {
         case trialDuration = "trial_duration"
         case isDefault = "is_default"
     }
+
+    /// Hand-written so a NUMERIC `price` cannot destroy the whole paywall.
+    ///
+    /// `price` / `price_display` are display strings here, but a paywall document is not always
+    /// written by the console: experiment variant payloads, older documents and any non-console
+    /// publisher can carry `"price": 49.99` as a JSON number. `PaywallConfig` is decoded
+    /// all-or-nothing (`RemoteConfigManager.decodeTypedConfig` → `JSONDecoder.decode`), so ONE
+    /// type-mismatched scalar in ONE plan threw, the whole document decoded to `nil`, and the paywall
+    /// silently never rendered. Android's map-based parser has always shrugged this off. Coerce the
+    /// scalar instead of discarding the paywall; every other field keeps its strict type.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self._id = try c.decodeIfPresent(String.self, forKey: ._id)
+        self.productId = try c.decodeIfPresent(String.self, forKey: .productId)
+        self.name = try c.decodeIfPresent(String.self, forKey: .name)
+        self.label = try c.decodeIfPresent(String.self, forKey: .label)
+        self.price = PaywallPlan.looseString(c, .price)
+        self.price_display = PaywallPlan.looseString(c, .price_display)
+        self.period = try c.decodeIfPresent(String.self, forKey: .period)
+        self.badge = try c.decodeIfPresent(String.self, forKey: .badge)
+        self.trialDuration = PaywallPlan.looseString(c, .trialDuration)
+        self.trial = try c.decodeIfPresent(PaywallPlanTrial.self, forKey: .trial)
+        self.isDefault = try c.decodeIfPresent(Bool.self, forKey: .isDefault)
+        self.sort_order = try c.decodeIfPresent(Int.self, forKey: .sort_order)
+        self.description = try c.decodeIfPresent(String.self, forKey: .description)
+        self.features = try c.decodeIfPresent([String].self, forKey: .features)
+        self.savings_text = try c.decodeIfPresent(String.self, forKey: .savings_text)
+        self.cta_text = try c.decodeIfPresent(String.self, forKey: .cta_text)
+        self.icon = try c.decodeIfPresent(String.self, forKey: .icon)
+        self.image_url = try c.decodeIfPresent(String.self, forKey: .image_url)
+    }
+
+    /// A JSON string, or a number rendered as one. Nil when absent (never throws — the caller has
+    /// already decided that a stringly-typed field is not worth a paywall for).
+    private static func looseString(
+        _ c: KeyedDecodingContainer<CodingKeys>,
+        _ key: CodingKeys
+    ) -> String? {
+        if let s = try? c.decodeIfPresent(String.self, forKey: key) { return s }
+        if let d = try? c.decodeIfPresent(Double.self, forKey: key) {
+            if d == d.rounded(), abs(d) < 1e15 { return String(Int64(d)) }
+            return String(d)
+        }
+        if let b = try? c.decodeIfPresent(Bool.self, forKey: key) { return b ? "true" : "false" }
+        return nil
+    }
 }
 
 struct PaywallCTAStyle: Codable {
