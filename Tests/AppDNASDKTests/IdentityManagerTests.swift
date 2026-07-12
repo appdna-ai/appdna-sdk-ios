@@ -1,15 +1,55 @@
 import XCTest
 @testable import AppDNASDK
 
+/// An in-memory `KeychainStoring`. Same contract, no environment.
+///
+/// 🔴 It replaces a real `KeychainStore(service:)` whose two persistence tests were guarded by
+///
+///     try XCTSkipIf(keychainStore.getString(key: "anon_id") == nil, "Keychain not available")
+///
+/// THE SKIP CONDITION WAS THE BUG IT WAS TESTING FOR. `getString` returns nil in exactly two cases:
+/// the runner has no keychain entitlements (the normal SwiftPM-simulator CI path), or **the SDK
+/// failed to persist `anon_id`** — the defect. The test could not tell them apart, so on the failure
+/// it was written to catch it printed a skip and the suite went green. Both persistence tests were
+/// dormant on every CI run we have ever done.
+///
+/// An injected store has no entitlements to lack. Nothing can be "unavailable", so nothing is
+/// skipped, and `testAnonIdPersistedToKeychain` now fails when persistence is broken — which is all
+/// it was ever supposed to do.
+private final class InMemoryKeychainStore: KeychainStoring {
+    private var anonId: String?
+    private var userId: String?
+    private var traits: [String: Any]?
+
+    /// Reads/writes seen — so a test can assert the manager actually WROTE, not merely cached in RAM.
+    private(set) var setAnonIdCallCount = 0
+
+    func getAnonId() -> String? { anonId }
+    func setAnonId(_ id: String) {
+        anonId = id
+        setAnonIdCallCount += 1
+    }
+
+    func getUserId() -> String? { userId }
+    func setUserId(_ id: String) { userId = id }
+    func clearUserId() { userId = nil }
+
+    func getUserTraits() -> [String: Any]? { traits }
+    func setUserTraits(_ traits: [String: Any]) { self.traits = traits }
+    func clearUserTraits() { traits = nil }
+}
+
 final class IdentityManagerTests: XCTestCase {
 
-    private var keychainStore: KeychainStore!
+    private var keychainStore: InMemoryKeychainStore!
     private var manager: IdentityManager!
 
     override func setUp() {
         super.setUp()
-        // Use a test-specific keychain service to avoid polluting real data
-        keychainStore = KeychainStore(service: "ai.appdna.sdk.test.\(UUID().uuidString)")
+        // Deterministic on every runner, entitlements or not. A second IdentityManager built over the
+        // SAME store is exactly what "relaunch the app" means to this class — that is what the
+        // persistence tests below exercise, and they can no longer opt out of doing so.
+        keychainStore = InMemoryKeychainStore()
         manager = IdentityManager(keychainStore: keychainStore)
     }
 
@@ -25,14 +65,20 @@ final class IdentityManagerTests: XCTestCase {
         XCTAssertNotNil(UUID(uuidString: identity.anonId))
     }
 
-    func testAnonIdPersistedToKeychain() throws {
+    func testAnonIdPersistedToKeychain() {
         let anonId = manager.currentIdentity.anonId
-        // Skip on CI where Keychain entitlements are unavailable
-        let readBack = keychainStore.getString(key: "anon_id")
-        try XCTSkipIf(readBack == nil, "Keychain not available (CI without entitlements)")
-        // Create new manager with same keychain — should load same ID
+
+        // It was WRITTEN — not merely held in the manager's memory.
+        XCTAssertEqual(keychainStore.getAnonId(), anonId)
+
+        // And it SURVIVES: a second manager over the same store (i.e. the next app launch) loads the
+        // same id rather than minting a new one. A new id here means every returning user looks like
+        // a new install — the exact failure the old XCTSkipIf swallowed.
         let manager2 = IdentityManager(keychainStore: keychainStore)
         XCTAssertEqual(manager2.currentIdentity.anonId, anonId)
+
+        // And it does not re-write on load: one mint, ever.
+        XCTAssertEqual(keychainStore.setAnonIdCallCount, 1)
     }
 
     func testAnonIdStableAcrossMultipleAccesses() {
@@ -57,13 +103,15 @@ final class IdentityManagerTests: XCTestCase {
         XCTAssertEqual(traits?["age"] as? Int, 25)
     }
 
-    func testIdentifyPersistsToKeychain() throws {
+    func testIdentifyPersistsToKeychain() {
         manager.identify(userId: "user_456", traits: ["name": "Test"])
-        // Skip on CI where Keychain entitlements are unavailable
-        let readBack = keychainStore.getString(key: "anon_id")
-        try XCTSkipIf(readBack == nil, "Keychain not available (CI without entitlements)")
+
+        XCTAssertEqual(keychainStore.getUserId(), "user_456")
+
+        // Survives the relaunch — both the id and the traits.
         let manager2 = IdentityManager(keychainStore: keychainStore)
         XCTAssertEqual(manager2.currentIdentity.userId, "user_456")
+        XCTAssertEqual(manager2.currentIdentity.traits?["name"] as? String, "Test")
     }
 
     func testIdentifyOverwritesPrevious() {

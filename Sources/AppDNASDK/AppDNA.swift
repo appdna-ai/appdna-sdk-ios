@@ -836,6 +836,7 @@ public final class AppDNA: @unchecked Sendable {
                 h(entitlement)
             }
         }
+        return token
     }
 
     /// Remove a handler registered by `onWebEntitlementChanged`. Removing the last one also tears

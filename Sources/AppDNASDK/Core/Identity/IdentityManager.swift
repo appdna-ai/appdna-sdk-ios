@@ -11,7 +11,9 @@ struct DeviceIdentity {
 /// Thread-safe via serial dispatch queue.
 final class IdentityManager {
     private let queue = DispatchQueue(label: "ai.appdna.sdk.identity")
-    private let keychainStore: KeychainStore
+    /// `KeychainStoring`, not `KeychainStore`: the tests inject an in-memory double so the
+    /// persistence assertions are deterministic instead of skipped. See `KeychainStore.swift`.
+    private let keychainStore: KeychainStoring
 
     // Weak reference set after initialization
     weak var sessionManager: SessionManager?
@@ -26,7 +28,7 @@ final class IdentityManager {
         }
     }
 
-    init(keychainStore: KeychainStore) {
+    init(keychainStore: KeychainStoring) {
         self.keychainStore = keychainStore
 
         // Load or generate anonymous ID
