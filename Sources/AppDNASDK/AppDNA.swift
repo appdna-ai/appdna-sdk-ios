@@ -32,8 +32,8 @@ public final class AppDNA: @unchecked Sendable {
 
     /// Observer token for web entitlement changes (registered at most once).
     private static var webEntitlementObserverToken: NSObjectProtocol?
-    /// Callbacks registered via `onWebEntitlementChanged`.
-    private static var webEntitlementChangeHandlers: [(WebEntitlement?) -> Void] = []
+    /// Callbacks registered via `onWebEntitlementChanged`, keyed by their removal token.
+    private static var webEntitlementChangeHandlers: [UUID: (WebEntitlement?) -> Void] = [:]
 
     // SPEC-428 CL-10/D7: bounded pre-init buffer at the STATIC facade — captures track() calls made
     // before configure() (when `shared.eventTracker` is still nil, so they'd otherwise no-op at the
@@ -812,21 +812,35 @@ public final class AppDNA: @unchecked Sendable {
 
     /// Register a callback for when the web entitlement changes.
     /// Only one NotificationCenter observer is registered; all handlers are dispatched from it.
-    public static func onWebEntitlementChanged(_ handler: @escaping (WebEntitlement?) -> Void) {
-        webEntitlementChangeHandlers.append(handler)
+    /// - Returns: a token for `removeWebEntitlementChangedHandler`. Discardable, so existing native
+    ///   call sites keep compiling unchanged; a WRAPPER must keep it, because a wrapper re-registers
+    ///   on every `configure()` and this list only ever grew.
+    @discardableResult
+    public static func onWebEntitlementChanged(_ handler: @escaping (WebEntitlement?) -> Void) -> UUID {
+        let token = UUID()
+        webEntitlementChangeHandlers[token] = handler
 
         // Register the observer only once (first handler registration)
-        guard webEntitlementObserverToken == nil else { return }
+        guard webEntitlementObserverToken == nil else { return token }
         webEntitlementObserverToken = NotificationCenter.default.addObserver(
             forName: .webEntitlementChanged,
             object: nil,
             queue: .main
         ) { notification in
             let entitlement = notification.object as? WebEntitlement
-            for h in webEntitlementChangeHandlers {
+            for h in webEntitlementChangeHandlers.values {
                 h(entitlement)
             }
         }
+    }
+
+    /// Remove a handler registered by `onWebEntitlementChanged`. Removing the last one also tears
+    /// down the NotificationCenter observer, so nothing is retained after a wrapper invalidates.
+    public static func removeWebEntitlementChangedHandler(_ token: UUID) {
+        webEntitlementChangeHandlers.removeValue(forKey: token)
+        guard webEntitlementChangeHandlers.isEmpty, let observer = webEntitlementObserverToken else { return }
+        NotificationCenter.default.removeObserver(observer)
+        webEntitlementObserverToken = nil
     }
 
     // MARK: - Public API: Deferred Deep Links (v0.3)
@@ -1542,6 +1556,13 @@ public final class AppDNA: @unchecked Sendable {
                 webEntitlementObserverToken = nil
             }
             webEntitlementChangeHandlers.removeAll()
+
+            // …and the STORE-entitlement handlers, which this method plainly meant to do and did not.
+            // They live on the process-global `billing` module and survived shutdown, so a wrapper
+            // re-registering on the next `configure()` ended up with two live handlers and delivered
+            // every subsequent entitlement change twice. Android is safe because `shutdown()` nulls
+            // the billing manager, taking its listeners with it — this is the iOS equivalent.
+            billing.removeAllEntitlementsChangedHandlers()
 
             Log.info("AppDNA SDK shut down")
         }

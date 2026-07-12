@@ -229,6 +229,24 @@ extension AppDNA {
             }
         }
 
+        /// Drop EVERY entitlements handler and the backing observer.
+        ///
+        /// Called from `AppDNA.shutdown()`, which already does exactly this for the web-entitlement
+        /// handlers. Without it, `shutdown()` left the entitlement handlers of the previous run
+        /// attached to the process-global singleton: a wrapper that re-registers on `configure()`
+        /// then had TWO live handlers, and every entitlement change — every purchase, every restore —
+        /// was delivered twice. After N shutdown→configure cycles, N duplicate grants.
+        public func removeAllEntitlementsChangedHandlers() {
+            entitlementHandlerLock.lock()
+            entitlementChangeHandlers.removeAll()
+            let observer = entitlementObserverToken
+            entitlementObserverToken = nil
+            entitlementHandlerLock.unlock()
+            if let observer {
+                NotificationCenter.default.removeObserver(observer)
+            }
+        }
+
         /// Set a delegate to receive billing lifecycle callbacks.
         public func setDelegate(_ delegate: AppDNABillingDelegate?) {
             AppDNA.billingDelegate = delegate
