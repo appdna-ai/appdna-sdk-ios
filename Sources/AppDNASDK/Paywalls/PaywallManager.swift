@@ -280,12 +280,31 @@ final class PaywallManager {
                 // locale. `error_type` is the stable discriminator that lets analytics separate a user
                 // cancel from a real failure, and lets a host retry only what is retryable.
                 let errorType = billingErrorType(error)
-                eventTracker.track(event: "purchase_failed", properties: PurchaseFailedProps.build(
-                    paywallId: paywallId,
-                    productId: plan.productId,
-                    error: error,
-                    errorType: errorType
-                ))
+                // A user closing the App Store sheet is NOT a failure, and a Ask-to-Buy / SCA purchase
+                // waiting for approval is not one either. Android has always split these into their own
+                // events; on iOS the ONLY code that emitted them lived in the never-instantiated
+                // `Billing/NativeBillingManager`, so the live path folded both into `purchase_failed` —
+                // inflating the iOS failure rate with every cancel, and losing pending purchases
+                // entirely. (`delegate_contracts/purchase_cancel_is_not_a_failure` pins this.)
+                switch errorType {
+                case "userCancelled":
+                    eventTracker.track(event: "purchase_canceled", properties: [
+                        "paywall_id": paywallId,
+                        "product_id": plan.productId ?? "",
+                    ])
+                case "purchasePending":
+                    eventTracker.track(event: "purchase_pending", properties: [
+                        "paywall_id": paywallId,
+                        "product_id": plan.productId ?? "",
+                    ])
+                default:
+                    eventTracker.track(event: "purchase_failed", properties: PurchaseFailedProps.build(
+                        paywallId: paywallId,
+                        productId: plan.productId,
+                        error: error,
+                        errorType: errorType
+                    ))
+                }
                 DispatchQueue.main.async { [weak self] in
                     delegate?.onPaywallPurchaseFailed(
                         paywallId: paywallId,

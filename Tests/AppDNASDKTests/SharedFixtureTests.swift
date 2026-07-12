@@ -1779,6 +1779,18 @@ final class SharedFixtureTests: XCTestCase {
         case .openAppSettings:      return ("open_app_settings", nil)
         case .submitForm:           return ("submit_form", nil)
         case .track(let event, _):  return ("track", event)
+        // Flow-level verbs (SectionAction parity with Android's sealed class). No fixture dispatches
+        // one today; these arms exist because the switch must stay exhaustive. Spellings are the
+        // snake_case the fixtures speak, matching the action strings Android's FlowManager routes.
+        case .restart:              return ("restart", nil)
+        case .complete:             return ("complete", nil)
+        case .setResponse(let key, _): return ("set_response", key)
+        case .presentPaywall(let id):  return ("present_paywall", id)
+        case .dismissPaywall:       return ("dismiss_paywall", nil)
+        case .showMessage(let id):  return ("show_message", id)
+        case .setUserProperty(let key, _): return ("set_user_property", key)
+        case .purchase(let productId):     return ("purchase", productId)
+        case .restore:              return ("restore", nil)
         }
     }
 

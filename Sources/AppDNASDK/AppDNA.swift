@@ -267,6 +267,10 @@ public final class AppDNA: @unchecked Sendable {
     private var experimentManager: ExperimentManager?
     private var paywallManager: PaywallManager?
     private var billingBridge: BillingBridgeProtocol?
+    /// Emits `subscription_renewed` / `subscription_canceled` / `subscription_renewal_failed` on the
+    /// LIVE StoreKit 2 path. Without it, iOS emitted no subscription-lifecycle event at all and every
+    /// renewal was invisible to analytics. See `Billing/SubscriptionStatusObserver.swift`.
+    private var subscriptionObserver: SubscriptionStatusObserver?
     private var onboardingFlowManager: OnboardingFlowManager?
     private var messageManager: MessageManager?
     private var pendingMessageListener: PendingMessageListener?
@@ -1264,6 +1268,16 @@ public final class AppDNA: @unchecked Sendable {
             self.billingBridge = nil
         }
 
+        // 4b. Subscription lifecycle. StoreKit is the ONLY place a renewal is observable on-device, and
+        // nothing on the live path was listening — so `subscription_renewed` / `_canceled` /
+        // `_renewal_failed` never fired on iOS, while Android emitted all three. Attached to the native
+        // StoreKit 2 path (the RevenueCat / Adapty bridges own their own event emission).
+        if self.billingBridge is StoreKit2Bridge {
+            let observer = SubscriptionStatusObserver(eventTracker: tracker)
+            self.subscriptionObserver = observer
+            observer.start()
+        }
+
         // 5. Initialize push token manager (v0.2 + v0.4 SPEC-030: backend registration)
         self.pushTokenManager = PushTokenManager(keychainStore: keychainStore, eventTracker: tracker, apiClient: client)
         AppDNA.pushModule.manager = self.pushTokenManager
@@ -1539,6 +1553,10 @@ public final class AppDNA: @unchecked Sendable {
             shared.eventQueue?.flush()
             shared.eventQueue = nil
             shared.eventTracker = nil
+            // The `Transaction.updates` listener is a long-lived Task holding the tracker we just
+            // released. Cancel it, or a re-configure()d SDK ends up with two live listeners.
+            shared.subscriptionObserver?.stop()
+            shared.subscriptionObserver = nil
             shared.sessionManager = nil
             shared.apiClient = nil
             shared.isConfigured = false

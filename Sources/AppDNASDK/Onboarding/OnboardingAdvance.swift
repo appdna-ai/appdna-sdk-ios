@@ -17,10 +17,16 @@ import Foundation
 /// must perform (image-preloading navigation, history push, analytics, flow completion, paywall
 /// presentation) are DESCRIBED by the returned ``Outcome`` instead of performed.
 ///
-/// KNOWN divergence from Android, preserved deliberately (this is a behaviour-preserving extraction,
-/// not a merge): iOS does not emit Android's `onboarding_flow_completed_via_fallback` event, and iOS
-/// does not carry Android's `permission` / `screen` / `sub_flow` graph-node completion markers — iOS
-/// routes those elsewhere. iOS also pushes navigation history inside `navigate(to:)` (after the
+/// The two "known divergences" this doc comment used to claim were BUGS, and both are fixed:
+///   * "iOS does not carry Android's `permission` / `screen` / `sub_flow` graph-node completion
+///     markers — iOS routes those elsewhere" — iOS routed them NOWHERE. A rule targeting one of those
+///     graph nodes fell through to the next rule and then to plain sequential advance: the node was
+///     skipped with no log, no event, no error. iOS now emits the same marker sentinels Android does.
+///   * "iOS does not emit Android's `onboarding_flow_completed_via_fallback` event" — the event is
+///     actually named `flow_completed_via_fallback` (Android `NextStepRuleEvaluator.kt:293`), and iOS
+///     now emits it, so ETL can tell an authored completion from a misconfigured one on both platforms.
+///
+/// Remaining (real) divergence: iOS pushes navigation history inside `navigate(to:)` (after the
 /// decision), so the outcome carries no `historyPush` list; `previousStepId` is passed IN instead.
 enum OnboardingAdvance {
 
@@ -76,6 +82,27 @@ enum OnboardingAdvance {
     /// place. `from_step_id` is omitted (not null) when the leaving step can't be resolved, matching
     /// Android's `buildMap` + `fromStepId?.let`.
     static let stepSkippedEvent = "step_skipped"
+
+    /// Fired when the LAST step carries `next_step_rules` and NONE of them matched — a rule-failure
+    /// bailout, not a natural end. Without it, ETL cannot tell an authored completion from a
+    /// misconfigured one.
+    ///
+    /// Pinned to Android's `FLOW_COMPLETED_VIA_FALLBACK_EVENT`
+    /// (`onboarding/NextStepRuleEvaluator.kt:293`) — the name is `flow_completed_via_fallback`, NOT
+    /// the `onboarding_`-prefixed spelling this file's own doc comment used to claim. Props are
+    /// Android's, from `OnboardingAdvance.kt:274-283`: `{flow_id, step_id, step_index}`.
+    static let flowCompletedViaFallbackEvent = "flow_completed_via_fallback"
+
+    /// Completion-payload sentinels for graph nodes the SDK cannot execute itself — the host (or the
+    /// paywall bridge) reads them off the completion `responses` and acts. Keys are Android's,
+    /// verbatim, from `onboarding/OnboardingAdvance.kt:231-236`.
+    ///
+    /// The VALUE is the node id with its routing prefix stripped, exactly as Android's
+    /// `classifyRuleTarget` (`NextStepRuleEvaluator.kt:300-302`) strips it: `permission_camera` →
+    /// `camera`, `screen_paywall_intro` → `paywall_intro`, `flow_upsell` → `upsell`.
+    static let permissionRequestMarker = "__permission_request"
+    static let screenPresentMarker = "__screen_present"
+    static let subFlowMarker = "__sub_flow"
 
     // MARK: - Hook result
 
@@ -184,6 +211,16 @@ enum OnboardingAdvance {
             Outcome(navigation: nav, responses: responses, events: events)
         }
 
+        /// Complete the flow with a graph-node sentinel folded into the completion payload. Mirrors
+        /// Android's `completeWithMarker` (`OnboardingAdvance.kt:184-188`): the marker rides in the
+        /// COMPLETION responses only — `Outcome.responses` (what the host writes back into flow state)
+        /// never carries it.
+        func completeWithMarker(_ key: String, _ value: String) -> Outcome {
+            var merged = responses
+            merged[key] = value
+            return outcome(.completeFlow(responses: merged))
+        }
+
         guard let currentStep = step(flow, currentIndex) else {
             // Out of range — the host never calls this way, but completing beats trapping.
             return outcome(.completeFlow(responses: responses))
@@ -206,6 +243,8 @@ enum OnboardingAdvance {
                 ) else { continue }
 
                 let target = rule.target_step_id
+                // A blank target routes nowhere — try the next rule (Android `RuleTarget.Empty`).
+                if target.isEmpty { continue }
                 // Route by graph-node TYPE (short ids like `paywall1` carry no prefix) and by the
                 // legacy ID prefix, so both forms route.
                 let nodeType = graphNodeType(for: target, flow: flow)
@@ -233,10 +272,43 @@ enum OnboardingAdvance {
                     return outcome(.completeFlow(responses: responses))
                 }
 
+                // permission / screen / sub-flow graph nodes: the SDK cannot execute them, so hand
+                // them to the host in the completion payload. These three fell through to plain
+                // sequential advance before — the node was skipped in silence. Prefix-only routing,
+                // matching Android `classifyRuleTarget` (NextStepRuleEvaluator.kt:300-302), whose
+                // short-id upgrade covers analytics_event / paywall_trigger / end only.
+                if target.hasPrefix("permission_") {
+                    return completeWithMarker(
+                        permissionRequestMarker, String(target.dropFirst("permission_".count))
+                    )
+                }
+                if target.hasPrefix("screen_") {
+                    return completeWithMarker(
+                        screenPresentMarker, String(target.dropFirst("screen_".count))
+                    )
+                }
+                if target.hasPrefix("flow_") {
+                    return completeWithMarker(
+                        subFlowMarker, String(target.dropFirst("flow_".count))
+                    )
+                }
+
                 if let targetIndex = flow.steps.firstIndex(where: { $0.id == target }) {
                     return outcome(.goToIndex(targetIndex))
                 }
                 // Unresolvable target — fall through to the next rule (unchanged).
+            }
+
+            // No rule matched. On the LAST step that is a rule-failure bailout, not a natural end —
+            // emit the distinguishing event so ETL can tell them apart (Android
+            // `OnboardingAdvance.kt:273-285`).
+            if currentIndex >= flow.steps.count - 1 {
+                events.append(TrackedEvent(name: flowCompletedViaFallbackEvent, props: [
+                    "flow_id": flow.id,
+                    "step_id": flow.steps.last?.id ?? "",
+                    "step_index": max(flow.steps.count - 1, 0),
+                ]))
+                return outcome(.completeFlow(responses: responses))
             }
         }
 
