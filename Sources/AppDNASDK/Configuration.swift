@@ -56,11 +56,17 @@ public enum BillingProvider: Sendable, Codable, Equatable {
     /// than having one silently chosen for it. Mirrors Android `BillingProvider.fromWire`.
     public static func fromWire(_ value: Any?) -> BillingProvider? {
         if let provider = value as? BillingProvider { return provider }
+        // `BillingProvider.none`, spelled out. A bare `.none` in a `BillingProvider?` return position
+        // resolves to `Optional.none` — i.e. NIL — so `fromWire("none")` reported "unparseable" for the
+        // one provider value that explicitly says "this app does no billing". The compiler warned
+        // ("assuming you mean 'Optional<BillingProvider>.none'"); `BillingProviderWireTests` did not
+        // catch it because `XCTAssertEqual(fromWire("none"), .none)` collapses to `nil == nil` and
+        // passes vacuously. The shared fixture, which asserts the STRING "none", is what caught it.
         if let string = value as? String {
             switch string {
             case "storeKit2": return .storeKit2
             case "revenueCat": return .revenueCat
-            case "none": return .none
+            case "none": return BillingProvider.none
             default: return nil
             }
         }
@@ -72,7 +78,7 @@ public enum BillingProvider: Sendable, Codable, Equatable {
                 return .adapty(apiKey: apiKey)
             case "storeKit2": return .storeKit2
             case "revenueCat": return .revenueCat
-            case "none": return .none
+            case "none": return BillingProvider.none
             default: return nil
             }
         }

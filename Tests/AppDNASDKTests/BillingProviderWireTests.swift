@@ -28,7 +28,11 @@ final class BillingProviderWireTests: XCTestCase {
     func testBareStringsDecodeToTheValuelessCases() {
         XCTAssertEqual(BillingProvider.fromWire("storeKit2"), BillingProvider.storeKit2)
         XCTAssertEqual(BillingProvider.fromWire("revenueCat"), BillingProvider.revenueCat)
-        XCTAssertEqual(BillingProvider.fromWire("none"), BillingProvider.none)
+        // Asserted through `.type`, NOT `XCTAssertEqual(fromWire("none"), .none)`: in a
+        // `BillingProvider?` position `.none` means `Optional.none`, so that comparison collapses to
+        // `nil == nil` and passed for months while `fromWire("none")` actually returned nil.
+        XCTAssertEqual(BillingProvider.fromWire("none")?.type, "none")
+        XCTAssertNotNil(BillingProvider.fromWire("none"))
     }
 
     /// A bare "adapty" carries no key, so it cannot be honored. Returning nil lets the caller choose

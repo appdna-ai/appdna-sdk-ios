@@ -1593,15 +1593,27 @@ final class SharedFixtureTests: XCTestCase {
         pushTokenManager(h).trackTapped(pushId: payload.pushId)             // REAL push_tapped
         AppDNA.pushDelegate?.onPushTapped(notification: payload, actionId: nil)
 
-        // The body action routes. NOTE what the SDK actually does here:
-        // PushNotificationHandler.didReceive auto-routes ONLY `show_screen` actions
-        // (`AppDNA.showScreen(routed.value)`); a `deep_link` action is handed to the host and nothing
-        // else. And DeepLinksModule.handleURL emits NO event — Android's does
-        // (`AppDNA.track("deep_link_handled", …)`, AppDNAModules.kt:676). So a fixture expecting a
-        // `deep_link_handled` event on iOS is pointing at a REAL parity gap, and it will fail here.
-        if let action = payload.action, action.type == "deep_link", let url = URL(string: action.value) {
-            AppDNA.deepLinks.handleURL(url)                                  // REAL onDeepLinkReceived
+        // The body action routes. `DeepLinksModule.handleURL` is the REAL dispatch: it fires
+        // `onDeepLinkReceived` on the host delegate AND emits `deep_link_handled` {url} — which iOS
+        // never did before SPEC-070-B, so every deep-link-attributed session was invisible in iOS
+        // analytics while Android counted it. `trackEvent` is the module's analytics seam (AppDNA.track
+        // needs a fully configured SDK); the event name and props are the SDK's own, via
+        // DeepLinkAnalytics.
+        guard let action = payload.action, action.type == "deep_link", let url = URL(string: action.value) else {
+            return
         }
+        let previousSink = AppDNA.deepLinks.trackEvent
+        AppDNA.deepLinks.trackEvent = { name, props in h.tracker.track(event: name, properties: props) }
+        defer { AppDNA.deepLinks.trackEvent = previousSink }
+
+        AppDNA.deepLinks.handleURL(url)                                      // REAL
+
+        // The route the host navigates to — derived from the URL the SDK parsed out of the push.
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let path = (components?.path ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        h.state["current_route"] = [components?.host, path.isEmpty ? nil : path]
+            .compactMap { $0 }
+            .joined(separator: "/")
     }
 
     private func pushTokenManager(_ h: Harness) -> PushTokenManager {
