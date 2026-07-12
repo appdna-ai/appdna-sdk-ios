@@ -10,6 +10,15 @@ import Adapty
 ///
 /// Requires Adapty SDK to be available (conditionally imported).
 /// If Adapty is not linked, this bridge logs a warning and returns empty results.
+///
+/// **Subscription lifecycle** (`subscription_renewed` / `_canceled` / `_renewal_failed`) is NOT emitted
+/// here — it is emitted by `SubscriptionStatusObserver`, which now runs under this provider too, in
+/// `.providerOwned` mode (Adapty owns transaction finishing, so the observer must not drain
+/// `Transaction.updates`). The observer reconciles at start, on every app foreground, and whenever this
+/// bridge nudges it below. Adapty renewals that happen while the app is backgrounded are therefore
+/// caught on the next foreground rather than in real time — the honest limit of not binding to
+/// `AdaptyDelegate` here.
+
 final class AdaptyBridge: BillingBridgeProtocol {
     private let apiKey: String
     private weak var eventTracker: EventTracker?
@@ -75,6 +84,11 @@ final class AdaptyBridge: BillingBridgeProtocol {
             await MainActor.run {
                 AppDNA.billingDelegate?.onPurchaseCompleted(productId: productId, transaction: txInfo)
             }
+            // Adapty's subscriber state just moved. Reconcile so the observer's snapshot records the new
+            // subscription immediately — otherwise the FIRST post-purchase reconcile would see a product
+            // that is new to it, and a product new to the snapshot is (correctly) not a renewal, but the
+            // snapshot would only be written at the next foreground.
+            AppDNA.reconcileSubscriptionState()
             return purchaseResult
         } catch {
             eventTracker?.track(event: "purchase_failed", properties: [
@@ -115,6 +129,9 @@ final class AdaptyBridge: BillingBridgeProtocol {
         await MainActor.run {
             AppDNA.billingDelegate?.onRestoreCompleted(restoredProducts: ids)
         }
+        // A restore can surface subscriptions this install has never seen. Reconcile so the snapshot
+        // records them as PRESENT rather than treating the next pass's sighting as a state change.
+        AppDNA.reconcileSubscriptionState()
         return ids
         #else
         // Even when Adapty is not linked we still surface the empty

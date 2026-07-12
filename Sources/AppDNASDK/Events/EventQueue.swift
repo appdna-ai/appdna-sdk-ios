@@ -31,14 +31,27 @@ final class EventQueue {
     private let eventStore: EventStore
     private let baseBatchSize: Int
     private let flushInterval: TimeInterval
-    private let maxRetries = 3
-    private let retryDelays: [TimeInterval] = [1, 2, 4]
+    /// SPEC-070-B AC-35 (`backoff_bounded_and_jittered`) — the retry schedule is a STATIC seam, so the
+    /// shared resilience fixture can assert the same three numbers against iOS and Android. As
+    /// instance-private `let`s they were unreachable from a test, and the two platforms' schedules
+    /// could drift with nothing to notice: bounded backoff is only bounded if somebody checks the
+    /// bound. Mirrors Android `EventQueue.MAX_RETRIES` / `RETRY_DELAYS_MS`.
+    static let maxRetries = 3
+    static let retryBaseDelays: [TimeInterval] = [1, 2, 4]
+
+    private let maxRetries = EventQueue.maxRetries
+    private let retryDelays: [TimeInterval] = EventQueue.retryBaseDelays
+
+    /// The jitter fraction applied to every backoff delay. Mirrors Android `EventQueue.JITTER_PCT`.
+    /// A named constant, not a literal inside `jittered`, so the shared `backoff_bounded_and_jittered`
+    /// fixture can assert that the two platforms spread by the SAME amount.
+    static let jitterFraction = 0.25
 
     /// Applies ±25% full jitter to a backoff delay, matching Android's
     /// `EventQueue.kt`. Without it, every client throttled by the same 429 retries
     /// on the identical wall clock and stampedes the server again.
     static func jittered(_ base: TimeInterval) -> TimeInterval {
-        let spread = base * 0.25
+        let spread = base * jitterFraction
         return max(0, base + TimeInterval.random(in: -spread...spread))
     }
     // SPEC-428 CL-2/D5: client redelivery horizon — never re-send an event older than this (past the

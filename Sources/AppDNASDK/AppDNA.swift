@@ -272,9 +272,10 @@ public final class AppDNA: @unchecked Sendable {
     private var experimentManager: ExperimentManager?
     private var paywallManager: PaywallManager?
     private var billingBridge: BillingBridgeProtocol?
-    /// Emits `subscription_renewed` / `subscription_canceled` / `subscription_renewal_failed` on the
-    /// LIVE StoreKit 2 path. Without it, iOS emitted no subscription-lifecycle event at all and every
-    /// renewal was invisible to analytics. See `Billing/SubscriptionStatusObserver.swift`.
+    /// Emits `subscription_renewed` / `subscription_canceled` / `subscription_renewal_failed` — the ONLY
+    /// emitter of those three in the whole SDK, under EVERY billing provider (the RevenueCat and Adapty
+    /// bridges emit purchase events only). Without it, iOS emitted no subscription-lifecycle event at all
+    /// and every renewal was invisible to analytics. See `Billing/SubscriptionStatusObserver.swift`.
     private var subscriptionObserver: SubscriptionStatusObserver?
     private var onboardingFlowManager: OnboardingFlowManager?
     private var messageManager: MessageManager?
@@ -1276,10 +1277,24 @@ public final class AppDNA: @unchecked Sendable {
 
         // 4b. Subscription lifecycle. StoreKit is the ONLY place a renewal is observable on-device, and
         // nothing on the live path was listening — so `subscription_renewed` / `_canceled` /
-        // `_renewal_failed` never fired on iOS, while Android emitted all three. Attached to the native
-        // StoreKit 2 path (the RevenueCat / Adapty bridges own their own event emission).
-        if self.billingBridge is StoreKit2Bridge {
-            let observer = SubscriptionStatusObserver(eventTracker: tracker)
+        // `_renewal_failed` never fired on iOS, while Android emitted all three.
+        //
+        // 🔴 This used to run ONLY for `StoreKit2Bridge`, under a comment claiming "the RevenueCat /
+        // Adapty bridges own their own event emission". They do not: grep this module — this observer is
+        // the ONLY emitter of the three subscription-lifecycle events, and both bridges emit purchase
+        // events only. So a host on `.revenueCat` or `.adapty` still produced exactly one MTPU event per
+        // subscriber, ever. The undercount had been narrowed to the default provider, not fixed.
+        //
+        // The observer therefore runs under EVERY provider. What differs is who finishes transactions:
+        // under `.providerOwned` it never drains `Transaction.updates` (see `SubscriptionObserverMode`),
+        // and is instead nudged by the provider's own subscriber-state callback plus app-foreground.
+        //
+        // Keyed off the bridge that was actually built, not off `options.billingProvider`: a host that
+        // asks for `.revenueCat` without linking RevenueCat falls back to `StoreKit2Bridge` above, and
+        // that fallback DOES own transaction finishing.
+        if let bridge = self.billingBridge {
+            let mode: SubscriptionObserverMode = bridge is StoreKit2Bridge ? .storeKitOwned : .providerOwned
+            let observer = SubscriptionStatusObserver(eventTracker: tracker, mode: mode)
             self.subscriptionObserver = observer
             observer.start()
         }
@@ -1548,6 +1563,22 @@ public final class AppDNA: @unchecked Sendable {
     }
 
     // MARK: - Helpers
+
+    /// A third-party billing provider (RevenueCat / Adapty) reports that the subscriber's state moved.
+    ///
+    /// Under `.providerOwned` the subscription observer does not watch `Transaction.updates` — the
+    /// provider owns transaction finishing — so this is how a renewal is noticed without waiting for the
+    /// next app foreground. The pass is serialized inside the observer, so this is safe to call from any
+    /// thread, as often as the provider fires: a redundant call re-reads the same entitlements, diffs
+    /// them against the snapshot it just wrote, and emits nothing.
+    internal static func reconcileSubscriptionState() {
+        // Hopped onto the SDK queue, like every other cross-thread read of a manager the configure path
+        // writes: a provider callback arrives on the provider's own thread, and `subscriptionObserver`
+        // is assigned during `configure()`.
+        shared.queue.async {
+            shared.subscriptionObserver?.reconcileNow()
+        }
+    }
 
     // MARK: - Lifecycle
 

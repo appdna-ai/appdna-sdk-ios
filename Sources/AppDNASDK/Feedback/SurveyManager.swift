@@ -147,7 +147,7 @@ final class SurveyManager {
                 self.frequencyTracker.recordDisplay(surveyId: surveyId)
                 self.trackSurveyCompleted(surveyId: surveyId, config: config, answers: answers)
                 self.submitResponse(surveyId: surveyId, config: config, answers: answers)
-                self.executeFollowUpAction(config: config, answers: answers)
+                self.executeFollowUpAction(surveyId: surveyId, config: config, answers: answers)
                 // SPEC-400 — fire onSurveyCompleted with the responses
                 // mapped to the public `[SurveyResponse]` shape.
                 let responses = answers.map { SurveyResponse(questionId: $0.question_id, answer: $0.answer) }
@@ -209,20 +209,66 @@ final class SurveyManager {
 
     // MARK: - Follow-up actions
 
-    private func executeFollowUpAction(config: SurveyConfig, answers: [SurveyAnswer]) {
+    /// Survey follow-up actions.
+    ///
+    /// 🔴 This was half a feature. `.positive` fired ONLY for `prompt_review`, `.negative` ONLY for
+    /// `show_feedback_form`, and `.neutral` was a bare `break` — `actions.on_neutral` (declared at
+    /// SurveyConfig.swift:265, authorable in the console) was never read by any line of iOS code.
+    /// `trigger_winback` — which the console offers as a first-class choice for detractors
+    /// (`src/modules/feedback-loop/entities/Survey.ts:107`) — did LITERALLY NOTHING on iOS while
+    /// Android fired it. And iOS emitted no follow-up analytics at all, so the whole
+    /// `survey_followup_*` funnel was an Android-only dataset.
+    ///
+    /// Now mirrors Android `feedback/SurveyManager.kt:299-343` exactly: sentiment (including
+    /// neutral) selects the action; the action string routes to prompt_review / show_feedback_form /
+    /// trigger_winback / dismiss; and each fires the same event name with the same property keys.
+    /// `internal`, not `private`: the follow-up dispatch had NO test seam at all, which is how half
+    /// of it (neutral, trigger_winback, every follow-up event) stayed unimplemented on iOS while
+    /// Android shipped it.
+    internal func executeFollowUpAction(surveyId: String, config: SurveyConfig, answers: [SurveyAnswer]) {
         let sentiment = determineSentiment(config: config, answers: answers)
         guard let actions = config.follow_up_actions else { return }
 
+        let followUp: FollowUpAction?
         switch sentiment {
-        case .positive:
-            if actions.on_positive?.action == "prompt_review" {
-                ReviewPromptManager.shared.triggerReview()
-            }
-        case .negative:
-            if actions.on_negative?.action == "show_feedback_form" {
-                presentFeedbackForm(message: actions.on_negative?.message)
-            }
-        case .neutral:
+        case .positive: followUp = actions.on_positive
+        case .negative: followUp = actions.on_negative
+        case .neutral: followUp = actions.on_neutral
+        }
+        guard let followUp else { return }
+
+        // Android sends `sentiment.name.lowercase()` — "positive" / "negative" / "neutral".
+        let sentimentName = sentiment.analyticsName
+
+        switch followUp.action ?? "" {
+        case "prompt_review":
+            // Native review prompt first; the event lets the host handle the case where the OS
+            // suppressed it (Android SurveyManager.kt:311-318).
+            ReviewPromptManager.shared.triggerReview()
+            eventTracker.track(event: surveyFollowUpReviewEvent, properties: [
+                "survey_id": surveyId,
+                "sentiment": sentimentName,
+            ])
+
+        case "show_feedback_form":
+            presentFeedbackForm(message: followUp.message)
+            eventTracker.track(event: surveyFollowUpFeedbackFormEvent, properties: [
+                "survey_id": surveyId,
+                "sentiment": sentimentName,
+            ])
+
+        case "trigger_winback":
+            // The SDK signals; the host launches the winback campaign (Android SurveyManager.kt:329-336).
+            eventTracker.track(event: surveyFollowUpWinbackEvent, properties: [
+                "survey_id": surveyId,
+                "sentiment": sentimentName,
+                "message": followUp.message ?? "",
+            ])
+
+        case "dismiss":
+            break
+
+        default:
             break
         }
     }
@@ -351,3 +397,13 @@ final class SurveyManager {
         return max(0, Int(elapsed / 86400))
     }
 }
+
+// MARK: - Survey follow-up events
+
+/// The three analytics signals a survey follow-up raises. Names + property keys are Android's,
+/// verbatim, from `feedback/SurveyManager.kt:316/325/331`. Constants rather than literals at the
+/// call sites so a rename has to happen in one place — `scripts/check-event-name-parity.ts` resolves
+/// constants, so these still count as iOS emits for the parity gate.
+internal let surveyFollowUpReviewEvent = "survey_followup_prompt_review"
+internal let surveyFollowUpFeedbackFormEvent = "survey_followup_feedback_form"
+internal let surveyFollowUpWinbackEvent = "survey_followup_winback"

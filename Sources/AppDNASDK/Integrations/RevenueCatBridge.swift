@@ -117,6 +117,17 @@ extension RevenueCatBridge: PurchasesDelegate {
                 "entitlements": activeEntitlements,
             ])
         }
+
+        // 🔴 Subscription LIFECYCLE. RC's own listener is the right trigger — RC owns transaction
+        // finishing, so `SubscriptionStatusObserver` runs in `.providerOwned` mode and never drains
+        // `Transaction.updates`. This is the only callback RC gives us when subscriber state moves
+        // (renewal, expiry, cross-device sync), and it is deliberately fired even when the entitlement
+        // set is EMPTY: an expiry — the whole point of `subscription_canceled` /
+        // `subscription_renewal_failed` — arrives exactly as an empty `active`.
+        //
+        // The observer diffs against its persisted snapshot, so a `receivedUpdated` that changed nothing
+        // (RC fires it on restore and on cross-device sync too) emits nothing.
+        AppDNA.reconcileSubscriptionState()
     }
 }
 

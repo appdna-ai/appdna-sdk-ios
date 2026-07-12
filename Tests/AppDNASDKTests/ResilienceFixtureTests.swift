@@ -9,9 +9,19 @@ import XCTest
  `events` — the category is native-only and iOS + Android assert the SAME fixture table.
 
  Each `contract` maps to a PURE seam, which is why this is a table test rather than an HTTP mock:
-   - transient_status → `APIClient.transientStatusCodes`  (Android: ApiClient.TRANSIENT_STATUS_CODES)
-   - retry_after      → `APIClient.parseRetryAfter`       (Android: ApiClient.parseRetryAfter)
-   - stale_horizon    → `EventStore.isStale`              (Android: EventDatabase.isStale)
+   - transient_status  → `APIClient.transientStatusCodes`  (Android: ApiClient.TRANSIENT_STATUS_CODES)
+   - retry_after       → `APIClient.parseRetryAfter`       (Android: ApiClient.parseRetryAfter)
+   - stale_horizon     → `EventStore.isStale`              (Android: EventDatabase.isStale)
+   - permanent_failure → `APIClient.disposition(for:)` + `APIClient.applyEventUploadStatus`
+                                                           (Android: ApiClient.dispositionFor)
+   - backoff           → `EventQueue.jittered` / `.retryBaseDelays` / `.maxRetries`
+                                                           (Android: EventQueue.jittered / RETRY_DELAYS_MS / MAX_RETRIES)
+
+ `permanent_failure` is the one that matters most, and it is the one that did not exist. W1 was a LIVE
+ iOS defect: a single 429 latched `eventUploadPermanentlyFailed` and halted every event upload until
+ the app restarted. No test asserted the flag, because no test could — it only moved inside an async
+ method doing a real URLSession round trip. Extracting `applyEventUploadStatus` makes the latch
+ drivable without a network, and the fixture now pins it: after a 429, that flag reads FALSE.
 
  A fixture whose `contract` this runner does not know FAILS. It is never skipped — a silently skipped
  resilience fixture is the coverage theater AC-35 exists to remove.
@@ -38,9 +48,10 @@ final class ResilienceFixtureTests: XCTestCase {
         let seconds: Int?
         let age_ms: Int64?
         let stale: Bool?
+        let disposition: String?
 
         private enum CodingKeys: String, CodingKey {
-            case status, transient, header, seconds, age_ms, stale
+            case status, transient, header, seconds, age_ms, stale, disposition
         }
 
         init(from decoder: Decoder) throws {
@@ -49,6 +60,7 @@ final class ResilienceFixtureTests: XCTestCase {
             transient = try c.decodeIfPresent(Bool.self, forKey: .transient)
             age_ms = try c.decodeIfPresent(Int64.self, forKey: .age_ms)
             stale = try c.decodeIfPresent(Bool.self, forKey: .stale)
+            disposition = try c.decodeIfPresent(String.self, forKey: .disposition)
 
             // Plain statements, not a `&&` inside a ternary: `decodeNil` throws, and Swift will not
             // let a throwing call sit inside a short-circuit operand.
@@ -62,10 +74,26 @@ final class ResilienceFixtureTests: XCTestCase {
         }
     }
 
+    /// One step of the `permanent_failure` latch sequence. ORDER is the assertion.
+    private struct LatchStep: Decodable {
+        let status: Int
+        let permanently_failed: Bool
+    }
+
     private struct Resilience: Decodable {
         let contract: String
         let horizon_ms: Int64?
-        let cases: [Case]
+        /// Optional: `backoff` asserts a DISTRIBUTION and carries no case table.
+        let cases: [Case]?
+        // contract=backoff
+        let max_retries: Int?
+        let base_delays_ms: [Int]?
+        let jitter_pct: Double?
+        let samples: Int?
+        let min_distinct_samples: Int?
+        let max_total_backoff_ms: Int?
+        // contract=permanent_failure
+        let latch: [LatchStep]?
     }
 
     private struct Fixture: Decodable {
@@ -86,7 +114,7 @@ final class ResilienceFixtureTests: XCTestCase {
 
             switch f.resilience.contract {
             case "transient_status":
-                for c in f.resilience.cases {
+                for c in try requireCases(f) {
                     guard let status = c.status, let expected = c.transient else {
                         return XCTFail("[\(f.id)] transient_status case needs `status` and `transient`")
                     }
@@ -97,7 +125,7 @@ final class ResilienceFixtureTests: XCTestCase {
                 }
 
             case "retry_after":
-                for c in f.resilience.cases {
+                for c in try requireCases(f) {
                     guard c.headerPresent, c.secondsPresent else {
                         return XCTFail("[\(f.id)] retry_after case must state both `header` and `seconds` (null is a value, not an omission)")
                     }
@@ -116,7 +144,7 @@ final class ResilienceFixtureTests: XCTestCase {
                 }
                 // A fixed `now` keeps the table exact: age is what varies, not the wall clock.
                 let now: Int64 = 1_800_000_000_000
-                for c in f.resilience.cases {
+                for c in try requireCases(f) {
                     guard let ageMs = c.age_ms, let expected = c.stale else {
                         return XCTFail("[\(f.id)] stale_horizon case needs `age_ms` and `stale`")
                     }
@@ -126,6 +154,100 @@ final class ResilienceFixtureTests: XCTestCase {
                     )
                 }
 
+            // AC-35 — the full three-way classification AND the real latch.
+            //
+            // 🔴 This is the fixture that would have caught the live defect. `eventUploadPermanentlyFailed`
+            // is what a 429 used to set, and setting it halted EVERY event upload for the rest of the
+            // process. Nothing asserted the flag — not because nobody thought to, but because nobody
+            // COULD: it only ever moved inside `sendEvents`, an async method that performs a real
+            // URLSession round trip. `applyEventUploadStatus` is that method's body, extracted; driving
+            // it here drives the same flag the network path drives, with no network.
+            case "permanent_failure":
+                for c in try requireCases(f) {
+                    guard let status = c.status, let want = c.disposition else {
+                        return XCTFail("[\(f.id)] permanent_failure case needs `status` and `disposition`")
+                    }
+                    let actual: String
+                    switch APIClient.disposition(for: status) {
+                    case .success: actual = "success"
+                    case .retryTransient: actual = "retry_transient"
+                    case .dropPermanent: actual = "drop_permanent"
+                    }
+                    XCTAssertEqual(actual, want, "[\(f.id)] HTTP \(status) disposition")
+                }
+
+                guard let latch = f.resilience.latch else {
+                    return XCTFail("[\(f.id)] permanent_failure must state a `latch` sequence — the 429 defect WAS the latch")
+                }
+                // ONE client across the whole sequence: the latch is stateful, and "a 429 does not
+                // clear a latch a 401 set" is only sayable as a sequence.
+                let client = APIClient(apiKey: "adn_test_placeholder", environment: .sandbox)
+                XCTAssertFalse(
+                    client.eventUploadPermanentlyFailed,
+                    "[\(f.id)] a fresh client must not start latched"
+                )
+                for step in latch {
+                    client.applyEventUploadStatus(step.status, retryAfterHeader: nil)
+                    XCTAssertEqual(
+                        client.eventUploadPermanentlyFailed, step.permanently_failed,
+                        "[\(f.id)] after HTTP \(step.status), eventUploadPermanentlyFailed"
+                    )
+                }
+
+            // AC-35 — bounded AND jittered. Both halves, because each hides the other's failure: a
+            // `return base` regression satisfies every bound, and an unbounded jitter is still
+            // "jittered". Drives the real `EventQueue.jittered`, not a copy of its arithmetic.
+            case "backoff":
+                guard let maxRetries = f.resilience.max_retries,
+                      let bases = f.resilience.base_delays_ms,
+                      let jitterPct = f.resilience.jitter_pct,
+                      let samples = f.resilience.samples,
+                      let minDistinct = f.resilience.min_distinct_samples,
+                      let maxTotal = f.resilience.max_total_backoff_ms
+                else {
+                    return XCTFail("[\(f.id)] backoff needs max_retries, base_delays_ms, jitter_pct, samples, min_distinct_samples, max_total_backoff_ms")
+                }
+
+                XCTAssertEqual(EventQueue.maxRetries, maxRetries, "[\(f.id)] retry count")
+                XCTAssertEqual(EventQueue.jitterFraction, jitterPct, accuracy: 1e-9, "[\(f.id)] jitter fraction")
+                // The fixture states the schedule in MILLIseconds; iOS holds it in seconds.
+                XCTAssertEqual(
+                    EventQueue.retryBaseDelays.map { Int(($0 * 1000).rounded()) }, bases,
+                    "[\(f.id)] base backoff schedule"
+                )
+
+                for baseMs in bases {
+                    let base = TimeInterval(baseMs) / 1000
+                    let lo = base * (1 - jitterPct)
+                    let hi = base * (1 + jitterPct)
+                    var seen = Set<TimeInterval>()
+                    for _ in 0..<samples {
+                        let d = EventQueue.jittered(base)
+                        XCTAssertTrue(
+                            d >= lo && d <= hi,
+                            "[\(f.id)] jittered(\(base)) = \(d) escaped [\(lo), \(hi)] — the backoff is not bounded"
+                        )
+                        XCTAssertTrue(d >= 0, "[\(f.id)] jittered(\(base)) = \(d) is negative")
+                        seen.insert(d)
+                    }
+                    XCTAssertGreaterThanOrEqual(
+                        seen.count, minDistinct,
+                        "[\(f.id)] jittered(\(base)) produced only \(seen.count) distinct value(s) over \(samples) samples — the jitter is not being applied, and a throttled fleet will retry in lockstep"
+                    )
+                }
+
+                // "Bounded" is a claim about the TOTAL, not about one delay: MAX_RETRIES retries, each
+                // at its worst-case jittered ceiling.
+                var worstCaseTotalMs = 0.0
+                for attempt in 1...maxRetries {
+                    let baseMs = Double(bases[min(attempt - 1, bases.count - 1)])
+                    worstCaseTotalMs += baseMs * (1 + jitterPct)
+                }
+                XCTAssertLessThanOrEqual(
+                    Int(worstCaseTotalMs), maxTotal,
+                    "[\(f.id)] worst-case total backoff \(Int(worstCaseTotalMs))ms exceeds the \(maxTotal)ms bound"
+                )
+
             default:
                 XCTFail("[\(f.id)] unknown resilience contract '\(f.resilience.contract)' — this runner must assert it, never skip it")
             }
@@ -134,9 +256,20 @@ final class ResilienceFixtureTests: XCTestCase {
         // Every contract the schema defines must actually be exercised, or a fixture could be deleted
         // and this suite would still go green on the survivors.
         XCTAssertEqual(
-            seenContracts, ["transient_status", "retry_after", "stale_horizon"],
+            seenContracts,
+            ["transient_status", "retry_after", "stale_horizon", "permanent_failure", "backoff"],
             "every resilience contract must be covered by a fixture"
         )
+    }
+
+    /// The three table contracts require a case table; `backoff` does not carry one. A fixture that
+    /// omits it is malformed, never skipped.
+    private func requireCases(_ f: Fixture) throws -> [Case] {
+        guard let cases = f.resilience.cases, !cases.isEmpty else {
+            XCTFail("[\(f.id)] contract '\(f.resilience.contract)' requires a non-empty `cases` table")
+            return []
+        }
+        return cases
     }
 
     private func loadResilienceFixtures() throws -> [Fixture] {

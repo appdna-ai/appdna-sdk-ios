@@ -54,25 +54,38 @@ internal class ScreenPresenter {
         }
     }
 
+    /// 🔴 THIS PRESENTED THE FIRST SCREEN AND NEVER MOVED.
+    ///
+    /// It read `flowManager.currentScreen` ONCE, built a `SectionContext` from that snapshot, and handed
+    /// the resulting `ScreenRenderer` to `present(config:context:)`. So `handleAction` advanced
+    /// `currentScreenIndex` — and nothing re-rendered. A multi-screen flow showed screen 1 forever and
+    /// "Next" was a dead button.
+    ///
+    /// `FlowManager` was an `ObservableObject` with `@Published var currentScreenIndex` the whole time.
+    /// The observability existed; the view simply never observed it. `FlowHostView` does.
     static func presentFlow(
         flowManager: FlowManager,
         from viewController: UIViewController? = nil,
         onDismiss: (() -> Void)? = nil
     ) {
-        guard let screenConfig = flowManager.currentScreen else { return }
+        guard flowManager.currentScreen != nil else { return }
 
-        let context = SectionContext(
-            screenId: flowManager.currentScreenId ?? "",
-            flowId: flowManager.flowConfig.id,
-            responses: flowManager.responses,
-            onAction: { [weak flowManager] action in
-                flowManager?.handleAction(action)
-            },
-            currentScreenIndex: flowManager.currentScreenIndex,
-            totalScreens: flowManager.flowConfig.screens?.count ?? 0
-        )
+        let host = FlowHostView(flowManager: flowManager)
+        let hostingController = ScreenHostingController(rootView: AnyView(host), onDismiss: onDismiss)
 
-        present(config: screenConfig, context: context, from: viewController, onDismiss: onDismiss)
+        // The flow's presentation style comes from its FIRST screen, as before.
+        switch flowManager.currentScreen?.presentation ?? "modal" {
+        case "fullscreen":
+            hostingController.modalPresentationStyle = .fullScreen
+            hostingController.modalTransitionStyle = transitionStyle(flowManager.currentScreen?.transition)
+        case "bottom_sheet":
+            hostingController.modalPresentationStyle = .pageSheet
+        default:
+            hostingController.modalPresentationStyle = .pageSheet
+        }
+
+        guard let presenter = viewController ?? AppDNA.topViewController() else { return }
+        presenter.present(hostingController, animated: true)
     }
 
     private static func transitionStyle(_ transition: String?) -> UIModalTransitionStyle {
@@ -122,5 +135,36 @@ extension UIApplication {
             top = presented
         }
         return top
+    }
+}
+
+
+/// Re-renders whenever the flow advances. See `ScreenPresenter.presentFlow`.
+private struct FlowHostView: View {
+    @ObservedObject var flowManager: FlowManager
+
+    var body: some View {
+        if let config = flowManager.currentScreen {
+            ScreenRenderer(
+                config: config,
+                context: ScreenContextHolder(
+                    context: SectionContext(
+                        screenId: flowManager.currentScreenId ?? "",
+                        flowId: flowManager.flowConfig.id,
+                        responses: flowManager.responses,
+                        onAction: { [weak flowManager] action in
+                            flowManager?.handleAction(action)
+                        },
+                        currentScreenIndex: flowManager.currentScreenIndex,
+                        totalScreens: flowManager.flowConfig.screens?.count ?? 0
+                    )
+                )
+            )
+            // The screen id keys the identity, so SwiftUI tears down the old screen's state instead of
+            // reusing it for the next one — otherwise a text field's contents would bleed across screens.
+            .id(flowManager.currentScreenId ?? "\(flowManager.currentScreenIndex)")
+        } else {
+            EmptyView()
+        }
     }
 }

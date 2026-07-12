@@ -533,13 +533,6 @@ struct OnboardingFlowHost: View {
     }
 
     private func handleStepCompleted(step: OnboardingStep, data: [String: Any]?) {
-        if let data {
-            responses[step.id] = data
-        }
-        // SPEC-087: Persist responses incrementally so TemplateEngine has fresh data for next step
-        SessionDataStore.shared.setOnboardingResponses(responses)
-        onStepCompleted(step.id, currentIndex, data)
-
         // Auth-style actions require a delegate to perform the side effect
         // (sign in, register, send OTP, etc.) before the user advances past
         // the credential-collection step. Without a delegate the SDK has
@@ -547,6 +540,29 @@ struct OnboardingFlowHost: View {
         // logs a warning rather than silently advancing.
         let actionString = (data?["action"] as? String) ?? ""
         let requiresDelegate = AuthActionPolicy.delegateRequiredActions.contains(actionString)
+        let hasServerHook = (step.hook?.enabled == true)
+
+        // 🔴 THE BLOCKED PATH RUNS FIRST, AND RUNS NOTHING ELSE.
+        //
+        // This gate used to sit at the BOTTOM of the method, so a credential tap with no delegate
+        // still (1) wrote the credentials into `responses`, (2) PERSISTED them to SessionDataStore,
+        // and (3) fired `onStepCompleted` — whose closure emits `onboarding_step_completed`
+        // (OnboardingFlowManager.swift:86). The step did not complete: it refused to advance. So
+        // iOS's step-completion counts and onboarding funnel conversion were inflated by every
+        // misconfigured auth tap, and the credentials the gate exists to contain were written to
+        // disk anyway. Nothing is emitted or stored now — the user sees the toast, and that is all.
+        if requiresDelegate && delegate == nil && !hasServerHook {
+            Log.warning("[Onboarding] '\(actionString)' action received but no delegate is set. Implement AppDNAOnboardingDelegate to handle the action.")
+            showErrorToast("Sign-in isn't available right now. Please try again later.")
+            return
+        }
+
+        if let data {
+            responses[step.id] = data
+        }
+        // SPEC-087: Persist responses incrementally so TemplateEngine has fresh data for next step
+        SessionDataStore.shared.setOnboardingResponses(responses)
+        onStepCompleted(step.id, currentIndex, data)
 
         // SPEC-083: Determine hook type — client delegate takes priority over server hook
         if delegate != nil {
@@ -557,13 +573,9 @@ struct OnboardingFlowHost: View {
         } else if let hook = step.hook, hook.enabled == true {
             // Server-side hook (P1)
             executeServerHook(step: step, data: data, hookConfig: hook)
-        } else if requiresDelegate {
-            // Auth/account action without a delegate: do NOT auto-advance — the SDK has nowhere to
-            // route the credentials and advancing would skip authentication entirely. But SAY SO.
-            Log.warning("[Onboarding] '\(actionString)' action received but no delegate is set. Implement AppDNAOnboardingDelegate to handle the action.")
-            showErrorToast("Sign-in isn't available right now. Please try again later.")
         } else {
-            // No hook — advance immediately
+            // No hook — advance immediately. (The auth-action-without-delegate case can no longer
+            // reach here: it returned at the top, before anything was emitted or stored.)
             advanceOrComplete()
         }
     }

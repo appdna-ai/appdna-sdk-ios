@@ -186,38 +186,80 @@ final class APIClient {
 
             let (responseData, response) = try await session.data(for: urlRequest)
             guard let httpResponse = response as? HTTPURLResponse else { return false }
-            let statusCode = httpResponse.statusCode
-            if (200..<300).contains(statusCode) {
-                eventUploadPermanentlyFailed = false
-                retryAfterSeconds = nil
-                return true
-            }
-            // Log the failure reason
             let body = String(data: responseData.prefix(500), encoding: .utf8) ?? "no body"
-            if statusCode == 401 {
-                Log.error("Event upload rejected: HTTP 401 — Invalid API key. Check your key in Console → Settings → SDK. Retrying won't help.")
-                eventUploadPermanentlyFailed = true
-            } else if Self.transientStatusCodes.contains(statusCode) {
-                // 429 rate-limited / 408 request-timeout are transient by definition.
-                // Honor Retry-After when the server sends one.
-                retryAfterSeconds = Self.parseRetryAfter(
-                    httpResponse.value(forHTTPHeaderField: "Retry-After")
-                )
-                let hint = retryAfterSeconds.map { " Retry-After: \($0)s." } ?? ""
-                Log.warning("Event upload throttled: HTTP \(statusCode).\(hint) Will retry.")
-            } else if (400..<500).contains(statusCode) {
-                Log.error("Event upload rejected: HTTP \(statusCode) — \(body). Retrying won't help.")
-                eventUploadPermanentlyFailed = true
-            } else {
-                // 5xx — also honor Retry-After (503 commonly sends one).
-                retryAfterSeconds = Self.parseRetryAfter(
-                    httpResponse.value(forHTTPHeaderField: "Retry-After")
-                )
-                Log.warning("Event upload failed: HTTP \(statusCode) — \(body). Will retry.")
-            }
-            return false
+            return applyEventUploadStatus(
+                httpResponse.statusCode,
+                retryAfterHeader: httpResponse.value(forHTTPHeaderField: "Retry-After"),
+                body: body
+            )
         } catch {
             Log.error("Event upload network error: \(error.localizedDescription). Will retry.")
+            return false
+        }
+    }
+
+    /// What an event-upload HTTP status means, independent of any network.
+    ///
+    /// SPEC-070-B AC-35: a PURE seam. `permanent_4xx_dropped` and `rate_limited_429_retried` assert
+    /// this table on iOS and Android against the same fixture, so the two SDKs cannot drift on the
+    /// question that caused the live defect — is a 429 permanent? Android says no; iOS used to say
+    /// yes, and one rate-limit halted every upload until the app restarted.
+    enum EventUploadDisposition {
+        /// 2xx — the batch landed. Clears the latch.
+        case success
+        /// Retry with backoff: 408, 429, every 5xx, and anything else unexpected.
+        case retryTransient
+        /// A genuine permanent 4xx (400/401/403/404 …). Drop the batch and LATCH: retrying a bad
+        /// API key forever would only drain the battery.
+        case dropPermanent
+    }
+
+    static func disposition(for statusCode: Int) -> EventUploadDisposition {
+        if (200..<300).contains(statusCode) { return .success }
+        if transientStatusCodes.contains(statusCode) { return .retryTransient }
+        if (400..<500).contains(statusCode) { return .dropPermanent }
+        // 5xx, and any status nobody expected — the server may recover, so retry.
+        return .retryTransient
+    }
+
+    /// Apply an event-upload status to `eventUploadPermanentlyFailed` and the `Retry-After` hint.
+    ///
+    /// Extracted from `sendEvents` for one reason: the latch was UNTESTABLE. It only ever moved
+    /// inside an `async` method that performs a real `URLSession` round trip, so no test could ask
+    /// the question that matters — *does a 429 leave `eventUploadPermanentlyFailed` false?* — which
+    /// is precisely why the answer was "no" in production for as long as it was. This is the seam
+    /// AC-35's `permanent_4xx_dropped` fixture drives; it mutates the same flag the network path
+    /// mutates, because it IS the network path's body.
+    ///
+    /// - Returns: true when the batch was accepted.
+    @discardableResult
+    func applyEventUploadStatus(_ statusCode: Int, retryAfterHeader: String?, body: String = "no body") -> Bool {
+        switch Self.disposition(for: statusCode) {
+        case .success:
+            eventUploadPermanentlyFailed = false
+            retryAfterSeconds = nil
+            return true
+
+        case .dropPermanent:
+            if statusCode == 401 {
+                Log.error("Event upload rejected: HTTP 401 — Invalid API key. Check your key in Console → Settings → SDK. Retrying won't help.")
+            } else {
+                Log.error("Event upload rejected: HTTP \(statusCode) — \(body). Retrying won't help.")
+            }
+            eventUploadPermanentlyFailed = true
+            return false
+
+        case .retryTransient:
+            // 429 rate-limited / 408 request-timeout are transient by definition, and 503 commonly
+            // sends a Retry-After. Honor it in both cases. The latch is deliberately NOT touched:
+            // a transient failure must not clear a latch a permanent one set, and must never set one.
+            retryAfterSeconds = Self.parseRetryAfter(retryAfterHeader)
+            let hint = retryAfterSeconds.map { " Retry-After: \($0)s." } ?? ""
+            if Self.transientStatusCodes.contains(statusCode) {
+                Log.warning("Event upload throttled: HTTP \(statusCode).\(hint) Will retry.")
+            } else {
+                Log.warning("Event upload failed: HTTP \(statusCode) — \(body).\(hint) Will retry.")
+            }
             return false
         }
     }

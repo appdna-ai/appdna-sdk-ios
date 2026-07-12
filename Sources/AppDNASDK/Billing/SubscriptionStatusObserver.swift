@@ -15,6 +15,22 @@ struct SubSnapshot: Codable, Equatable {
     let isAutoRenewing: Bool
 }
 
+/// Who owns the StoreKit transaction lifecycle while this observer is running.
+///
+/// It decides ONE thing, and it is not cosmetic: whether the observer may drain `Transaction.updates`
+/// and call `transaction.finish()`.
+enum SubscriptionObserverMode {
+    /// AppDNA owns billing (`billingProvider == .storeKit2`). `StoreKit2Bridge` finishes the
+    /// transactions it purchases; nothing else finishes a renewal, so the observer must.
+    case storeKitOwned
+
+    /// A third-party provider (RevenueCat / Adapty) owns billing. It finishes transactions itself —
+    /// only AFTER posting the receipt to its own backend — so the observer must NOT touch
+    /// `Transaction.updates` or `finish()`. It still reconciles, because reading
+    /// `Transaction.currentEntitlements` is read-only and provider-agnostic.
+    case providerOwned
+}
+
 /// 🔴 iOS emitted ZERO subscription-lifecycle events.
 ///
 /// `Billing/NativeBillingManager.swift` had a `Transaction.updates` listener, but that class was never
@@ -34,44 +50,93 @@ struct SubSnapshot: Codable, Equatable {
 ///   - product **new** since the last snapshot → nothing (that is `purchase_completed`'s job — emitting
 ///     here too is how you get the double-count Android had on its purchase events)
 ///
-/// Two triggers, matching Android's two: StoreKit's `Transaction.updates` (the direct analogue of Play's
-/// `PurchasesUpdatedListener`, but unlike Play's it DOES fire for renewals) and app-foreground (Android
-/// uses `ProcessLifecycleOwner.ON_START` — it catches the expirations that produce no transaction at all).
+/// Triggers, matching Android's: StoreKit's `Transaction.updates` (the direct analogue of Play's
+/// `PurchasesUpdatedListener`, but unlike Play's it DOES fire for renewals — `.storeKitOwned` only),
+/// app-foreground (Android uses `ProcessLifecycleOwner.ON_START` — it catches the expirations that
+/// produce no transaction at all), and, under `.providerOwned`, the provider's own subscriber-state
+/// callback via `AppDNA.reconcileSubscriptionState()`.
+///
+/// 🔴 **Every trigger funnels through a SERIAL chain.** `reconcile()` used to be a plain `async` method
+/// with no lock and no in-flight flag, driven from two unsynchronized triggers — and it awaits
+/// `Transaction.currentEntitlements` *and* a `Product.products(for:)` NETWORK call before it writes the
+/// snapshot. Cold start after a renewal that happened while the app was dead fires both triggers at
+/// once; both loaded the same stale `previous`, both saw the later `purchaseTime`, and BOTH emitted
+/// `subscription_renewed`. That is an MTPU **over**-count on the single most common renewal case, and
+/// MTPU is how customers are metered. Passes now queue behind each other: pass 2 reads the snapshot
+/// pass 1 persisted, sees no change, and emits nothing. Serialized — not coalesced: a second trigger
+/// still runs a full pass afterwards, because it may carry state the first pass began before.
 final class SubscriptionStatusObserver {
 
     /// Persisted under the same semantic key Android uses (`billing_last_sub_snapshot_v1`).
     static let snapshotKey = "appdna.billing.last_sub_snapshot_v1"
 
+    /// The async source of the CURRENT subscription state. Defaults to StoreKit; injectable so the
+    /// serialization above can be driven by a unit test — StoreKit itself needs a StoreKitTest session,
+    /// and a race that only reproduces on a device is a race nobody proves fixed.
+    typealias EntitlementLoader = @Sendable () async -> [String: SubSnapshot]
+
     private let eventTracker: EventTracker
     private let defaults: UserDefaults
+    private let mode: SubscriptionObserverMode
+    private let loadCurrent: EntitlementLoader
+
     private var updatesTask: Task<Void, Never>?
     private var foregroundToken: NSObjectProtocol?
 
-    init(eventTracker: EventTracker, defaults: UserDefaults = .standard) {
+    /// The tail of the serial chain. Guarded by `chainLock` because the triggers arrive on different
+    /// threads: `Transaction.updates` on the cooperative pool, `didBecomeActive` on the main thread,
+    /// and a provider callback on whichever thread the provider's SDK uses.
+    private let chainLock = NSLock()
+    private var chain: Task<Void, Never>?
+
+    init(
+        eventTracker: EventTracker,
+        defaults: UserDefaults = .standard,
+        mode: SubscriptionObserverMode = .storeKitOwned,
+        loadCurrent: EntitlementLoader? = nil
+    ) {
         self.eventTracker = eventTracker
         self.defaults = defaults
+        self.mode = mode
+        self.loadCurrent = loadCurrent ?? { await SubscriptionStatusObserver.storeKitSnapshot() }
     }
 
     // MARK: - Lifecycle
 
-    /// Start observing. Long-lived: the `Transaction.updates` sequence never ends, so the task lives
-    /// for the whole SDK session and is cancelled by `stop()` (called from `AppDNA.shutdown()`).
+    /// Start observing. Under `.storeKitOwned` this is long-lived: the `Transaction.updates` sequence
+    /// never ends, so the task lives for the whole SDK session and is cancelled by `stop()` (called from
+    /// `AppDNA.shutdown()`).
     func start() {
         guard updatesTask == nil else { return }
 
-        updatesTask = Task { [weak self] in
-            // Renewals that happened while the app was dead do not necessarily arrive as an update —
-            // reconcile once at launch so they are still caught. Same reason Android reconciles on
-            // every foreground entry rather than trusting its purchase listener.
-            await self?.reconcile()
+        switch mode {
+        case .storeKitOwned:
+            updatesTask = Task { [weak self] in
+                // Renewals that happened while the app was dead do not necessarily arrive as an update —
+                // reconcile once at launch so they are still caught. Same reason Android reconciles on
+                // every foreground entry rather than trusting its purchase listener.
+                await self?.reconcile()
 
-            for await result in Transaction.updates {
-                guard let self else { return }
-                guard case .verified(let transaction) = result else { continue }
-                // Apple redelivers an unfinished transaction on every launch forever. StoreKit2Bridge
-                // finishes the ones it purchases; a RENEWAL arrives here and nothing else would.
-                await transaction.finish()
-                await self.reconcile()
+                for await result in Transaction.updates {
+                    guard let self else { return }
+                    guard case .verified(let transaction) = result else { continue }
+                    // Apple redelivers an unfinished transaction on every launch forever. StoreKit2Bridge
+                    // finishes the ones it purchases; a RENEWAL arrives here and nothing else would.
+                    await transaction.finish()
+                    await self.reconcile()
+                }
+            }
+
+        case .providerOwned:
+            // RevenueCat and Adapty finish transactions themselves, and only after posting the receipt
+            // to their backend. Draining `Transaction.updates` here would finish a renewal out from
+            // under the provider — losing the subscription server-side, which is a far worse bug than
+            // the one this class exists to fix. So under `.providerOwned` the observer never consumes
+            // updates and never calls `finish()`. It reconciles from `Transaction.currentEntitlements`
+            // (read-only, and populated for provider purchases too, since they are still Apple
+            // purchases) on: start, every foreground, and every provider subscriber-state callback.
+            updatesTask = Task { [weak self] in
+                await self?.reconcile()
             }
         }
 
@@ -81,8 +146,7 @@ final class SubscriptionStatusObserver {
             object: nil,
             queue: nil
         ) { [weak self] _ in
-            guard let self else { return }
-            Task { await self.reconcile() }
+            self?.reconcileNow()
         }
         #endif
     }
@@ -94,13 +158,49 @@ final class SubscriptionStatusObserver {
             NotificationCenter.default.removeObserver(token)
             foregroundToken = nil
         }
+        chainLock.lock()
+        chain = nil
+        chainLock.unlock()
     }
 
     // MARK: - Reconcile
 
-    /// Re-derive the current subscription snapshot from StoreKit, diff it against the persisted one,
-    /// emit, and persist. Mirrors Android `reconcileSubscriptionState()`.
+    /// Fire-and-forget reconcile, for callers that are not `async` (the foreground notification, a
+    /// provider's subscriber-state callback). Still serialized — it enqueues on the same chain.
+    func reconcileNow() {
+        _ = enqueueReconcile()
+    }
+
+    /// Re-derive the current subscription snapshot, diff it against the persisted one, emit, and
+    /// persist. Mirrors Android `reconcileSubscriptionState()`. Serialized against every other caller.
     func reconcile() async {
+        await enqueueReconcile().value
+    }
+
+    /// Append one pass to the serial chain and return it. The new pass awaits the previous one, so two
+    /// triggers firing at the same instant cannot both read the pre-renewal snapshot.
+    private func enqueueReconcile() -> Task<Void, Never> {
+        chainLock.lock()
+        let previous = chain
+        let task = Task { [weak self] in
+            await previous?.value
+            await self?.performReconcile()
+        }
+        chain = task
+        chainLock.unlock()
+        return task
+    }
+
+    private func performReconcile() async {
+        let current = await loadCurrent()
+        let previous = loadSnapshot()
+        diffAndEmit(previous: previous, current: current)
+        saveSnapshot(current)
+    }
+
+    /// The StoreKit half of a pass: build the current snapshot from `Transaction.currentEntitlements`.
+    /// Static, because it holds no observer state — only StoreKit's.
+    private static func storeKitSnapshot() async -> [String: SubSnapshot] {
         // Cross-account-leak guard, resolved ONCE per pass so the decision matrix sees a stable value
         // even if the host identifies a different user mid-iteration (same as `StoreKit2Bridge.restore`).
         let expectedToken = AppAccountTokenResolver.tokenForCurrentUser()
@@ -131,10 +231,7 @@ final class SubscriptionStatusObserver {
                 isAutoRenewing: willAutoRenew
             )
         }
-
-        let previous = loadSnapshot()
-        diffAndEmit(previous: previous, current: current)
-        saveSnapshot(current)
+        return current
     }
 
     /// The pure diff. No I/O, no StoreKit — this is the half a unit test can drive.
@@ -173,7 +270,7 @@ final class SubscriptionStatusObserver {
     /// product later vanishes. Unknown (offline, unresolvable product) defaults to `true`, which is what
     /// an active subscription normally is; the alternative would mis-label a billing-retry as a
     /// deliberate cancel.
-    private func autoRenewStatus(for productID: String) async -> Bool {
+    private static func autoRenewStatus(for productID: String) async -> Bool {
         do {
             let products = try await Product.products(for: [productID])
             guard let subscription = products.first?.subscription else { return true }
