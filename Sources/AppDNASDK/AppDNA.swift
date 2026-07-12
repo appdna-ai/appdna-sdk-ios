@@ -234,7 +234,12 @@ public final class AppDNA: @unchecked Sendable {
     /// Build one subsystem in isolation. A subsystem that fails to start is reported as degraded and
     /// left nil; the event pipeline — wired earlier, in `performConfigure` — keeps running either way.
     /// Analytics is the floor guarantee, exactly as at Amplitude and Firebase.
-    private static func initSubsystem<T>(_ name: String, _ make: () throws -> T) -> T? {
+    ///
+    /// 🔴 `internal`, not `private`. While it was private, the test that claimed to prove this
+    /// isolation could not call it — so it RE-IMPLEMENTED the do/catch inline and asserted on its own
+    /// copy. Deleting this function left that test green. A test that cannot fail when the code it
+    /// covers is deleted is not a test.
+    internal static func initSubsystem<T>(_ name: String, _ make: () throws -> T) -> T? {
         do {
             if subsystemInitFailures.contains(name) {
                 throw AppDNAInitError.subsystemFailed(name: name, message: "injected failure")

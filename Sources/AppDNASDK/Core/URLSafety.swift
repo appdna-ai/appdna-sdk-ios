@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// SPEC-070-B PN row 18 (W11) — a scheme allowlist for URLs that arrive from remote config.
 ///
@@ -55,5 +58,25 @@ internal enum URLSafety {
             return nil
         }
         return url
+    }
+
+    /// How an allowed URL reaches the system. Production hands it to `UIApplication`; a test
+    /// substitutes a spy, which is what lets the CALL SITES — not just this helper — be asserted on.
+    internal static var opener: (URL) -> Void = { url in
+        #if canImport(UIKit)
+        UIApplication.shared.open(url)
+        #endif
+    }
+
+    /// Sanitize and open, in one call. Returns whether the URL was allowed.
+    ///
+    /// 🔴 The helper above existed and was unit-tested, while `PaywallRenderer` — the MONEY surface —
+    /// built `URL(string: config.secondaryUrl)` and handed it straight to `UIApplication.shared.open`.
+    /// A tested guard nothing calls is not a guard. Every config-driven open goes through here now.
+    @discardableResult
+    static func open(_ raw: String?) -> Bool {
+        guard let raw, let url = sanitized(raw) else { return false }
+        opener(url)
+        return true
     }
 }

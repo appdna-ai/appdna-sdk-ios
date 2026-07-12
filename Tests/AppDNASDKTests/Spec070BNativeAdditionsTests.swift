@@ -107,22 +107,109 @@ final class Spec070BNativeAdditionsTests: XCTestCase {
         XCTAssertNotNil(spy.received)
     }
 
+    /// 🔴 This test used to RE-IMPLEMENT `initSubsystem`'s do/catch inline and assert on its own
+    /// copy — `initSubsystem` was `private`, so it could not be called from here. Deleting the SDK's
+    /// isolation left the test green. It now calls the REAL function; delete `initSubsystem` and
+    /// this file does not compile.
     func testInitSubsystemReportsFailureAndReturnsNilWithoutThrowing() {
+        AppDNA.resetInitStateForTesting()
         AppDNA.subsystemInitFailures = ["paywall"]
-        // Reaching through the same seam configure() uses.
-        let made: String? = {
-            do {
-                if AppDNA.subsystemInitFailures.contains("paywall") {
-                    throw AppDNAInitError.subsystemFailed(name: "paywall", message: "injected failure")
-                }
-                return "built"
-            } catch {
-                AppDNA.reportInitDegraded(error)
-                return nil
-            }
-        }()
+        defer { AppDNA.subsystemInitFailures = [] }
+
+        let made: String? = AppDNA.initSubsystem("paywall") { "built" }
+
         XCTAssertNil(made, "a failing subsystem must not produce an instance")
-        XCTAssertNotNil(AppDNA.lastInitError, "and the failure must be surfaced, not swallowed")
+        guard let error = AppDNA.lastInitError as? AppDNAInitError,
+              case .subsystemFailed(let name, _) = error else {
+            return XCTFail("the failure must be surfaced and name the subsystem, got: \(String(describing: AppDNA.lastInitError))")
+        }
+        XCTAssertEqual(name, "paywall")
+    }
+
+    func testInitSubsystemDoesNotThrowWhenTheSubsystemItselfThrows() {
+        AppDNA.resetInitStateForTesting()
+        AppDNA.subsystemInitFailures = []
+        struct Boom: Error {}
+
+        // Not the injection seam — a real constructor blowing up, which is the production case.
+        let made: String? = AppDNA.initSubsystem("surveys") { throw Boom() }
+
+        XCTAssertNil(made)
+        XCTAssertNotNil(
+            AppDNA.lastInitError,
+            "a throwing subsystem constructor must be contained and reported, not propagated to the host"
+        )
+    }
+
+    func testInitSubsystemBuildsTheSubsystemWhenNothingFails() {
+        AppDNA.subsystemInitFailures = []
+        XCTAssertEqual(AppDNA.initSubsystem("paywall") { "built" }, "built")
+    }
+
+    // MARK: - W11: the scheme allowlist, at the CALL SITE
+
+    /// 🔴 `PaywallRenderer`'s sticky-footer secondary action built `URL(string:)` from the config and
+    /// handed it to `UIApplication.shared.open` — bypassing `URLSafety` entirely. The old tests
+    /// asserted the HELPER refused `javascript:`, which it did, while the money surface never asked
+    /// it. These drive the real call site through `URLSafety`'s opener seam.
+    func testPaywallSecondaryLinkRefusesADangerousScheme() {
+        var opened: [URL] = []
+        let original = URLSafety.opener
+        URLSafety.opener = { opened.append($0) }
+        defer { URLSafety.opener = original }
+
+        PaywallRenderer.performSecondaryAction(
+            action: "link",
+            url: "javascript:alert(document.cookie)",
+            onRestore: { XCTFail("a link action must not restore") }
+        )
+        XCTAssertTrue(opened.isEmpty, "the paywall opened a `javascript:` URL from remote config")
+
+        PaywallRenderer.performSecondaryAction(
+            action: "link",
+            url: "file:///var/mobile/Containers/Data/Application/x",
+            onRestore: {}
+        )
+        XCTAssertTrue(opened.isEmpty, "the paywall opened a `file:` URL from remote config")
+
+        PaywallRenderer.performSecondaryAction(
+            action: "link",
+            url: "http://insecure.example.com",
+            onRestore: {}
+        )
+        XCTAssertTrue(opened.isEmpty, "the paywall opened a cleartext `http:` URL from remote config")
+    }
+
+    func testPaywallSecondaryLinkStillOpensAnAllowedScheme() {
+        var opened: [URL] = []
+        let original = URLSafety.opener
+        URLSafety.opener = { opened.append($0) }
+        defer { URLSafety.opener = original }
+
+        PaywallRenderer.performSecondaryAction(
+            action: "link",
+            url: "https://appdna.ai/terms",
+            onRestore: { XCTFail("a link action must not restore") }
+        )
+
+        XCTAssertEqual(opened.map(\.absoluteString), ["https://appdna.ai/terms"])
+    }
+
+    func testPaywallRestoreActionStillRestoresAndOpensNothing() {
+        var opened: [URL] = []
+        let original = URLSafety.opener
+        URLSafety.opener = { opened.append($0) }
+        defer { URLSafety.opener = original }
+
+        var restored = false
+        PaywallRenderer.performSecondaryAction(
+            action: "restore",
+            url: "https://appdna.ai/terms",
+            onRestore: { restored = true }
+        )
+
+        XCTAssertTrue(restored)
+        XCTAssertTrue(opened.isEmpty, "a restore action must not also open the link")
     }
 
     // MARK: - Row 14 / AC-36: the consent decision persists

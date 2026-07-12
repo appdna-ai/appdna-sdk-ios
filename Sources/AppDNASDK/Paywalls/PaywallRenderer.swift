@@ -981,6 +981,30 @@ struct PaywallRenderer: View {
         })
     }
 
+    /// The sticky footer's secondary action, resolved.
+    ///
+    /// SPEC-070-B W11 — `internal static` so the test can drive the REAL code. The Button body above
+    /// is now a single call to this; deleting the `URLSafety` hop below turns that test red.
+    ///
+    /// 🔴 This used to be `URL(string: data.secondaryUrl)` → `UIApplication.shared.open(url)`,
+    /// inline in the Button. `URLSafety` was right there, tested, and unused on the one surface where
+    /// the config decides where the user's money goes. A paywall config naming `javascript:` opened
+    /// `javascript:`.
+    internal static func performSecondaryAction(
+        action: String?,
+        url: String?,
+        onRestore: () -> Void
+    ) {
+        switch action {
+        case "restore":
+            onRestore()
+        case "link":
+            URLSafety.open(url)
+        default:
+            break
+        }
+    }
+
     private func parseMarkdownLinks(_ text: String) -> AttributedString {
         var result = AttributedString(text)
         // Simple markdown link parser: [label](url)
@@ -1094,18 +1118,11 @@ struct PaywallRenderer: View {
             // Secondary action
             if let secondaryText = data?.secondaryText {
                 Button {
-                    switch data?.secondaryAction {
-                    case "restore":
-                        onRestore()
-                    case "link":
-                        if let urlStr = data?.secondaryUrl, let url = URL(string: urlStr) {
-                            #if canImport(UIKit)
-                            UIApplication.shared.open(url)
-                            #endif
-                        }
-                    default:
-                        break
-                    }
+                    Self.performSecondaryAction(
+                        action: data?.secondaryAction,
+                        url: data?.secondaryUrl,
+                        onRestore: onRestore
+                    )
                 } label: {
                     Text(loc("sticky_footer.secondary", secondaryText))
                         .font(.caption)
