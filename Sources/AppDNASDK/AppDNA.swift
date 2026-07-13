@@ -143,6 +143,22 @@ public final class AppDNA: @unchecked Sendable {
     /// react_native); tagged on every event's device context. Defaults to "native".
     internal static var framework: String { shared.options.framework }
 
+    /// SPEC-070-B §7 rule 4 — the WRAPPER's own version (e.g. the npm package's `1.0.7`), injected by
+    /// the bridge, tagged on every event's device context as `framework_version`.
+    ///
+    /// `device.sdk_version` is always this NATIVE core's version, so before this field existed a
+    /// React Native app was indistinguishable from a native one in the warehouse on every version
+    /// column: all 79 `react_native` rows in `raw.sdk_events` carried `sdk_version = 1.0.70`, the core
+    /// they wrap. Which meant the question support actually asks — "is the fix in the version they are
+    /// running?" — had no answer, because the artifact an RN developer INSTALLS is the npm package and
+    /// nothing reported it. The value was already carried all the way into `options.frameworkVersion`
+    /// and then read by exactly one thing, `diagnose()`, which prints to the developer's own console.
+    ///
+    /// Nil for a native host (there is no wrapper to name); the envelope omits it in that case.
+    internal static var frameworkVersion: String? {
+        shared.options.framework == "native" ? nil : shared.options.frameworkVersion
+    }
+
     // MARK: - Screen attribution (SPEC-070-B PN row 1 / D-h)
 
     /// The most recent screen name announced by `notifyScreenAppeared`, surfaced into every event
@@ -250,6 +266,30 @@ public final class AppDNA: @unchecked Sendable {
             return nil
         }
     }
+
+    /// Which subsystems came up on the last `configure()`. Mirrors Android's `AppDNA.subsystemsUp()`.
+    ///
+    /// AC-31(b) is *"a failing subsystem leaves ANALYTICS WORKING"*, and AC-31(a) — the error is
+    /// surfaced — is explicitly **not** that: a reporting seam says nothing about what survived. The
+    /// claim needs an observer for what came up and what did not, and until now iOS had none, so the
+    /// only iOS test of `initSubsystem` called it in isolation and never ran a `configure()` at all.
+    ///
+    /// `events` is the floor guarantee: the tracker and the queue are both wired in `performConfigure`,
+    /// BEFORE any subsystem is constructed, and no subsystem failure can unwire them.
+    internal static func subsystemsUp() -> [String: Bool] {
+        [
+            "events": shared.eventTracker != nil && shared.eventQueue != nil,
+            "paywall": shared.paywallManager != nil,
+            "onboarding": shared.onboardingFlowManager != nil,
+            "in_app_messages": shared.messageManager != nil,
+            "surveys": shared.surveyManager != nil,
+            "web_entitlements": shared.webEntitlementManager != nil,
+        ]
+    }
+
+    /// The live `EventTracker`, so a test can observe an event actually reaching the pipeline rather
+    /// than merely observing that `track()` did not throw. Its `eventSink` fires on every enqueue.
+    internal static var eventTrackerForTesting: EventTracker? { shared.eventTracker }
 
     // MARK: - Singleton
 
@@ -1670,6 +1710,37 @@ public final class AppDNA: @unchecked Sendable {
             // every subsequent entitlement change twice. Android is safe because `shutdown()` nulls
             // the billing manager, taking its listeners with it — this is the iOS equivalent.
             billing.removeAllEntitlementsChangedHandlers()
+
+            // 🔴 SHUTDOWN LEFT MOST OF THE SDK RUNNING.
+            //
+            // This method released the event pipeline, the session and the API client — and left
+            // THIRTEEN subsystem managers alive, holding references to the very `apiClient` and
+            // `eventTracker` it had just dropped. Android nulls all eighteen of its own
+            // (`AppDNA.kt` shutdown), and its comment says it is mirroring THIS method. It was not.
+            //
+            // Found by a test that injected a failure into every subsystem and then asked
+            // `subsystemsUp()`. Four came back UP — not because the isolation seam was broken (it
+            // works; every manager is built through `initSubsystem`), but because they were STALE
+            // OBJECTS FROM A PREVIOUS `configure()` that `shutdown()` had never released. So the new
+            // diagnostic was lying, and it was lying because the thing it diagnoses was.
+            //
+            // Beyond the leak: `webEntitlementManager` and `pendingMessageListener` are OBSERVERS. A
+            // host that calls `shutdown()` — on sign-out, on teardown — reasonably expects the SDK to
+            // stop. Half of it did not.
+            shared.identityManager = nil
+            shared.remoteConfigManager = nil
+            shared.featureFlagManager = nil
+            shared.experimentManager = nil
+            shared.paywallManager = nil
+            shared.billingBridge = nil
+            shared.onboardingFlowManager = nil
+            shared.messageManager = nil
+            shared.pendingMessageListener = nil
+            shared.pushTokenManager = nil
+            shared.surveyManager = nil
+            shared.webEntitlementManager = nil
+            shared.deferredDeepLinkManager = nil
+            shared.screenManager = nil
 
             Log.info("AppDNA SDK shut down")
         }

@@ -1509,6 +1509,46 @@ struct PaywallRenderer: View {
 
     // MARK: - SPEC-089d: Promo input section (AC-037)
 
+    /**
+     SPEC-070-B AC-30(b) — what a promo code submission resolves to. A REVENUE path.
+
+     🔴 The original: a paywall with NO delegate ran
+
+         updateState(code.isNotBlank() ? "success" : "error")
+
+     so ANY non-blank string the user typed rendered "Code applied!", and the CTA path then folded
+     that unvalidated string into the purchase metadata as `promo_code` — presented downstream as if
+     the app had validated it. Nobody had. The SDK cannot validate a code; only the host can. So when
+     there is no host to ask, the only honest answer is REJECT, which is also what every delegate
+     default already answers on timeout.
+
+     Android proves this by driving the real composable (`PromoCodeFallbackTest`). iOS shipped the
+     same fix inline in a `Button` action — where no test could reach it — and asserted nothing. This
+     function IS the shipped decision (the button calls it and does nothing else), so a test that
+     calls it exercises the branch that ships rather than a re-implementation of it.
+
+     `internal`, not `private`, for exactly that reason.
+     */
+    internal static func resolvePromoSubmission(
+        code: String,
+        onPromoCodeSubmit: ((String, @escaping (Bool) -> Void) -> Void)?,
+        setState: @escaping (PromoState) -> Void
+    ) {
+        setState(.loading)
+        guard let onPromoCodeSubmit else {
+            // No delegate configured — we cannot validate the code, so we must NOT report success.
+            Log.warning("Promo code submitted but no AppDNAPaywallDelegate is registered — rejecting. Implement onPromoCodeSubmit to validate codes.")
+            setState(.error)
+            return
+        }
+        onPromoCodeSubmit(code) { isValid in
+            // The host may answer on any thread; `promoState` drives SwiftUI.
+            DispatchQueue.main.async {
+                setState(isValid ? .success : .error)
+            }
+        }
+    }
+
     @ViewBuilder
     private func promoInputSectionView(data: PaywallSectionData?, style: SectionStyleConfig?) -> some View {
         HStack(spacing: 8) {
@@ -1522,22 +1562,18 @@ struct PaywallRenderer: View {
                 .font(.subheadline)
 
             Button {
-                // AC-037: Submit promo code via delegate callback
-                promoState = .loading
-                if let onPromoCodeSubmit = onPromoCodeSubmit {
-                    onPromoCodeSubmit(promoCode) { isValid in
-                        DispatchQueue.main.async {
-                            promoState = isValid ? .success : .error
-                        }
-                    }
-                } else {
-                    // No delegate configured — we cannot validate the code, so we must
-                    // NOT report success. The old "any non-empty string is valid"
-                    // fallback showed "Code applied!" for anything the user typed, and
-                    // then folded that unvalidated string into purchase metadata as
-                    // `promo_code`. Rejecting matches every delegate default.
-                    Log.warning("Promo code submitted but no AppDNAPaywallDelegate is registered — rejecting. Implement onPromoCodeSubmit to validate codes.")
-                    promoState = .error
+                // AC-037: Submit promo code via delegate callback.
+                //
+                // The decision itself lives in `resolvePromoSubmission` — see there. It is not inlined
+                // here because a decision inlined in a `Button` action inside a `@ViewBuilder` is
+                // reachable by nothing: SwiftUI has no equivalent of Android's Compose test rule in
+                // this SDK, so the ONLY way this branch can be under test is for it to be a function.
+                // It was inline, and it was the one branch on this whole screen that nothing asserted.
+                Self.resolvePromoSubmission(
+                    code: promoCode,
+                    onPromoCodeSubmit: onPromoCodeSubmit
+                ) { newState in
+                    promoState = newState
                 }
             } label: {
                 if case .loading = promoState {

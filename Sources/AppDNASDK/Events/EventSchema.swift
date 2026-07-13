@@ -29,6 +29,11 @@ struct EventDevice: Codable {
     let country: String
     /// SPEC-070-C D4 — SDK-wrapper attribution (native|flutter|react_native).
     let framework: String
+    /// SPEC-070-B §7 rule 4 — the WRAPPER's own version (the RN npm package / the Flutter pub
+    /// package), which `sdk_version` cannot express because that one is always the native core.
+    /// Optional, and Codable omits it when nil — so a native host's envelope is byte-identical to
+    /// what it was, and no existing consumer sees a new key.
+    let framework_version: String?
 }
 
 struct EventContext: Codable {
@@ -193,7 +198,8 @@ enum EventEnvelopeBuilder {
             bundle_version: bundleVer,
             locale: Locale.current.identifier,
             country: (Locale.current as NSLocale).countryCode ?? "",
-            framework: AppDNA.framework
+            framework: AppDNA.framework,
+            framework_version: AppDNA.frameworkVersion
         )
 
         let props: [String: AnyCodable]? = properties?.mapValues { AnyCodable($0) }
