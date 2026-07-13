@@ -142,8 +142,26 @@ final class SubsystemInitIsolationTests: XCTestCase {
 
     // MARK: - Every subsystem down at once
 
+    /// 🔴 THE FAILING SET IS DERIVED FROM THE SDK, NOT HARD-CODED.
+    ///
+    /// It used to be a literal list of five names. So "every subsystem" quietly meant "these five", and a
+    /// subsystem added later was simply never injected — the test kept passing, and kept claiming
+    /// coverage it did not have.
+    ///
+    /// That is exactly what happened with `billing`: it was built by a bare `switch` OUTSIDE
+    /// `initSubsystem`, so it could not be isolated or injected at all, and `subsystemsUp()` had no
+    /// `billing` key to report it with. Two blind spots lining up to look like green. The moment the key
+    /// existed, this test failed with `["billing"] is not equal to []` — the subsystem that had never
+    /// been in the seam.
+    ///
+    /// Deriving the set from `subsystemsUp()` means the next subsystem is injected the day it is
+    /// reportable, without anyone remembering to add it here.
     func testEverySubsystemFailingAtOnceStillLeavesATrackingSDK() {
-        configureWith(failing: ["paywall", "onboarding", "in_app_messages", "surveys", "web_entitlements"])
+        // `events` is the floor guarantee, not a failable subsystem — it is the thing that must survive.
+        let everySubsystem = Set(AppDNA.subsystemsUp().keys).subtracting(["events"])
+        XCTAssertGreaterThan(everySubsystem.count, 4, "the SDK reports suspiciously few subsystems")
+
+        configureWith(failing: everySubsystem)
 
         let up = AppDNA.subsystemsUp()
         XCTAssertEqual(

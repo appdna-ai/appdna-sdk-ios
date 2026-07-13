@@ -71,14 +71,20 @@ final class AdaptyBridge: BillingBridgeProtocol {
                 // subscriptions never emit `subscription_started`.
                 isSubscription: await PurchaseSuccessEvents.isAutoRenewable(productId: productId)
             )
-            // `purchase_completed` + (auto-renewing only) `subscription_started`, same envelope.
-            if let eventTracker {
-                PurchaseSuccessEvents.emit(
-                    tracker: eventTracker,
-                    paywallId: nil,
-                    result: purchaseResult
-                )
-            }
+            // 🔴 NO EMIT HERE. A bridge NEVER emits the metered purchase events — its CALLER does.
+            //
+            // This bridge used to emit, and `PaywallManager` (which calls `bridge.purchase(...)`)
+            // emitted again on the very result returned below — so every Adapty purchase through a
+            // native paywall fired `purchase_completed` AND `subscription_started` TWICE, inflating
+            // purchase counts and revenue sums. Meanwhile StoreKit2Bridge emitted nothing and relied on
+            // its caller, so the DIRECT `AppDNA.billing.purchase()` path emitted nothing at all.
+            //
+            // One rule, both callers, every provider: emission belongs to whoever called us. See
+            // `AppDNA.BillingModule.purchase(_:options:)`. `check-purchase-emit-chokepoint.ts` fails
+            // the build if a bridge ever emits again.
+            //
+            // `isSubscription` above is still resolved HERE, because only the bridge knows which store
+            // actually billed — the caller cannot ask Adapty what kind of product it just sold.
             // SPEC-400 — fire onPurchaseCompleted to the host's
             // AppDNABillingDelegate. Bridges are the single source of
             // truth for billing-delegate purchase events.

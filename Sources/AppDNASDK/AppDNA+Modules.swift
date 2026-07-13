@@ -44,7 +44,42 @@ extension AppDNA {
     /// Billing module namespace.
     /// Delegates to the configured `BillingBridgeProtocol` (StoreKit2, RevenueCat, or Adapty).
     public final class BillingModule: @unchecked Sendable {
+        /// 🔴 THE ONLY **STRONG** FACADE REFERENCE IN THE SDK — AND IT IS THE ONE THAT SPENDS MONEY.
+        ///
+        /// Every other module facade holds its manager `weak` (`PushModule.manager`,
+        /// `SurveysModule.manager`, …), so when `shutdown()` nils `shared.<manager>` the facade's
+        /// reference dies with it. This one was `internal var` — STRONG — so `shutdown()`'s
+        /// `shared.billingBridge = nil` dropped only the SDK's copy and left the FACADE holding the
+        /// bridge alive.
+        ///
+        /// Consequence: after `AppDNA.shutdown()`, `AppDNA.billing.purchase(...)` sailed past its
+        /// `guard let bridge` and **executed a real StoreKit purchase** — charging the user — while
+        /// `shared.eventTracker` was already nil, so the purchase was never reported to anyone.
+        /// A host calling `shutdown()` on sign-out could still bill the signed-out user, silently.
+        ///
+        /// `subsystemsUp()` could not see it: it had no `billing` key, and read `shared.*` anyway —
+        /// the shadow copy, not the variable the host actually calls through. The oracle and the bug
+        /// were on opposite sides of the same name. `teardown()` below is what `shutdown()` now calls,
+        /// and `isLive` is what `subsystemsUp()` now reads: both look at THIS object.
         internal var bridge: BillingBridgeProtocol?
+
+        /// The tracker this facade emits purchase events with. Weak: `shared` owns it.
+        ///
+        /// A direct `AppDNA.billing.purchase(...)` — which is exactly what the React Native and Flutter
+        /// wrappers call, and what any host with a JS/Dart-authored paywall calls — emitted NOTHING.
+        /// See `purchase(_:options:)`.
+        internal weak var eventTracker: EventTracker?
+
+        /// Is billing actually usable right now? Read by `subsystemsUp()` so the diagnostic and the
+        /// host see the same object.
+        internal var isLive: Bool { bridge != nil }
+
+        /// Released by `AppDNA.shutdown()`. Nothing else may call this.
+        internal func teardown() {
+            bridge = nil
+            eventTracker = nil
+            removeAllEntitlementsChangedHandlers()
+        }
         /// SPEC-070-B PN row 3 (E3): keyed by token so a handler can be removed. An append-only array
         /// had no removal method anywhere in the SDK, so a wrapper that re-`configure()`s (a React
         /// Native reload does exactly that) accumulated handlers and delivered every change N-fold.
@@ -82,6 +117,28 @@ extension AppDNA {
         ///     untagged (the bridge logs a warning). This preserves
         ///     pre-identify first-launch flows; hosts SHOULD call
         ///     `AppDNA.identify(...)` before letting the user purchase.
+        /// 🔴 EVERY PURCHASE MADE OUTSIDE A NATIVE PAYWALL WAS ANALYTICALLY SILENT.
+        ///
+        /// `purchase_completed` / `subscription_started` / `subscription_renewed` are the three events
+        /// the MTPU billing query counts (`COUNT(DISTINCT user)`). Emission of the first two was
+        /// scattered across BOTH layers — some bridges emitted, some expected their caller to — which
+        /// produced a matrix that was wrong in three of six cells:
+        ///
+        /// |                              | StoreKit2   | Adapty        | RevenueCat  |
+        /// |------------------------------|-------------|---------------|-------------|
+        /// | native paywall               | 1 ✅        | **2** ❌       | 1 ✅        |
+        /// | `AppDNA.billing.purchase()`  | **0** ❌    | 1 ✅          | **0** ❌    |
+        ///
+        /// The double-emit inflated purchase counts and revenue sums. The ZERO-emit cell cost real
+        /// money: a React Native / Flutter host — or any native host with its own JS/SwiftUI paywall —
+        /// on the DEFAULT provider (StoreKit2) reported no metered event at all, so those subscribers
+        /// were never counted, in our billing OR in the customer's own revenue dashboard.
+        ///
+        /// The invariant, now enforced by `check-purchase-emit-chokepoint.ts`:
+        /// **the CALLER of `bridge.purchase(...)` emits; a bridge NEVER does.** There are exactly two
+        /// callers — this one and `PaywallManager` — so every purchase, on every provider, through
+        /// every entry point, emits exactly once. `PurchaseSuccessEvents.emit`'s own doc always said
+        /// "exactly one of each, from the one site that observed the purchase"; now it is true.
         public func purchase(_ productId: String, options: PurchaseOptions? = nil) async throws -> TransactionInfo {
             guard let bridge = bridge else {
                 Log.warning("BillingModule: No billing provider configured")
@@ -89,6 +146,11 @@ extension AppDNA {
             }
             let token = options?.appAccountToken ?? AppAccountTokenResolver.tokenForCurrentUser()
             let result = try await bridge.purchase(productId: productId, appAccountToken: token)
+            // No `paywall_id`: this purchase did not come from an AppDNA-rendered paywall. Fabricating
+            // one would misattribute revenue to a paywall that was never shown.
+            if let eventTracker {
+                PurchaseSuccessEvents.emit(tracker: eventTracker, paywallId: nil, result: result)
+            }
             return TransactionInfo(
                 transactionId: result.transactionId,
                 productId: result.productId,

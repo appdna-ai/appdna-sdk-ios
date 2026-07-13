@@ -119,14 +119,24 @@ final class RevenueCatBridge: NSObject, BillingBridgeProtocol {
 
 extension RevenueCatBridge: PurchasesDelegate {
     func purchases(_ purchases: Purchases, receivedUpdated customerInfo: CustomerInfo) {
-        // Auto-track entitlement changes
-        let activeEntitlements = Array(customerInfo.entitlements.active.keys)
-        if !activeEntitlements.isEmpty {
-            eventTracker.track(event: "purchase_completed", properties: [
-                "provider": "revenuecat",
-                "entitlements": activeEntitlements,
-            ])
-        }
+        // 🔴 THIS LISTENER USED TO EMIT `purchase_completed` — ON EVERY DELIVERY WITH A LIVE
+        // ENTITLEMENT. It was labelled "auto-track entitlement changes", but it did not track a
+        // CHANGE: it fired whenever `active` was non-empty, and RevenueCat delivers `customerInfo` on
+        // app launch, on every refresh, on restore, and on cross-device sync.
+        //
+        // So every launch of the app by an existing subscriber emitted a purchase that never happened.
+        // `purchase_completed` is one of the three MTPU-metered events (`COUNT(DISTINCT user)`), which
+        // means a subscriber who merely OPENED THE APP was counted as a transacting user — inflating
+        // the customer's revenue reporting and our own metering, every month, for as long as they kept
+        // the app installed. A real RC purchase is already emitted exactly once by the caller of
+        // `bridge.purchase(...)` (`PaywallManager` / `AppDNA.billing.purchase()`), so this emit was
+        // never the one carrying the signal — it was pure fabrication on top of it.
+        //
+        // The give-away was three lines below, and had been there all along: the LIFECYCLE call
+        // deliberately diffs against a persisted snapshot precisely because "RC fires it on restore and
+        // on cross-device sync too". The emit above it had no such guard.
+        //
+        // `check-purchase-emit-chokepoint.ts` now fails the build if a bridge emits a metered event.
 
         // 🔴 Subscription LIFECYCLE. RC's own listener is the right trigger — RC owns transaction
         // finishing, so `SubscriptionStatusObserver` runs in `.providerOwned` mode and never drains

@@ -284,6 +284,12 @@ public final class AppDNA: @unchecked Sendable {
             "in_app_messages": shared.messageManager != nil,
             "surveys": shared.surveyManager != nil,
             "web_entitlements": shared.webEntitlementManager != nil,
+            // Reads the FACADE, not `shared.billingBridge`. Those are two different references, and the
+            // shadow one is not the one a host buys through: `AppDNA.billing.purchase()` goes through
+            // `AppDNA.billing.bridge`. `shutdown()` used to nil only `shared.billingBridge`, so an
+            // oracle reading `shared` would have reported billing DOWN while the facade was still
+            // charging real money. An oracle must read the variable the caller actually uses.
+            "billing": AppDNA.billing.isLive,
         ]
     }
 
@@ -1350,22 +1356,34 @@ public final class AppDNA: @unchecked Sendable {
         self.sessionManager = sessionMgr
         identityMgr.sessionManager = sessionMgr
 
-        // 4. Initialize billing bridge
-        switch options.billingProvider {
-        case .storeKit2:
-            self.billingBridge = StoreKit2Bridge()
-        case .revenueCat:
-            #if canImport(RevenueCat)
-            self.billingBridge = RevenueCatBridge(eventTracker: tracker)
-            #else
-            Log.warning("RevenueCat not available, falling back to StoreKit 2")
-            self.billingBridge = StoreKit2Bridge()
-            #endif
-        case .adapty(let adaptyKey):
-            self.billingBridge = AdaptyBridge(apiKey: adaptyKey, eventTracker: tracker)
-        case .none:
-            self.billingBridge = nil
-        }
+        // 4. Initialize billing bridge — INSIDE the isolation seam, like every other subsystem.
+        //
+        // 🔴 This used to be a bare `switch`, outside `initSubsystem` entirely. Billing was therefore
+        // the one subsystem that could neither be isolated nor observed: a throwing provider init (a bad
+        // Adapty key, an unconfigured RevenueCat) would escape instead of degrading billing alone, and
+        // `subsystemInitFailures` — the seam the whole isolation guarantee rests on — could not reach it.
+        //
+        // Nothing noticed, because `subsystemsUp()` had no `billing` key to report. Adding one surfaced
+        // it immediately: `testEverySubsystemFailingAtOnceStillLeavesATrackingSDK` injects a failure into
+        // EVERY subsystem and asserts none comes up — and billing came up anyway, because it was never
+        // in the seam to fail. The oracle was blind in exactly the place the code was unguarded.
+        self.billingBridge = AppDNA.initSubsystem("billing") { () -> BillingBridgeProtocol? in
+            switch options.billingProvider {
+            case .storeKit2:
+                return StoreKit2Bridge()
+            case .revenueCat:
+                #if canImport(RevenueCat)
+                return RevenueCatBridge(eventTracker: tracker)
+                #else
+                Log.warning("RevenueCat not available, falling back to StoreKit 2")
+                return StoreKit2Bridge()
+                #endif
+            case .adapty(let adaptyKey):
+                return AdaptyBridge(apiKey: adaptyKey, eventTracker: tracker)
+            case .none:
+                return nil
+            }
+        } ?? nil
 
         // 4b. Subscription lifecycle. StoreKit is the ONLY place a renewal is observable on-device, and
         // nothing on the live path was listening — so `subscription_renewed` / `_canceled` /
@@ -1608,6 +1626,10 @@ public final class AppDNA: @unchecked Sendable {
 
         // Wire module namespaces (v1.0)
         AppDNA.billing.bridge = self.billingBridge
+        // The facade emits the metered purchase events for the DIRECT `AppDNA.billing.purchase()` path
+        // (React Native, Flutter, and any host with its own paywall UI). Without a tracker it emitted
+        // nothing — see `BillingModule.purchase(_:options:)`.
+        AppDNA.billing.eventTracker = tracker
         AppDNA.onboarding.manager = self.onboardingFlowManager
         AppDNA.paywall.paywallManager = self.paywallManager
         AppDNA.remoteConfig.manager = remoteCfg
@@ -1679,6 +1701,20 @@ public final class AppDNA: @unchecked Sendable {
     /// After calling shutdown the SDK must be re-configured before use.
     public static func shutdown() {
         shared.queue.async {
+            // 🔴 BILLING GOES DOWN FIRST — BEFORE THE PIPELINE THAT REPORTS IT.
+            //
+            // This used to happen ~70 lines below, AFTER `eventTracker` was released. Between those two
+            // points the SDK sat in the single worst state it can occupy: **able to charge the user, and
+            // unable to tell anyone it did.** A `purchase()` landing in that window took the money and
+            // emitted nothing — no `purchase_completed`, no `subscription_started` — so the subscriber
+            // was never metered, in the customer's revenue dashboard or in our billing.
+            //
+            // The window was real, not theoretical: the behavioural test for this caught it on the first
+            // run, from a plain `AppDNA.billing.purchase()` issued right after `shutdown()`.
+            //
+            // Order the teardown by blast radius: stop what can spend money, then stop what observes it.
+            billing.teardown()
+
             shared.eventQueue?.flush()
             shared.eventQueue = nil
             shared.eventTracker = nil
@@ -1704,12 +1740,11 @@ public final class AppDNA: @unchecked Sendable {
             }
             webEntitlementChangeHandlers.removeAll()
 
-            // …and the STORE-entitlement handlers, which this method plainly meant to do and did not.
-            // They live on the process-global `billing` module and survived shutdown, so a wrapper
-            // re-registering on the next `configure()` ended up with two live handlers and delivered
-            // every subsequent entitlement change twice. Android is safe because `shutdown()` nulls
-            // the billing manager, taking its listeners with it — this is the iOS equivalent.
-            billing.removeAllEntitlementsChangedHandlers()
+            // (The `billing` facade — bridge, tracker and entitlement handlers — was released at the TOP
+            // of this method. `billing` is a process-global `static let`, so `shutdown()` cannot nil the
+            // object; it must nil what the object HOLDS. It used to release only the entitlement
+            // handlers, leaving `billing.bridge` — the SDK's one STRONG facade reference — alive, so
+            // `AppDNA.billing.purchase(...)` kept executing real StoreKit purchases after shutdown.)
 
             // 🔴 SHUTDOWN LEFT MOST OF THE SDK RUNNING.
             //
