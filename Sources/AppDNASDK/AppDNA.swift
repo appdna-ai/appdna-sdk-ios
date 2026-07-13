@@ -468,6 +468,27 @@ public final class AppDNA: @unchecked Sendable {
             shared.surveyManager?.resetSession()
             shared.webEntitlementManager?.stopObserving()
             shared.pendingMessageListener?.stopObserving()
+
+            // 🔴 USER A'S ONBOARDING ANSWERS SURVIVED THE SIGN-OUT AND RENDERED INTO USER B'S PAYWALL.
+            //
+            // `SessionDataStore` is a PERSISTED process-global (UserDefaults here, SharedPreferences on
+            // Android) holding three buckets: onboarding responses, computed data, session data. `reset()`
+            // cleared identity, exposures, message and survey session — and never touched it. Neither did
+            // `shutdown()`. `clearAll()` existed on both platforms with ZERO callers.
+            //
+            // So after A signed out and B signed in on the same device, B could read A's onboarding
+            // answers and structured location back via `getOnboardingResponses()` / `session.get(key)` /
+            // `getLocationData(fieldId)`. And worse than the read: `TemplateEngine.buildContext()` feeds
+            // all three buckets into the `{{…}}` namespace, so A's answers RENDERED INTO B's paywall,
+            // onboarding and in-app-message copy. It survived app restarts. All four SDKs.
+            //
+            // `reset()` IS the sign-out boundary — it is already where identity, exposures and session
+            // state go — and onboarding responses are per-user data that must not outlive the user.
+            //
+            // `shutdown()` deliberately does NOT do this: it is a lifecycle stop, not a user change.
+            // Clearing a user's answers because the app is backgrounding would be a different bug.
+            SessionDataStore.shared.clearAll()
+
             // Cross-account-leak defence — DELIBERATELY do NOT call
             // `AppAccountTokenResolver.clearFirstIdentifiedUserId()`
             // here. The anchor is a security boundary: clearing it on
@@ -477,7 +498,7 @@ public final class AppDNA: @unchecked Sendable {
             // anchor's natural lifecycle is the app installation;
             // factory-reset / uninstall wipe UserDefaults, which is
             // the correct invalidation event.
-            Log.info("Identity reset")
+            Log.info("Identity reset (session data cleared)")
         }
     }
 
