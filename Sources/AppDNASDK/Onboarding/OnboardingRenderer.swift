@@ -2070,36 +2070,36 @@ enum StepAdvanceResultNaming {
 /// Extracted from the view so the "which fields an override may replace" contract is testable — an
 /// override that silently stops applying is otherwise only visible on a device.
 enum StepConfigOverrideMerger {
+    /// 🔴 NON-DESTRUCTIVE: copy the authored config, then assign only the fields the override NAMES.
+    ///
+    /// This used to REBUILD a `StepConfig` through its 26-parameter memberwise init, forwarding every
+    /// field by hand — and it forgot `chat_config`. Forgetting a field in a rebuild does not fail to
+    /// compile and does not log; it DELETES the field. So any host with an override on an
+    /// `interactive_chat` step lost the authored chat background and the renderer fell back to a
+    /// hardcoded `#0F172A`.
+    ///
+    /// And on the React Native path there was no such thing as "a host with no override": the wrapper's
+    /// veto decoder turned the `__appdna_unhandled` sentinel — the reply meaning "this host registered
+    /// no `onBeforeStepRender`" — into a real, all-nil `StepConfigOverride`. Every step of every flow
+    /// therefore ran through this merger, and every `interactive_chat` step lost its background, in the
+    /// DEFAULT integration.
+    ///
+    /// A merger that lists fields can only ever be as correct as the last person to add one remembered
+    /// to be. This one cannot forget: `StepConfig`'s fields are `var`, and anything not assigned below
+    /// is carried over by the copy.
     static func apply(_ override: StepConfigOverride?, to config: StepConfig) -> StepConfig {
         guard let override else { return config }
-        let fieldDefaults = override.fieldDefaults?.mapValues { AnyCodable($0) }
-        return StepConfig(
-            title: override.title ?? config.title,
-            subtitle: override.subtitle ?? config.subtitle,
-            image_url: config.image_url,
-            cta_text: override.ctaText ?? config.cta_text,
-            skip_enabled: config.skip_enabled,
-            options: config.options,
-            selection_mode: config.selection_mode,
-            items: config.items,
-            layout: config.layout,
-            fields: config.fields,
-            validation_mode: config.validation_mode,
-            field_defaults: fieldDefaults,
-            content_blocks: config.content_blocks,
-            layout_variant: config.layout_variant,
-            background: config.background,
-            text_style: config.text_style,
-            element_style: config.element_style,
-            animation: config.animation,
-            localizations: config.localizations,
-            default_locale: config.default_locale,
-            next_step_rules: config.next_step_rules,
-            progress_color: config.progress_color,
-            permission_type: config.permission_type,
-            show_settings_fallback_on_denied: config.show_settings_fallback_on_denied,
-            settings_fallback_label: config.settings_fallback_label
-        )
+        var merged = config
+        if let title = override.title { merged.title = title }
+        if let subtitle = override.subtitle { merged.subtitle = subtitle }
+        if let ctaText = override.ctaText { merged.cta_text = ctaText }
+        // Only replaced when the override actually carries defaults. The rebuild assigned this
+        // unconditionally, so an override that set ONLY a title also wiped a previous override's
+        // field defaults.
+        if let fieldDefaults = override.fieldDefaults {
+            merged.field_defaults = fieldDefaults.mapValues { AnyCodable($0) }
+        }
+        return merged
     }
 }
 

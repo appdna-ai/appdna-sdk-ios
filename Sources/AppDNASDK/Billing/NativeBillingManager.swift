@@ -57,7 +57,12 @@ public enum BillingError: LocalizedError {
 /// Map ANY billing error — `BillingError`, the active `StoreKit2Bridge`'s `StoreKit2Error`, a raw
 /// `SKError`, or a transport failure — onto the same discriminator vocabulary. Unrecognized errors
 /// are "unknown" rather than being force-fit into a category the host would act on wrongly.
-internal func billingErrorType(_ error: Error) -> String {
+///
+/// **Public** because it is the wrappers' only way to type a failure. React Native and Flutter receive
+/// a plain `Error` across their bridge and can read nothing off it but a LOCALIZED message; without
+/// this they rejected every purchase with one code and hosts string-matched English prose to tell a
+/// user cancel from a declined card.
+public func billingErrorType(_ error: Error) -> String {
     if let billingError = error as? BillingError {
         return billingError.errorType
     }
@@ -65,7 +70,11 @@ internal func billingErrorType(_ error: Error) -> String {
         switch skError {
         case .productNotFound: return "productNotFound"
         case .userCancelled: return "userCancelled"
-        case .purchasePending: return "purchasePending"
+        // 🔴 "purchasePending" on iOS, "pending" on Android — the SAME condition, two discriminators,
+        // in the one vocabulary whose entire purpose is not to fork. It reached `onPaywallPurchaseFailed
+        // (errorType:)` and every wrapper. Android's name wins: it is the one the vocabulary was
+        // documented with. (The `purchase_pending` EVENT name is unchanged.)
+        case .purchasePending: return "pending"
         case .verificationFailed: return "verificationFailed"
         case .unknown: return "unknown"
         }

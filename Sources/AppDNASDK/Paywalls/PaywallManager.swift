@@ -40,6 +40,26 @@ final class PaywallManager {
         self.experimentManager = experimentManager
     }
 
+    /// Would `present(id:)` find something to show? The lookup, without the presentation.
+    ///
+    /// Exists so `AppDNA.presentPaywall` can answer its caller SYNCHRONOUSLY — the presentation runs
+    /// on the main queue, long after the return value has been handed back, so "did it work" cannot be
+    /// read out of it.
+    func hasPaywall(id: String) -> Bool {
+        remoteConfigManager.getPaywallConfig(id: id) != nil
+    }
+
+    /// Would `presentByPlacement` find something to show? Runs the SAME resolver the presentation runs
+    /// — not a lookalike — so the two can never disagree about what "no paywall for this placement"
+    /// means.
+    func hasPaywall(placement: String) -> Bool {
+        PaywallPlacementResolver.pick(
+            from: Array(remoteConfigManager.getAllPaywalls().values),
+            placement: placement,
+            traits: AppDNA.getUserTraits()
+        ) != nil
+    }
+
     /// Present a paywall by placement — selects best match using audience rules.
     /// Falls back to first paywall with matching placement if no audience rules match.
     func presentByPlacement(
@@ -294,7 +314,7 @@ final class PaywallManager {
                         "paywall_id": paywallId,
                         "product_id": plan.productId ?? "",
                     ])
-                case "purchasePending":
+                case "pending":
                     eventTracker.track(event: "purchase_pending", properties: [
                         "paywall_id": paywallId,
                         "product_id": plan.productId ?? "",

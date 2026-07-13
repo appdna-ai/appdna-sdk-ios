@@ -22,8 +22,31 @@ final class BillingErrorTypeTests: XCTestCase {
         XCTAssertEqual(billingErrorType(StoreKit2Error.userCancelled), "userCancelled")
         XCTAssertEqual(billingErrorType(StoreKit2Error.productNotFound("p1")), "productNotFound")
         XCTAssertEqual(billingErrorType(StoreKit2Error.verificationFailed), "verificationFailed")
-        XCTAssertEqual(billingErrorType(StoreKit2Error.purchasePending), "purchasePending")
+        // "pending", NOT "purchasePending". Android's `billingErrorType` has always returned "pending"
+        // for the same condition, so `onPaywallPurchaseFailed(errorType:)` — and every wrapper that
+        // forwards it — forked per platform in the ONE vocabulary that exists so it cannot.
+        XCTAssertEqual(billingErrorType(StoreKit2Error.purchasePending), "pending")
         XCTAssertEqual(billingErrorType(StoreKit2Error.unknown), "unknown")
+    }
+
+    /// The vocabulary is a CLOSED set, and it is the contract two wrappers reject promises with. Pin
+    /// it whole: a new discriminator that only one platform knows is a `switch` a host cannot write.
+    func testDiscriminatorVocabularyIsTheOneBothPlatformsShare() {
+        let vocabulary: Set<String> = [
+            "userCancelled", "pending", "productNotFound", "verificationFailed",
+            "networkError", "serverError", "providerNotAvailable", "unknown",
+        ]
+        let produced: Set<String> = [
+            billingErrorType(StoreKit2Error.userCancelled),
+            billingErrorType(StoreKit2Error.purchasePending),
+            billingErrorType(StoreKit2Error.productNotFound("p")),
+            billingErrorType(StoreKit2Error.verificationFailed),
+            billingErrorType(BillingError.networkError(URLError(.timedOut))),
+            billingErrorType(BillingError.serverError("500")),
+            billingErrorType(BillingError.providerNotAvailable("no")),
+            billingErrorType(StoreKit2Error.unknown),
+        ]
+        XCTAssertEqual(produced, vocabulary)
     }
 
     func testBillingErrorsMapThroughTheTopLevelMapper() {

@@ -118,6 +118,88 @@ final class SDKSeamsTests: XCTestCase {
         XCTAssertEqual(StepConfigOverrideMerger.apply(nil, to: config).title, "Original")
     }
 
+    /// 🔴 The merger DELETED `chat_config`.
+    ///
+    /// It rebuilt `StepConfig` through its 26-parameter memberwise init and forwarded every field by
+    /// hand — and forgot that one. Forgetting a field in a rebuild does not fail to compile and does
+    /// not log: it silently drops the field. The authored chat background went to nil and
+    /// `OnboardingRenderer` fell back to a hardcoded `#0F172A`.
+    ///
+    /// And on React Native there was no such thing as "a host with no override": the wrapper's veto
+    /// decoder turned the `__appdna_unhandled` sentinel — the reply meaning "this host registered no
+    /// `onBeforeStepRender`" — into a real, all-nil `StepConfigOverride`, which the renderer then stored
+    /// for EVERY step. So every `interactive_chat` step of every flow lost its background in the DEFAULT
+    /// integration.
+    ///
+    /// This asserts what the merger must NOT touch, not what it must copy: a list of fields a test
+    /// remembers is exactly as forgettable as a list of fields an initializer remembers.
+    func testOverrideDoesNotDeleteTheFieldsItDoesNotName() throws {
+        let config = try JSONDecoder().decode(
+            StepConfig.self,
+            from: Data(#"""
+            {"title":"Original","subtitle":"Sub","cta_text":"Continue","layout_variant":"image_top",
+             "progress_color":"#FF0000","permission_type":"notifications","validation_mode":"realtime",
+             "chat_config":{"style":{"background_color":"#123456"}}}
+            """#.utf8)
+        )
+        XCTAssertEqual(config.chat_config?.style?.background_color, "#123456", "precondition: the fixture parses")
+
+        // The all-nil override — the one the RN sentinel produced on every single step.
+        let merged = StepConfigOverrideMerger.apply(StepConfigOverride(), to: config)
+
+        XCTAssertEqual(merged.chat_config?.style?.background_color, "#123456", "the authored chat background was WIPED")
+        XCTAssertEqual(merged.layout_variant, "image_top")
+        XCTAssertEqual(merged.progress_color, "#FF0000")
+        XCTAssertEqual(merged.permission_type, "notifications")
+        XCTAssertEqual(merged.validation_mode, "realtime")
+        // …and it still overrides what it IS given.
+        XCTAssertEqual(StepConfigOverrideMerger.apply(StepConfigOverride(title: "New"), to: config).title, "New")
+        XCTAssertEqual(StepConfigOverrideMerger.apply(StepConfigOverride(title: "New"), to: config).chat_config?.style?.background_color, "#123456")
+    }
+
+    /// An override that names ONLY a title must not blank a previous override's field defaults — the
+    /// rebuild assigned `field_defaults` unconditionally, so it did.
+    func testOverrideWithoutFieldDefaultsKeepsTheOnesAlreadyThere() throws {
+        var config = try JSONDecoder().decode(StepConfig.self, from: Data(#"{"title":"T"}"#.utf8))
+        config.field_defaults = ["email": AnyCodable("a@b.c")]
+
+        let merged = StepConfigOverrideMerger.apply(StepConfigOverride(title: "New"), to: config)
+
+        XCTAssertEqual(merged.field_defaults?["email"]?.value as? String, "a@b.c")
+    }
+
+    // MARK: - Placement paywall context (SPEC-070-B F3)
+
+    /// 🔴 `presentPaywall(placement:)` DROPPED `customData` — it rebuilt the context from three of its
+    /// four fields, and the fourth is the only one `PaywallManager` merges into `paywall_view`. Android
+    /// passes the context straight through, so the same JS call shipped the attributes on one platform
+    /// and silently not on the other.
+    func testPlacementContextCarriesEveryFieldIncludingCustomData() {
+        let host = PaywallContext(
+            placement: "ignored_by_the_placement_api",
+            experiment: "exp_pricing_q3",
+            variant: "treatment_b",
+            customData: ["source": "settings", "tier": 2]
+        )
+
+        let sent = PlacementPaywallContext.make(placement: "upgrade", from: host)
+
+        // The placement argument wins — that is why the rebuild exists at all.
+        XCTAssertEqual(sent.placement, "upgrade")
+        XCTAssertEqual(sent.experiment, "exp_pricing_q3")
+        XCTAssertEqual(sent.variant, "treatment_b")
+        XCTAssertEqual(sent.customData?["source"] as? String, "settings")
+        XCTAssertEqual(sent.customData?["tier"] as? Int, 2)
+    }
+
+    func testPlacementContextWithNoHostContextIsPlacementOnly() {
+        let sent = PlacementPaywallContext.make(placement: "upgrade", from: nil)
+
+        XCTAssertEqual(sent.placement, "upgrade")
+        XCTAssertNil(sent.experiment)
+        XCTAssertNil(sent.customData)
+    }
+
     // MARK: - In-app message presentation gate
 
     func testMessageGateAllowsByDefault() {

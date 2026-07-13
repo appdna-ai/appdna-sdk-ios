@@ -177,25 +177,15 @@ public struct OnboardingStep: Codable, Identifiable {
             ?? c.decodeIfPresent(StepConfig.self, forKey: .layout)
             ?? StepConfig()
 
-        // If content_blocks empty in config/layout, check step-level content_blocks
+        // If content_blocks empty in config/layout, check step-level content_blocks.
+        //
+        // Assigned, not rebuilt. This was a 26-argument re-construction that forwarded every other
+        // field by hand — the same shape as the `StepConfigOverrideMerger` bug, where exactly such a
+        // rebuild forgot `chat_config` and silently deleted it. Adding a field to `StepConfig` must not
+        // require remembering two unrelated places to copy it.
         if (decoded.content_blocks ?? []).isEmpty {
             if let stepBlocks = try c.decodeIfPresent([ContentBlock].self, forKey: .content_blocks), !stepBlocks.isEmpty {
-                decoded = StepConfig(
-                    title: decoded.title, subtitle: decoded.subtitle, image_url: decoded.image_url,
-                    cta_text: decoded.cta_text, skip_enabled: decoded.skip_enabled,
-                    options: decoded.options, selection_mode: decoded.selection_mode,
-                    items: decoded.items, layout: decoded.layout,
-                    fields: decoded.fields, validation_mode: decoded.validation_mode,
-                    field_defaults: decoded.field_defaults, chat_config: decoded.chat_config,
-                    content_blocks: stepBlocks, layout_variant: decoded.layout_variant,
-                    background: decoded.background, text_style: decoded.text_style,
-                    element_style: decoded.element_style, animation: decoded.animation,
-                    localizations: decoded.localizations, default_locale: decoded.default_locale,
-                    next_step_rules: decoded.next_step_rules, progress_color: decoded.progress_color,
-                    permission_type: decoded.permission_type,
-                    show_settings_fallback_on_denied: decoded.show_settings_fallback_on_denied,
-                    settings_fallback_label: decoded.settings_fallback_label
-                )
+                decoded.content_blocks = stepBlocks
             }
         }
         self.config = decoded
@@ -251,47 +241,54 @@ public struct StepHookConfig: Codable {
 }
 
 /// Step configuration — varies by step type.
+/// The authored content of one onboarding step.
+///
+/// The fields are `var`, not `let`, and that is load-bearing: `StepConfigOverrideMerger` used to apply
+/// a host override by REBUILDING this struct field-by-field through the memberwise init, and it forgot
+/// `chat_config`. A rebuild that forgets a field does not fail — it silently DELETES it. Overrides are
+/// applied by copying this value and assigning the two or three fields the override actually names, so
+/// a field nobody remembered survives by construction.
 public struct StepConfig: Codable {
     // welcome
-    public let title: String?
-    public let subtitle: String?
-    public let image_url: String?
-    public let cta_text: String?
-    public let skip_enabled: Bool?
+    public var title: String?
+    public var subtitle: String?
+    public var image_url: String?
+    public var cta_text: String?
+    public var skip_enabled: Bool?
 
     // question
-    public let options: [QuestionOption]?
-    public let selection_mode: SelectionMode?
+    public var options: [QuestionOption]?
+    public var selection_mode: SelectionMode?
 
     // value_prop
-    public let items: [ValuePropItem]?
+    public var items: [ValuePropItem]?
 
     // custom
-    public let layout: [String: AnyCodable]?
+    public var layout: [String: AnyCodable]?
 
     // form (SPEC-082)
-    public let fields: [FormField]?
-    public let validation_mode: String?  // "on_submit" or "realtime"
+    public var fields: [FormField]?
+    public var validation_mode: String?  // "on_submit" or "realtime"
 
     // SPEC-083: Populated by applyOverrides from StepConfigOverride.fieldDefaults
-    public let field_defaults: [String: AnyCodable]?
+    public var field_defaults: [String: AnyCodable]?
 
     // SPEC-090: Interactive chat
-    public let chat_config: ChatConfig?
+    public var chat_config: ChatConfig?
 
     // SPEC-084: Content blocks (block-based step rendering)
-    public let content_blocks: [ContentBlock]?
-    public let layout_variant: String?   // image_top, image_bottom, image_fullscreen, image_split, no_image
-    public let background: BackgroundStyleConfig?
-    public let text_style: TextStyleConfig?
-    public let element_style: ElementStyleConfig?
-    public let animation: AnimationConfig?
-    public let localizations: [String: [String: String]]?
-    public let default_locale: String?
+    public var content_blocks: [ContentBlock]?
+    public var layout_variant: String?   // image_top, image_bottom, image_fullscreen, image_split, no_image
+    public var background: BackgroundStyleConfig?
+    public var text_style: TextStyleConfig?
+    public var element_style: ElementStyleConfig?
+    public var animation: AnimationConfig?
+    public var localizations: [String: [String: String]]?
+    public var default_locale: String?
     // Navigation rules from layout (may have Logic panel conditions)
-    public let next_step_rules: [NextStepRule]?
+    public var next_step_rules: [NextStepRule]?
     // Per-step progress bar color override (overrides flow.settings.progress_color)
-    public let progress_color: String?
+    public var progress_color: String?
 
     // SPEC-421 — permission-step contract. The console serializer writes these at the
     // step-content TOP LEVEL (siblings of `content_blocks`), NOT under the inner `layout`
@@ -299,9 +296,9 @@ public struct StepConfig: Codable {
     // authored permission step emitted `permission_unavailable` and advanced without prompting.
     // Decode them as first-class fields here; the renderer prefers these, falling back to the
     // inner `layout` map only for safety.
-    public let permission_type: String?
-    public let show_settings_fallback_on_denied: Bool?
-    public let settings_fallback_label: String?
+    public var permission_type: String?
+    public var show_settings_fallback_on_denied: Bool?
+    public var settings_fallback_label: String?
 
     private enum CodingKeys: String, CodingKey {
         case title, subtitle, image_url, cta_text, skip_enabled

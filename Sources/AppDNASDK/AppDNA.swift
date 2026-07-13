@@ -581,12 +581,19 @@ public final class AppDNA: @unchecked Sendable {
     // MARK: - Public API: Paywalls
 
     /// Present a paywall modally from the given view controller.
+    ///
+    /// - Returns: `false` when NOTHING will be presented — the SDK is runtime-locked, was never
+    ///   configured, or no paywall with this id exists in the published config. `presentOnboarding`
+    ///   and `showScreen` have always reported this; `presentPaywall` returned `Void`, so every
+    ///   wrapper resolved its promise SUCCESSFULLY on a typo'd id and the host was told a paywall it
+    ///   never saw had been shown.
+    @discardableResult
     public static func presentPaywall(
         id: String,
         from viewController: UIViewController,
         context: PaywallContext? = nil,
         delegate: AppDNAPaywallDelegate? = nil
-    ) {
+    ) -> Bool {
         // SPEC-404 — refuse to present any paywall while the SDK is in
         // backend-locked mode. The lock fires only when the tenant is
         // per-key-suspended (day 20+) or org cancelled, so a paywall
@@ -594,10 +601,19 @@ public final class AppDNA: @unchecked Sendable {
         // and no entitlement would ever land on our side).
         if runtimeLock != nil {
             Log.warning("AppDNA.presentPaywall(id:\(id)) skipped — SDK in runtime-locked mode")
-            return
+            return false
         }
+        guard let manager = shared.paywallManager else {
+            Log.warning("Cannot present paywall — SDK not configured")
+            return false
+        }
+        // Resolved here, synchronously, because the answer has to be in the RETURN VALUE — by the time
+        // the main-queue block runs, the caller has already been told "presented". `present` is still
+        // dispatched either way: its not-found branch is what notifies `onPaywallError`, and a native
+        // host that relies on that callback must keep getting it.
+        let known = manager.hasPaywall(id: id)
         DispatchQueue.main.async {
-            shared.paywallManager?.present(
+            manager.present(
                 id: id,
                 from: viewController,
                 context: context,
@@ -617,31 +633,46 @@ public final class AppDNA: @unchecked Sendable {
                 delegate: delegate ?? AppDNA.paywall.delegate
             )
         }
+        return known
     }
 
     /// Present a paywall by placement — auto-selects based on audience rules.
     /// Multiple paywalls can share the same placement; the best audience match wins.
+    ///
+    /// - Returns: `false` when no paywall matched the placement, the SDK is locked, or it was never
+    ///   configured. See `presentPaywall(id:…)`.
+    @discardableResult
     public static func presentPaywall(
         placement: String,
         from viewController: UIViewController,
         context: PaywallContext? = nil,
         delegate: AppDNAPaywallDelegate? = nil
-    ) {
+    ) -> Bool {
         // SPEC-404 — same lock check as the id-based variant above.
         if runtimeLock != nil {
             Log.warning("AppDNA.presentPaywall(placement:\(placement)) skipped — SDK in runtime-locked mode")
-            return
+            return false
         }
+        guard let manager = shared.paywallManager else {
+            Log.warning("Cannot present paywall by placement — SDK not configured")
+            return false
+        }
+        let known = manager.hasPaywall(placement: placement)
         DispatchQueue.main.async {
-            shared.paywallManager?.presentByPlacement(
+            manager.presentByPlacement(
                 placement: placement,
                 from: viewController,
-                context: PaywallContext(placement: placement, experiment: context?.experiment, variant: context?.variant),
+                // 🔴 `customData` used to be DROPPED here: the context was rebuilt inline from three of
+                // its four fields, and the fourth is the only one `PaywallManager` merges into the
+                // `paywall_view` event's properties. Named and extracted so a test can hold it to
+                // carrying all four — see `PlacementPaywallContext`.
+                context: PlacementPaywallContext.make(placement: placement, from: context),
                 // Same fallback as `presentPaywall` — see the note there. A wrapper has no Swift
                 // delegate to pass, so without this the placement path is delegate-less too.
                 delegate: delegate ?? AppDNA.paywall.delegate
             )
         }
+        return known
     }
 
     // MARK: - Public API: Onboarding (v0.2)

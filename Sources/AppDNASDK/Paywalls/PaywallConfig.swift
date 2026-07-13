@@ -742,6 +742,29 @@ public struct PaywallContext {
     }
 }
 
+/// The `PaywallContext` the PLACEMENT path hands to `PaywallManager`.
+///
+/// 🔴 Extracted from `AppDNA.presentPaywall(placement:…)`, where it was built inline from THREE of
+/// `PaywallContext`'s four fields — and the fourth, `customData`, is the only one `PaywallManager`
+/// merges into the `paywall_view` event's properties. So per-presentation attributes reached the
+/// warehouse from an Android host (which passes the context straight through) and silently never from
+/// an iOS one: same JS, same call, half the data, no error and no log.
+///
+/// The rebuild itself is necessary — `placement` is an argument of the placement API, and a caller may
+/// pass a context whose own placement disagrees with it. What was not necessary was forgetting a field.
+/// It lives here, named, so a test can assert that every field survives; an inline initializer inside a
+/// `DispatchQueue.main.async` closure is unreachable from one, which is why nothing caught this.
+internal enum PlacementPaywallContext {
+    static func make(placement: String, from context: PaywallContext?) -> PaywallContext {
+        PaywallContext(
+            placement: placement,
+            experiment: context?.experiment,
+            variant: context?.variant,
+            customData: context?.customData
+        )
+    }
+}
+
 /// Reason a paywall was dismissed.
 public enum DismissReason: String {
     case purchased
