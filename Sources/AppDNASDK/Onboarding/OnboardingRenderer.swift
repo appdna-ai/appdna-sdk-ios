@@ -557,12 +557,31 @@ struct OnboardingFlowHost: View {
             return
         }
 
-        if let data {
-            responses[step.id] = data
+        // 🔴 THE USER'S PASSWORD WAS BEING UPLOADED TO THE ANALYTICS BACKEND.
+        //
+        // Two sinks took the raw `data` map — which, on a `login` / `register` / `change_password`
+        // step, is the field map the user just typed, PASSWORD INCLUDED:
+        //
+        //   1. `responses` → `SessionDataStore` (UserDefaults, plaintext, on disk, every attempt).
+        //      And `TemplateEngine.buildContext()` folds that bucket into the `{{…}}` namespace — the
+        //      same path that once rendered one user's name into another user's paywall copy. The
+        //      password was one `{{onboarding.password}}` away from being DISPLAYED.
+        //
+        //   2. `onStepCompleted` → `onboarding_step_completed`, whose properties carry
+        //      `"selection_data": data` verbatim (OnboardingFlowManager.swift:90). That event is
+        //      enqueued, uploaded, and lands in `raw.sdk_events` — so every login attempt shipped the
+        //      end-user's plaintext password into the warehouse, and kept it.
+        //
+        // Both sinks now get the REDACTED map. The host still receives the credentials in full:
+        // `executeClientHook` hands the delegate the raw `data` as `stepData` below, which is how it
+        // actually signs the user in. Nobody else needs them, so nobody else gets them.
+        let safeData = AuthSecretRedactor.redact(data, in: step)
+        if let safeData {
+            responses[step.id] = safeData
         }
         // SPEC-087: Persist responses incrementally so TemplateEngine has fresh data for next step
         SessionDataStore.shared.setOnboardingResponses(responses)
-        onStepCompleted(step.id, currentIndex, data)
+        onStepCompleted(step.id, currentIndex, safeData)
 
         // SPEC-083: Determine hook type — client delegate takes priority over server hook
         if delegate != nil {
@@ -1716,6 +1735,56 @@ enum AuthActionPolicy {
         "logout", "change_password", "set_new_password",
         "delete_account", "update_profile",
     ]
+}
+
+// MARK: - Secret redaction
+
+/// 🔴 THE USER'S PASSWORD WAS WRITTEN TO PLAINTEXT `UserDefaults` — ON EVERY LOGIN ATTEMPT.
+///
+/// `handleStepCompleted` did `responses[step.id] = data` and then persisted the whole map to
+/// `SessionDataStore` (backed by `UserDefaults`). For a `login` / `register` / `change_password` step,
+/// `data` is the field map the user just typed — **including the password**. It landed on disk before
+/// the delegate had even been asked to authenticate, and it stayed there.
+///
+/// Worse than the storage: `TemplateEngine.buildContext()` feeds the onboarding-responses bucket into
+/// the `{{…}}` namespace. That is the same path that rendered one user's name into another user's
+/// paywall copy — so a password was one `{{onboarding.password}}` away from being *displayed*.
+///
+/// The delegate still receives the credentials in full: `onBeforeStepAdvance` is handed the raw
+/// `stepData`, which is how a host signs the user in. What it does NOT get is a copy on disk.
+///
+/// The discriminator is STRUCTURAL, from the console's own schema (`flow.schema.ts`): a content block
+/// of type `input_password`, or a form field of type `password`. It is deliberately NOT a name match on
+/// the field id — `field_id.contains("password")` would miss `pwd` and would happily redact a field
+/// called `password_hint`, and a substring oracle is exactly the kind of guess this codebase has been
+/// bitten by before.
+enum AuthSecretRedactor {
+
+    /// Block/field types whose VALUE is a secret and must never be persisted or templated.
+    /// Both are typed enums, so a new secret-bearing type cannot be added as a bare string.
+    static let secretBlockTypes: Set<ContentBlockType> = [.input_password]
+    static let secretFieldTypes: Set<FormFieldType> = [.password]
+
+    /// The field ids on this step whose values are secrets.
+    static func secretFieldIds(in step: OnboardingStep) -> Set<String> {
+        var ids: Set<String> = []
+        for block in step.config.content_blocks ?? [] where secretBlockTypes.contains(block.type) {
+            ids.insert(block.field_id ?? block.id)
+        }
+        for field in step.config.fields ?? [] where secretFieldTypes.contains(field.type) {
+            ids.insert(field.id)
+        }
+        return ids
+    }
+
+    /// `data` with every secret value removed. The keys are dropped entirely rather than masked: a
+    /// `"password": "••••"` in the template namespace is still a lie a host could render.
+    static func redact(_ data: [String: Any]?, in step: OnboardingStep) -> [String: Any]? {
+        guard let data else { return nil }
+        let secrets = secretFieldIds(in: step)
+        guard !secrets.isEmpty else { return data }
+        return data.filter { !secrets.contains($0.key) }
+    }
 }
 
 // MARK: - OTP Channel Resolver
