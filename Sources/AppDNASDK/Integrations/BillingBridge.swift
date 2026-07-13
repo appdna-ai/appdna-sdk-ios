@@ -7,6 +7,26 @@ public struct PurchaseResult {
     public let price: Double
     public let currency: String
     public let provider: String
+
+    /// Does this product AUTO-RENEW? (`purchase_completed` vs `subscription_started`.)
+    ///
+    /// 🔴 `subscription_started` is one of the three MTPU-metered events the billing query counts
+    /// (`purchase_completed`, `subscription_started`, `subscription_renewed`) — and NO SDK emitted it.
+    /// The only rows in BigQuery carrying that name were seeded demo data. MTPU totals survived (a new
+    /// subscriber still lands via `purchase_completed`, and the metric is COUNT(DISTINCT user) over the
+    /// union), but the subscription funnel was fiction: nothing downstream could tell a NEW SUBSCRIPTION
+    /// from a one-off / consumable / lifetime purchase.
+    ///
+    /// Every bridge must decide this at the ONE place that knows the product's real type:
+    ///   - `StoreKit2Bridge` → `product.subscription != nil` (`Product.SubscriptionInfo?`)
+    ///   - `RevenueCatBridge` → `storeProduct.subscriptionPeriod != nil`
+    ///   - `AdaptyBridge`    → `PurchaseSuccessEvents.isAutoRenewable(productId:)` (asks StoreKit, since
+    ///     Adapty's own product model is not in scope at that emit site)
+    ///
+    /// It is deliberately non-optional and has no default: a new bridge MUST answer the question rather
+    /// than silently inherit `false`, which is exactly how an SDK ships a metered event nobody emits.
+    /// This is the Android `Entitlement.expiresAt != null` discriminator, in the iOS type that carries it.
+    public let isSubscription: Bool
 }
 
 /// Protocol for billing provider integrations.

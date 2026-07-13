@@ -250,13 +250,15 @@ final class PaywallManager {
                     productId: plan.productId ?? "",
                     appAccountToken: AppAccountTokenResolver.tokenForCurrentUser()
                 )
-                eventTracker.track(event: "purchase_completed", properties: [
-                    "paywall_id": paywallId,
-                    "product_id": result.productId,
-                    "price": result.price,
-                    "currency": result.currency,
-                    "provider": result.provider,
-                ])
+                // `purchase_completed` (unchanged) and — ONLY when the purchased product auto-renews —
+                // `subscription_started`, the MTPU-metered event iOS never emitted. Both carry the same
+                // envelope; the rule lives in `PurchaseSuccessEvents` so StoreKit2 / RevenueCat / Adapty
+                // all obey it from the single result they each return.
+                PurchaseSuccessEvents.emit(
+                    tracker: eventTracker,
+                    paywallId: paywallId,
+                    result: result
+                )
                 DispatchQueue.main.async { [weak self] in
                     delegate?.onPaywallPurchaseCompleted(
                         paywallId: paywallId,

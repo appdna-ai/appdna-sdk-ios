@@ -35,7 +35,8 @@ final class BillingModuleOwnerVerificationTests: XCTestCase {
             transactionId: "tx-1",
             price: 9.99,
             currency: "USD",
-            provider: "test"
+            provider: "test",
+            isSubscription: false
         )
         var restoreResult: [String] = []
         var entitlementsResult: [String] = []

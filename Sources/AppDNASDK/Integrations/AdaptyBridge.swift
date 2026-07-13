@@ -64,14 +64,21 @@ final class AdaptyBridge: BillingBridgeProtocol {
                 transactionId: result.transactionId ?? UUID().uuidString,
                 price: result.price ?? 0,
                 currency: result.currencyCode ?? "USD",
-                provider: "adapty"
+                provider: "adapty",
+                // Adapty's purchase result does not carry the product TYPE at this site, so ask the store
+                // that actually billed it. Same rule as StoreKit2Bridge (`product.subscription != nil`),
+                // just resolved a level up — an Adapty customer must not be the one customer whose
+                // subscriptions never emit `subscription_started`.
+                isSubscription: await PurchaseSuccessEvents.isAutoRenewable(productId: productId)
             )
-            eventTracker?.track(event: "purchase_completed", properties: [
-                "product_id": productId,
-                "price": purchaseResult.price,
-                "currency": purchaseResult.currency,
-                "provider": "adapty",
-            ])
+            // `purchase_completed` + (auto-renewing only) `subscription_started`, same envelope.
+            if let eventTracker {
+                PurchaseSuccessEvents.emit(
+                    tracker: eventTracker,
+                    paywallId: nil,
+                    result: purchaseResult
+                )
+            }
             // SPEC-400 — fire onPurchaseCompleted to the host's
             // AppDNABillingDelegate. Bridges are the single source of
             // truth for billing-delegate purchase events.

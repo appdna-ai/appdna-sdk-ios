@@ -75,7 +75,17 @@ final class RevenueCatBridge: NSObject, BillingBridgeProtocol {
             transactionId: customerInfo.originalAppUserId,
             price: NSDecimalNumber(decimal: product.price).doubleValue,
             currency: product.currencyCode ?? "USD",
-            provider: "revenuecat"
+            provider: "revenuecat",
+            // RC's `StoreProduct.subscriptionPeriod` is non-nil ONLY for an auto-renewing product — the
+            // RC-model equivalent of StoreKit's `Product.subscription != nil`. `PaywallManager` reads
+            // this off the result and emits `subscription_started` alongside `purchase_completed`, so RC
+            // customers are covered by the same rule as the native store path.
+            //
+            // NOT emitted from `purchases(_:receivedUpdated:)` below: that callback fires on renewals,
+            // restores and cross-device syncs too, so a `subscription_started` there would fire once per
+            // renewal — an over-count on a METERED event, and the exact double-count
+            // `SubscriptionStatusObserver` was written to avoid.
+            isSubscription: product.subscriptionPeriod != nil
         )
     }
 

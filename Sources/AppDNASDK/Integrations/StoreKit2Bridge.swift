@@ -67,7 +67,12 @@ final class StoreKit2Bridge: BillingBridgeProtocol {
                 transactionId: String(transaction.id),
                 price: NSDecimalNumber(decimal: product.price).doubleValue,
                 currency: product.priceFormatStyle.currencyCode ?? "USD",
-                provider: "storekit2"
+                provider: "storekit2",
+                // `Product.subscription` is `Product.SubscriptionInfo?` — non-nil ONLY for an
+                // auto-renewable subscription. A consumable / non-consumable / lifetime unlock leaves it
+                // nil and therefore emits `purchase_completed` alone. This is the iOS half of the
+                // discriminator Android reads off `Entitlement.expiresAt != null`.
+                isSubscription: product.subscription != nil
             )
 
         case .userCancelled:
