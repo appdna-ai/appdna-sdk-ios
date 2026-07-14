@@ -229,13 +229,21 @@ internal class ScreenManager {
 
         let flowManager = FlowManager(flowConfig: config, screens: screens)
         flowManager.onComplete = { result in
-            let eventName = result.completed ? "flow_completed" : "flow_abandoned"
-            AppDNA.track(event:eventName, properties: [
+            // Emit the LITERAL event name for each terminal — the catalog-provenance gate harvests real
+            // `track("…")` literals, and a ternary-built name is invisible to it, which is why
+            // `flow_completed` (the flow's success terminal, the most valuable of the three) could not be
+            // catalogued and thus could not be a journey/email trigger. Two literal calls, same props.
+            let props: [String: Any] = [
                 "flow_id": flowId,
                 "flow_name": config.name,
                 "screens_viewed": result.screensViewed,
                 "duration_ms": result.duration_ms,
-            ])
+            ]
+            if result.completed {
+                AppDNA.track(event: "flow_completed", properties: props)
+            } else {
+                AppDNA.track(event: "flow_abandoned", properties: props)
+            }
             // SPEC-400 — fire onFlowCompleted to the host's
             // AppDNAScreenDelegate. Fires for both completed and
             // abandoned flows; the FlowResult.completed flag tells
