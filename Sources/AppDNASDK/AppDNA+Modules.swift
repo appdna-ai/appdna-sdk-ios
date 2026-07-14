@@ -86,6 +86,9 @@ extension AppDNA {
         private var entitlementChangeHandlers: [UUID: ([Entitlement]) -> Void] = [:]
         private let entitlementHandlerLock = NSLock()
         private var entitlementObserverToken: NSObjectProtocol?
+        /// The active product-id set at the last `refreshEntitlementCache`. Used to post
+        /// `.entitlementsChanged` only on a REAL change. Guarded by `entitlementHandlerLock`.
+        private var lastKnownEntitlementIds: Set<String> = []
 
         internal init() {}
 
@@ -252,14 +255,33 @@ extension AppDNA {
                 return
             }
             // Calling getEntitlements() reads `Transaction.currentEntitlements`
-            // (or RC/Adapty customerInfo) without firing restore events. The
-            // result is discarded — we only care about the side-effect of
-            // priming any internal cache the bridge maintains. Token is
+            // (or RC/Adapty customerInfo) without firing restore events. Token is
             // critical here: this method is auto-called by `identify`, and
             // the whole point of that call is to make the cache reflect the
             // *newly-identified* user — passing the freshly-resolved token
             // is what filters out the previous user's transactions.
-            _ = await bridge.getEntitlements(appAccountToken: AppAccountTokenResolver.tokenForCurrentUser())
+            let productIds = await bridge.getEntitlements(appAccountToken: AppAccountTokenResolver.tokenForCurrentUser())
+
+            // 🔴 POST `.entitlementsChanged` on a real change — this is what makes `onEntitlementsChanged`
+            // fire on iOS AT ALL. The result USED TO BE DISCARDED: the only poster of that notification is
+            // `EntitlementCache`, which is NEVER constructed anywhere in the iOS SDK, so the host's
+            // entitlement-change callback (and the typed billing delegate) were dead on iOS while Android
+            // drove them live (`AppDNA.kt` constructs `EntitlementCache`). Diff against the last-known
+            // active set so we don't fire a spurious callback on every identify with unchanged
+            // entitlements. (Real-time renewal/expiry without a refresh still needs a Firestore-listener
+            // wiring — the `EntitlementCache.startObserving` design — tracked separately.)
+            let newIds = Set(productIds)
+            entitlementHandlerLock.lock()
+            let changed = newIds != lastKnownEntitlementIds
+            lastKnownEntitlementIds = newIds
+            entitlementHandlerLock.unlock()
+            guard changed else { return }
+            let entitlements = productIds.map {
+                ServerEntitlement(productId: $0, store: "app_store", status: "active",
+                                  expiresAt: nil, isTrial: false, offerType: nil)
+            }
+            NotificationCenter.default.post(name: .entitlementsChanged, object: nil,
+                                            userInfo: ["entitlements": entitlements])
         }
 
         /// Register a callback that fires when entitlements change.

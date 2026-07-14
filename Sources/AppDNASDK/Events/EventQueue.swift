@@ -278,11 +278,30 @@ final class EventQueue {
                     self.consecutiveFailures = 0
                     Log.debug("Flush successful: \(batch.count) events delivered")
                 } else if self.apiClient.eventUploadPermanentlyFailed {
-                    // Permanent 4xx (401 / other 4xx, but NOT 408 or 429) — retrying
-                    // won't help. Pause immediately.
+                    // 🔴 DROP THE POISON BATCH — don't just pause. A permanent 4xx (400 malformed /
+                    // 401 bad key, NOT 408/429) fails identically forever, and `flush()` always takes
+                    // the OLDEST `batchSize` events (`prefix`, above). Pausing WITHOUT removing this
+                    // batch leaves it at the head of `pendingEvents`; the pause latch resets each new
+                    // session, so it re-POSTs, 4xxs, and re-pauses forever — head-of-line-blocking
+                    // EVERY later event until the 7-day disk horizon evicts it. Android drops it (see
+                    // EventQueue.kt ClientError branch); iOS must too. The whole batch is a real loss
+                    // (a 401 drops valid events, a 400 malformed ones), so count it into the
+                    // server-visible dropped counter — each normal event +1, plus any carried
+                    // `_sdk_events_dropped` meta count — so nothing vanishes silently.
+                    var loss = 0
+                    for event in batch {
+                        if event.event_name == "_sdk_events_dropped" {
+                            loss += (event.properties?["count"]?.value as? Int) ?? 0
+                        } else {
+                            loss += 1
+                        }
+                    }
+                    if loss > 0 { DroppedEventsCounter.increment(loss) }
+                    self.pendingEvents.removeAll { eventIds.contains($0.event_id) }
+                    self.eventStore.removeSent(eventIds: eventIds)
                     self.consecutiveFailures = self.maxConsecutiveFailures
                     self.retryCount = 0
-                    Log.error("Event uploads permanently failed (invalid key or payload). Paused until next session.")
+                    Log.error("Dropping batch of \(batch.count) events after permanent 4xx (retry won't help). Paused until next session.")
                 } else {
                     if self.retryCount < self.maxRetries {
                         // A server-supplied Retry-After wins over our backoff schedule.
