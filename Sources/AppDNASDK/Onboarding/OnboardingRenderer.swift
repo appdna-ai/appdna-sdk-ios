@@ -334,6 +334,12 @@ struct OnboardingFlowHost: View {
                 Button {
                     let previousIndex = navigationHistory.last ?? max(currentIndex - 1, 0)
                     Log.debug("[Onboarding] Back button tapped, going from \(currentIndex) to \(previousIndex)")
+                    // 🔴 DISCARD A COMPLETION WAITING ON A HOOK. Tapping Log-in arms
+                    // `pendingStepCompletion` and starts the hook (with a 300 ms grace before the spinner
+                    // shows, during which Back is still tappable). Going back means the user did NOT
+                    // complete this step — but the pending would otherwise be fired by the NEXT
+                    // `applyOutcome`, recording a completion for the step they just abandoned. Clear it.
+                    pendingStepCompletion = nil
                     navigationHistory.removeLast()
                     withAnimation(.easeInOut(duration: 0.25)) { currentIndex = previousIndex }
                 } label: {
@@ -893,6 +899,9 @@ struct OnboardingFlowHost: View {
     // MARK: - Navigation helpers
 
     private func handleStepSkipped(step: OnboardingStep) {
+        // Skipping is not completing: discard any completion waiting on an in-flight hook, or the
+        // `advanceOrComplete()` below would fire it and record this step as completed AND skipped.
+        pendingStepCompletion = nil
         onStepSkipped(step.id, currentIndex)
         advanceOrComplete()
     }

@@ -1700,6 +1700,25 @@ public final class AppDNA: @unchecked Sendable {
     /// Flushes the event queue and resets internal state.
     /// After calling shutdown the SDK must be re-configured before use.
     public static func shutdown() {
+        // 🔴 CLEAR `isConfigured` SYNCHRONOUSLY, UNDER THE SAME LOCK `configure()` READS — OR A
+        // shutdown()→configure() PAIR LEAVES THE SDK DEAD FOR THE PROCESS.
+        //
+        // `configure()` checks `isConfigured` synchronously under `initLock` and returns early if it is
+        // true. This flag used to be flipped to false ONLY inside the async teardown block below. So the
+        // ordinary sign-out→sign-in / RN-reload sequence — `shutdown(); configure()` on the same tick —
+        // ran `configure()` while the teardown was merely SCHEDULED, `isConfigured` was still true, and
+        // the configure was IGNORED. The teardown then nilled everything, and the SDK stayed dead (no
+        // pipeline, no billing, no managers) until the process restarted. There is no completion
+        // callback on `shutdown()` for a host to wait on, so it could not even be worked around.
+        //
+        // Flipped here, on the caller's thread, before the async teardown is queued: a `configure()`
+        // that follows now sees `false` and proceeds. Its `performConfigure` is enqueued on the same
+        // serial `queue` strictly AFTER this teardown (configure double-hops through main first), so the
+        // rebuild lands after the teardown — correct order, no lost re-configure.
+        shared.initLock.lock()
+        shared.isConfigured = false
+        shared.initLock.unlock()
+
         shared.queue.async {
             // 🔴 BILLING GOES DOWN FIRST — BEFORE THE PIPELINE THAT REPORTS IT.
             //
@@ -1724,7 +1743,8 @@ public final class AppDNA: @unchecked Sendable {
             shared.subscriptionObserver = nil
             shared.sessionManager = nil
             shared.apiClient = nil
-            shared.isConfigured = false
+            // `isConfigured` was already cleared synchronously at the top (under initLock) so a
+            // concurrent `configure()` is not lost. Only `isReady` is cleared here.
             shared.isReady = false
             // SPEC-070-B PN row 10 (iOS half): a static that outlives the instance must be reset, or a
             // re-configure()d SDK attributes its first events to the previous run's last screen.
