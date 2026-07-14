@@ -52,6 +52,26 @@ enum OnboardingAdvance {
         case presentPaywallTrigger(nodeId: String)
         /// Remain on the current step (hook returned `.block` / `.stay`).
         case stay
+
+        /// 🔴 DID THE STEP ACTUALLY COMPLETE?
+        ///
+        /// The only honest definition: the flow LEFT the step. `.stay` is the hook saying no — a wrong
+        /// password, a failed sign-in, a validation error — and the user is still looking at the very
+        /// same step. Nothing completed.
+        ///
+        /// `onboarding_step_completed` used to be emitted the moment the user tapped the button, before
+        /// the hook had decided anything. So a user who mistyped their password three times emitted FOUR
+        /// completions of a step they never completed, and the successful fourth attempt made five. That
+        /// corrupts step-completion and funnel conversion — the metrics the product is sold on — and it
+        /// over-counts worst at the credential step, the step users actually fail at. The flows that
+        /// convert worst looked the healthiest.
+        ///
+        /// It lives on the pure machine, not in either renderer, so both platforms answer the question
+        /// the same way and a test can ask it without a host.
+        var completesStep: Bool {
+            if case .stay = self { return false }
+            return true
+        }
     }
 
     struct Outcome {

@@ -26,6 +26,9 @@ struct OnboardingFlowHost: View {
 
     // SPEC-083: Hook state
     @State private var isProcessing = false
+    /// A step submission whose completion event is waiting on the hook's verdict. See
+    /// `PendingStepCompletion` and `applyOutcome`.
+    @State private var pendingStepCompletion: PendingStepCompletion?
     @State private var loadingText: String = "Processing..."
     @State private var errorMessage: String?
     @State private var showError = false
@@ -579,24 +582,53 @@ struct OnboardingFlowHost: View {
         if let safeData {
             responses[step.id] = safeData
         }
-        // SPEC-087: Persist responses incrementally so TemplateEngine has fresh data for next step
+        // SPEC-087: Persist responses incrementally so TemplateEngine has fresh data for next step.
+        // The persist stays here even for a hook step: the hook is HANDED `responses`, and if it blocks
+        // we stay on the step and the user's typed values must survive the re-render.
         SessionDataStore.shared.setOnboardingResponses(responses)
-        onStepCompleted(step.id, currentIndex, safeData)
 
         // SPEC-083: Determine hook type — client delegate takes priority over server hook
         if delegate != nil {
-            // Client-side hook — for auth actions, the delegate handles the side
-            // effect and returns .proceed/.proceedWithData to advance, .block to
-            // stay (e.g. show "Signing in..."), or dismisses the host.
+            // 🔴 `onboarding_step_completed` USED TO FIRE HERE — BEFORE THE HOOK HAD DECIDED ANYTHING.
+            //
+            // On a hook step the hook is what decides whether the step completes. A `login` step whose
+            // delegate answers `.block("Wrong password")` does NOT complete: the user stays exactly
+            // where they were. But the event had already gone out. Mistype your password three times
+            // and the funnel records FOUR completions of a step you never completed — and the next
+            // one, on success, makes five.
+            //
+            // The metric this corrupts is the one the product is sold on: onboarding step-completion
+            // and funnel conversion. It over-counts worst precisely where the funnel matters most —
+            // the credential step, the step users actually fail at — so the flows that convert badly
+            // are the ones that look healthiest.
+            //
+            // The emit now happens in `applyOutcome`, the single place where the pure machine's
+            // decision becomes navigation, and only when the flow ACTUALLY LEAVES the step. Same for
+            // the server-hook path below; both converge on `handleHookResult`.
+            pendingStepCompletion = PendingStepCompletion(stepId: step.id, index: currentIndex, data: safeData)
             executeClientHook(step: step, data: data)
         } else if let hook = step.hook, hook.enabled == true {
-            // Server-side hook (P1)
+            pendingStepCompletion = PendingStepCompletion(stepId: step.id, index: currentIndex, data: safeData)
             executeServerHook(step: step, data: data, hookConfig: hook)
         } else {
-            // No hook — advance immediately. (The auth-action-without-delegate case can no longer
-            // reach here: it returned at the top, before anything was emitted or stored.)
+            // No hook — nothing can veto, so the step completes the moment it is submitted. (The
+            // auth-action-without-delegate case cannot reach here: it returned at the top, before
+            // anything was emitted or stored.)
+            onStepCompleted(step.id, currentIndex, safeData)
             advanceOrComplete()
         }
+    }
+
+    /// A step submission whose completion event is waiting on the hook's verdict.
+    ///
+    /// Nil unless a hook is in flight. `applyOutcome` fires it if — and only if — the outcome actually
+    /// navigates away from the step, and clears it otherwise so a blocked attempt cannot leak into the
+    /// next one. `@State` because a `View` is a value type: a plain stored property cannot be mutated
+    /// from the view's own methods.
+    struct PendingStepCompletion {
+        let stepId: String
+        let index: Int
+        let data: [String: Any]?
     }
 
     // MARK: - Client-side hook execution
@@ -795,6 +827,22 @@ struct OnboardingFlowHost: View {
     /// Execute an `OnboardingAdvance.Outcome`: the ONLY place the pure machine's decisions become
     /// side effects (state write-back, SessionDataStore, analytics, banner, navigation).
     private func applyOutcome(_ outcome: OnboardingAdvance.Outcome) {
+        // 🔴 THE STEP COMPLETES WHEN THE FLOW LEAVES IT — NOT WHEN THE USER TAPS THE BUTTON.
+        //
+        // A hook step's completion is the hook's to decide. `.stay` means the hook said no (a wrong
+        // password, a failed sign-in, a validation error), the user is still looking at the same step,
+        // and nothing completed. Emitting here — and only on a navigating outcome — is what makes
+        // `onboarding_step_completed` mean what its name says.
+        //
+        // The pending value is cleared either way: a blocked attempt must not leak into the next one,
+        // and a user who fixes their password and succeeds emits exactly ONE completion.
+        if let pending = pendingStepCompletion {
+            pendingStepCompletion = nil
+            if outcome.navigation.completesStep {
+                onStepCompleted(pending.stepId, pending.index, pending.data)
+            }
+        }
+
         if outcome.responsesChanged {
             responses = outcome.responses
         }
