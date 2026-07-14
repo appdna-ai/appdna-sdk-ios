@@ -134,12 +134,12 @@ internal class ScreenManager {
         }
 
         // Check scheduling (AC-098, AC-099)
-        if let startDate = config.start_date, let date = ISO8601DateFormatter().date(from: startDate), date > Date() {
+        if let startDate = config.start_date, let date = ISO8601.date(from: startDate), date > Date() {
             completion?(ScreenResult(screenId: screenId, dismissed: true))
             nestingDepth -= 1
             return
         }
-        if let endDate = config.end_date, let date = ISO8601DateFormatter().date(from: endDate), date < Date() {
+        if let endDate = config.end_date, let date = ISO8601.date(from: endDate), date < Date() {
             completion?(ScreenResult(screenId: screenId, dismissed: true))
             nestingDepth -= 1
             return
@@ -438,10 +438,10 @@ internal class ScreenManager {
         guard let triggerRules = entry.trigger_rules else { return false }
 
         // Check scheduling
-        if let startDate = entry.start_date, let date = ISO8601DateFormatter().date(from: startDate), date > Date() {
+        if let startDate = entry.start_date, let date = ISO8601.date(from: startDate), date > Date() {
             return false
         }
-        if let endDate = entry.end_date, let date = ISO8601DateFormatter().date(from: endDate), date < Date() {
+        if let endDate = entry.end_date, let date = ISO8601.date(from: endDate), date < Date() {
             return false
         }
 

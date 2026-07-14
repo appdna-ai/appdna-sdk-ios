@@ -55,10 +55,10 @@ internal class AutoTriggerEngine {
     ) -> Bool {
         // Check scheduling
         if let startDate = entry.start_date,
-           let date = ISO8601DateFormatter().date(from: startDate),
+           let date = ISO8601.date(from: startDate),
            date > now { return false }
         if let endDate = entry.end_date,
-           let date = ISO8601DateFormatter().date(from: endDate),
+           let date = ISO8601.date(from: endDate),
            date < now { return false }
 
         // Check audience rules

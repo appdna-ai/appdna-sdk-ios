@@ -145,11 +145,20 @@ extension AppDNA {
                 throw BillingModuleError.noBillingProvider
             }
             let token = options?.appAccountToken ?? AppAccountTokenResolver.tokenForCurrentUser()
+            // 🔴 CAPTURE THE TRACKER STRONGLY BEFORE THE AWAIT — OR A PURCHASE CAN CHARGE AND EMIT NOTHING.
+            //
+            // `bridge` is a local strong `let`, so a purchase already past the guard completes even if
+            // `shutdown()` runs during the StoreKit sheet (seconds of user Face-ID). But `eventTracker`
+            // is `weak`, and `teardown()` nils it — so if `shutdown()` lands mid-purchase, the charge
+            // goes through and `if let eventTracker` reads nil: money taken, ZERO metered events. Moving
+            // teardown() earlier (which the shutdown fix did, correctly) makes this MORE likely, not less.
+            // Pin the tracker to the purchase the instant we commit to it.
+            let tracker = eventTracker
             let result = try await bridge.purchase(productId: productId, appAccountToken: token)
             // No `paywall_id`: this purchase did not come from an AppDNA-rendered paywall. Fabricating
             // one would misattribute revenue to a paywall that was never shown.
-            if let eventTracker {
-                PurchaseSuccessEvents.emit(tracker: eventTracker, paywallId: nil, result: result)
+            if let tracker {
+                PurchaseSuccessEvents.emit(tracker: tracker, paywallId: nil, result: result)
             }
             return TransactionInfo(
                 transactionId: result.transactionId,

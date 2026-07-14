@@ -125,7 +125,7 @@ struct ChatStepView: View {
                     let content = msg["content"] as? String ?? ""
                     let msgId = msg["id"] as? String ?? UUID().uuidString
                     let ts: Date = {
-                        if let s = msg["timestamp"] as? String { return ISO8601DateFormatter().date(from: s) ?? Date() }
+                        if let s = msg["timestamp"] as? String { return ISO8601.date(from: s) ?? Date() }
                         return Date()
                     }()
                     messages.append(ChatMessage(id: msgId, role: role == "user" ? .user : .ai, content: content, media: nil, timestamp: ts))
