@@ -421,13 +421,29 @@ extension AppDNA {
         }
 
         /// Present a paywall.
+        /// 🔴 THIS DISCARDED THE ANSWER — ON THE SURFACE THAT TAKES THE MONEY.
+        ///
+        /// `AppDNA.presentPaywall(...)` returns a Bool: false when the id is not in the published
+        /// config, when the SDK is not configured, or when it is runtime-locked. This facade — the one
+        /// the docs tell hosts to call, and the one both wrappers route through — threw it away and
+        /// returned `Void`. So `AppDNA.paywall.present("typo_id")` looked like a success to every
+        /// caller, native and wrapper alike, and no paywall ever appeared.
+        ///
+        /// `OnboardingModule.present` has always returned Bool. The paywall — where the revenue is —
+        /// was the one that did not.
+        ///
+        /// Returns false if nothing was presented.
+        @discardableResult
         public func present(
             _ paywallId: String,
             from viewController: UIViewController? = nil,
             context: PaywallContext? = nil
-        ) {
-            guard let vc = viewController ?? AppDNA.topViewController() else { return }
-            AppDNA.presentPaywall(id: paywallId, from: vc, context: context, delegate: delegate)
+        ) -> Bool {
+            guard let vc = viewController ?? AppDNA.topViewController() else {
+                Log.warning("PaywallModule.present: no view controller to present from")
+                return false
+            }
+            return AppDNA.presentPaywall(id: paywallId, from: vc, context: context, delegate: delegate)
         }
 
         /// Set a delegate for paywall events.
