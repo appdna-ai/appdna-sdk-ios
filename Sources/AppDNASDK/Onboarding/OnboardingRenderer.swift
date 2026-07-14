@@ -1810,19 +1810,39 @@ enum AuthSecretRedactor {
 
     /// Block/field types whose VALUE is a secret and must never be persisted or templated.
     /// Both are typed enums, so a new secret-bearing type cannot be added as a bare string.
-    static let secretBlockTypes: Set<ContentBlockType> = [.input_password]
+    ///
+    /// 🔴 `otp_input` WAS MISSING. A `verify_otp` step captures the one-time code in an `otp_input`
+    /// block, which writes it into the SAME `inputValues` map — so the code (and, via the auth-action
+    /// payload, the recipient phone/email) shipped to `selection_data` → `raw.sdk_events`, unredacted.
+    /// A one-time code is a credential; it belongs here beside `input_password`.
+    static let secretBlockTypes: Set<ContentBlockType> = [.input_password, .otp_input]
     static let secretFieldTypes: Set<FormFieldType> = [.password]
 
-    /// The field ids on this step whose values are secrets.
+    /// The field ids on this step whose values are secrets — INCLUDING nested blocks.
+    ///
+    /// 🔴 THE ORIGINAL SCAN WAS TOP-LEVEL ONLY, so a password inside a `row` / `stack` (its
+    /// `children` / `stack_children`) sailed past it. The renderers recurse into nested blocks and write
+    /// every input into the SAME shared `inputValues` map regardless of depth, and `flow.schema.ts`
+    /// validates content blocks as `z.array(z.unknown())` — nothing rejects a nested `input_password`
+    /// from the AI generator, an import, a template, or a direct API POST. So "structural for flat
+    /// layouts only" was not structural. This walks the whole tree.
     static func secretFieldIds(in step: OnboardingStep) -> Set<String> {
         var ids: Set<String> = []
-        for block in step.config.content_blocks ?? [] where secretBlockTypes.contains(block.type) {
-            ids.insert(block.field_id ?? block.id)
-        }
+        collectSecretBlockIds(step.config.content_blocks ?? [], into: &ids)
         for field in step.config.fields ?? [] where secretFieldTypes.contains(field.type) {
             ids.insert(field.id)
         }
         return ids
+    }
+
+    private static func collectSecretBlockIds(_ blocks: [ContentBlock], into ids: inout Set<String>) {
+        for block in blocks {
+            if secretBlockTypes.contains(block.type) {
+                ids.insert(block.field_id ?? block.id)
+            }
+            if let children = block.children { collectSecretBlockIds(children, into: &ids) }
+            if let stackChildren = block.stack_children { collectSecretBlockIds(stackChildren, into: &ids) }
+        }
     }
 
     /// `data` with every secret value removed. The keys are dropped entirely rather than masked: a

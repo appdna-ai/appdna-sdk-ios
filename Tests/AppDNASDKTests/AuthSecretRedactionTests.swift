@@ -139,4 +139,69 @@ final class AuthSecretRedactionTests: XCTestCase {
         XCTAssertEqual(try AuthSecretRedactor.secretFieldIds(in: loginStep()), ["password"])
         XCTAssertEqual(try AuthSecretRedactor.secretFieldIds(in: formStepWithPasswordField()), ["passcode"])
     }
+
+    /// 🔴 A PASSWORD NESTED IN A `row` STILL SHIPPED TO THE WAREHOUSE — the scan was top-level only.
+    /// The renderer writes nested inputs into the SAME value map, so the redactor must walk the tree.
+    func testAPasswordNestedInsideARowIsRedacted() throws {
+        let json = """
+        {
+          "id": "step_login_row",
+          "type": "custom",
+          "config": {
+            "content_blocks": [
+              { "id": "row1", "type": "row", "children": [
+                { "id": "b1", "type": "input_email",    "field_id": "email" },
+                { "id": "b2", "type": "input_password", "field_id": "password" }
+              ] },
+              { "id": "b3", "type": "button", "action": "login" }
+            ]
+          }
+        }
+        """.data(using: .utf8)!
+        let step = try JSONDecoder().decode(OnboardingStep.self, from: json)
+
+        XCTAssertEqual(try AuthSecretRedactor.secretFieldIds(in: step), ["password"])
+        let safe = AuthSecretRedactor.redact(["email": "a@b.com", "password": "hunter2"], in: step)
+        XCTAssertNil(safe?["password"], "a password nested inside a row block leaked to the warehouse")
+        XCTAssertEqual(safe?["email"] as? String, "a@b.com")
+    }
+
+    /// ...and one nested two levels deep, in `stack_children` — the other nesting key.
+    func testAPasswordNestedTwoLevelsDeepIsRedacted() throws {
+        let json = """
+        {
+          "id": "s", "type": "custom",
+          "config": { "content_blocks": [
+            { "id": "outer", "type": "stack", "stack_children": [
+              { "id": "inner", "type": "row", "children": [
+                { "id": "p", "type": "input_password", "field_id": "pw" }
+              ] }
+            ] }
+          ] }
+        }
+        """.data(using: .utf8)!
+        let step = try JSONDecoder().decode(OnboardingStep.self, from: json)
+        XCTAssertEqual(try AuthSecretRedactor.secretFieldIds(in: step), ["pw"])
+    }
+
+    /// 🔴 THE OTP CODE WAS NOT REDACTED. A `verify_otp` step captures the one-time code in an
+    /// `otp_input` block; it shipped to `raw.sdk_events` in the clear.
+    func testTheOtpCodeIsRedacted() throws {
+        let json = """
+        {
+          "id": "step_verify", "type": "custom",
+          "config": { "content_blocks": [
+            { "id": "b1", "type": "otp_input", "field_id": "code" },
+            { "id": "b2", "type": "button", "action": "verify_otp" }
+          ] }
+        }
+        """.data(using: .utf8)!
+        let step = try JSONDecoder().decode(OnboardingStep.self, from: json)
+
+        let safe = AuthSecretRedactor.redact(
+            ["code": "418302", "action": "verify_otp", "channel": "sms"], in: step
+        )
+        XCTAssertNil(safe?["code"], "the one-time code shipped to the warehouse unredacted")
+        XCTAssertEqual(safe?["action"] as? String, "verify_otp", "non-secret metadata must survive")
+    }
 }
