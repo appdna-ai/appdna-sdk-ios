@@ -20,6 +20,9 @@ public struct AppDNAScreenSlot: View {
     @State private var screenConfig: ScreenConfig?
     @State private var isLoading = true
     @State private var isEmpty = false
+    /// The slot name already loaded, so `onAppear` runs `loadSlotContent()` (which emits
+    /// slot_registered/_rendered/_empty) ONCE per name — not on every SwiftUI re-appearance.
+    @State private var loadedName: String?
 
     public init(_ name: String) {
         self.name = name
@@ -40,6 +43,12 @@ public struct AppDNAScreenSlot: View {
             }
         }
         .onAppear {
+            // Match Android's `LaunchedEffect(name)` — load + emit telemetry ONCE per slot name, not on
+            // every re-appearance (scroll back into view, nav return, tab switch). Bare `onAppear`
+            // re-fired on each, re-emitting slot_registered/_rendered/_empty and inflating slot-impression
+            // counts relative to Android.
+            guard loadedName != name else { return }
+            loadedName = name
             loadSlotContent()
         }
     }
