@@ -59,6 +59,11 @@ final class WebEntitlementManager {
                 // No entitlement doc — user has no web subscription
                 if self.currentEntitlement != nil {
                     self.currentEntitlement = nil
+                    // 🔴 RESET previousStatus, or a later re-activation never emits web_entitlement_activated.
+                    // Without this, `active → doc deleted → doc re-created active` leaves previousStatus at
+                    // `.active`, so the activation guard below (`prevStatus == nil || canceled || pastDue`)
+                    // is false for the genuine re-activation and the event silently never fires.
+                    self.previousStatus = nil
                     self.cacheEntitlement(nil)
                     NotificationCenter.default.post(name: .webEntitlementChanged, object: nil)
                 }
