@@ -297,6 +297,19 @@ public final class AppDNA: @unchecked Sendable {
     /// than merely observing that `track()` did not throw. Its `eventSink` fires on every enqueue.
     internal static var eventTrackerForTesting: EventTracker? { shared.eventTracker }
 
+    /// Test-only: how many times `performConfigure` actually built the SDK (i.e. was NOT superseded
+    /// by a later configure()/shutdown()). A `configure(); shutdown(); configure()` on one tick must
+    /// leave this at 1 — the first, superseded build must be a no-op. See `configureEpoch`.
+    private static let performConfigureCountLock = NSLock()
+    private static var _performConfigureCount = 0
+    internal static var performConfigureCountForTesting: Int {
+        performConfigureCountLock.lock(); defer { performConfigureCountLock.unlock() }
+        return _performConfigureCount
+    }
+    internal static func resetPerformConfigureCountForTesting() {
+        performConfigureCountLock.lock(); _performConfigureCount = 0; performConfigureCountLock.unlock()
+    }
+
     // MARK: - Singleton
 
     private static let shared = AppDNA()
@@ -337,6 +350,15 @@ public final class AppDNA: @unchecked Sendable {
     /// Double-`configure()` guard. Set the INSTANT `configure()` is entered, long before the SDK can
     /// do anything — so it must never be used to answer "is the SDK usable yet".
     private var isConfigured = false
+
+    /// Monotonic configure generation, bumped under `initLock` on every accepted `configure()`.
+    /// `performConfigure` captures the value it was scheduled with and bails if a newer configure
+    /// has since superseded it. Without this, `configure(); shutdown(); configure()` on one tick
+    /// schedules the FIRST configure's `performConfigure` (which `shutdown` no longer no-ops away,
+    /// now that isConfigured is cleared synchronously) to run right before the second's — building
+    /// the pipeline, observers and timers twice with no teardown between. The epoch makes the stale
+    /// build a no-op so exactly the latest configure wins.
+    private var configureEpoch = 0
 
     /// What `onReady` actually waits for: bootstrap has settled and the managers are wired.
     ///
@@ -397,6 +419,8 @@ public final class AppDNA: @unchecked Sendable {
             return
         }
         shared.isConfigured = true
+        shared.configureEpoch &+= 1
+        let epoch = shared.configureEpoch
         shared.initLock.unlock()
 
         // Firebase MUST be initialized on the main thread to avoid main-thread checker warnings.
@@ -404,7 +428,7 @@ public final class AppDNA: @unchecked Sendable {
             shared.initializeFirebase()
             // Then do the rest on background queue
             shared.queue.async {
-                shared.performConfigure(apiKey: apiKey, environment: environment, options: options)
+                shared.performConfigure(apiKey: apiKey, environment: environment, options: options, epoch: epoch)
             }
         }
     }
@@ -1270,7 +1294,23 @@ public final class AppDNA: @unchecked Sendable {
 
     // MARK: - Internal bootstrap
 
-    private func performConfigure(apiKey: String, environment: Environment, options: AppDNAOptions) {
+    private func performConfigure(apiKey: String, environment: Environment, options: AppDNAOptions, epoch: Int) {
+        // Bail if a newer configure()/shutdown() superseded this scheduled build. `isConfigured` is
+        // false when a shutdown() landed after this configure() was accepted; a bumped epoch means a
+        // later configure() is the one that should build. Either way, rebuilding here would duplicate
+        // the pipeline, subscription observer and timers (there is no teardown between two back-to-back
+        // performConfigures). Read both under the same lock configure()/shutdown() write them under.
+        initLock.lock()
+        let superseded = !isConfigured || configureEpoch != epoch
+        initLock.unlock()
+        if superseded {
+            Log.warning("AppDNA.configure() superseded by a later configure()/shutdown() before its build ran — skipping duplicate initialization")
+            return
+        }
+        Self.performConfigureCountLock.lock()
+        Self._performConfigureCount += 1
+        Self.performConfigureCountLock.unlock()
+
         self.apiKey = apiKey
         self.environment = environment
         self.options = options

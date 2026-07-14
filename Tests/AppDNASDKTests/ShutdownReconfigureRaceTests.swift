@@ -59,4 +59,34 @@ final class ShutdownReconfigureRaceTests: XCTestCase {
             "shutdown() immediately before configure() swallowed the reconfigure — the SDK is dead"
         )
     }
+
+    /// The mirror hazard the reconfigure fix introduced: now that `shutdown()` clears `isConfigured`
+    /// synchronously, a `configure(); shutdown(); configure()` burst on ONE tick no longer no-ops the
+    /// first configure — its `performConfigure` is scheduled and runs (serial-queue order
+    /// Teardown → build1 → build2) right before the second's, with NO teardown between them. Since
+    /// `performConfigure` rebuilds the pipeline, the `Transaction.updates` observer and the flush
+    /// timers unconditionally, two back-to-back builds duplicate all of them. The `configureEpoch`
+    /// guard must make the first, superseded build a no-op so exactly the latest configure wins.
+    func testConfigureShutdownConfigureOnOneTickBuildsExactlyOnce() {
+        AppDNA.resetPerformConfigureCountForTesting()
+
+        AppDNA.configure(apiKey: "adn_test_placeholder", environment: .sandbox)
+        AppDNA.shutdown()
+        AppDNA.configure(apiKey: "adn_test_placeholder", environment: .sandbox)
+
+        let ready = expectation(description: "final configure reached ready")
+        AppDNA.onReady { ready.fulfill() }
+        wait(for: [ready], timeout: 30)
+
+        XCTAssertEqual(
+            AppDNA.subsystemsUp()["events"], true,
+            "the final configure must leave the SDK up"
+        )
+        XCTAssertEqual(
+            AppDNA.performConfigureCountForTesting, 1,
+            "configure(); shutdown(); configure() built the SDK "
+                + "\(AppDNA.performConfigureCountForTesting)× — the first, superseded build must be a "
+                + "no-op (epoch guard). 2 means duplicate pipeline/observer/timers."
+        )
+    }
 }
