@@ -15,12 +15,26 @@ final class MessageManager {
     /// When true, suppresses display of in-app messages.
     var suppressDisplay = false
 
-    private static let dateFormatter: DateFormatter = {
+    // Date-only fallback for hand-authored / legacy configs. UTC midnight to match Android's
+    // `parseWindowDate` fallback, so a bare `yyyy-MM-dd` window opens on the same instant on both
+    // platforms rather than device-local midnight (which drifted by the device's UTC offset).
+    private static let dateOnlyFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
         return f
     }()
+
+    /// The server serializes `start_date`/`end_date` via `Date.toISOString()` — a full ISO-8601
+    /// instant with fractional seconds and `Z`. Parse that instant first (exact time-of-day, and
+    /// identical to Android), and only fall back to the date-only shape for legacy/authored values.
+    /// A bare `yyyy-MM-dd` formatter used to "succeed" on the full string by leniently reading the
+    /// date prefix at device-local midnight — silently discarding the authored time and diverging
+    /// from Android's UTC midnight. Unparsable → nil (treated as no constraint).
+    static func parseWindowDate(_ s: String) -> Date? {
+        ISO8601.date(from: s) ?? dateOnlyFormatter.date(from: s)
+    }
 
     init(
         remoteConfigManager: RemoteConfigManager,
@@ -284,12 +298,12 @@ final class MessageManager {
     private func checkDateRange(_ config: MessageConfig) -> Bool {
         let now = Date()
         if let startStr = config.start_date,
-           let start = Self.dateFormatter.date(from: startStr),
+           let start = Self.parseWindowDate(startStr),
            now < start {
             return false
         }
         if let endStr = config.end_date,
-           let end = Self.dateFormatter.date(from: endStr),
+           let end = Self.parseWindowDate(endStr),
            now > end {
             return false
         }

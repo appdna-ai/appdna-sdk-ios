@@ -361,6 +361,10 @@ struct OnboardingFlowHost: View {
                 // EPIC-2 — back⇄X switch: dismiss in the leading slot on the first step.
                 Button {
                     let step = flow.steps[currentIndex]
+                    // Same race as Back/Skip: dismissing during the 300 ms hook grace-window must
+                    // discard a completion waiting on that hook, or the next `applyOutcome` records
+                    // a phantom completion for the step the user dismissed away from.
+                    pendingStepCompletion = nil
                     onFlowDismissed(step.id, currentIndex)
                 } label: {
                     Image(systemName: "xmark")
@@ -380,6 +384,8 @@ struct OnboardingFlowHost: View {
             if dismissAllowed && !leadingIsClose {
                 Button {
                     let step = flow.steps[currentIndex]
+                    // See leading-close above: clear a hook-pending completion before dismissing.
+                    pendingStepCompletion = nil
                     onFlowDismissed(step.id, currentIndex)
                 } label: {
                     Image(systemName: "xmark")
