@@ -56,8 +56,9 @@ final class WebEntitlementManager {
             }
 
             guard let data = snapshot?.data() else {
-                // No entitlement doc — user has no web subscription
-                if self.currentEntitlement != nil {
+                // No entitlement doc — the user's web subscription was removed.
+                if let previous = self.currentEntitlement {
+                    let prevStatus = self.previousStatus
                     self.currentEntitlement = nil
                     // 🔴 RESET previousStatus, or a later re-activation never emits web_entitlement_activated.
                     // Without this, `active → doc deleted → doc re-created active` leaves previousStatus at
@@ -66,6 +67,15 @@ final class WebEntitlementManager {
                     self.previousStatus = nil
                     self.cacheEntitlement(nil)
                     NotificationCenter.default.post(name: .webEntitlementChanged, object: nil)
+                    // Deletion of an ACTIVE/TRIALING entitlement IS an expiry — emit it, symmetric with an
+                    // in-place status→inactive transition (handled below). Resetting previousStatus alone
+                    // would make the delete path silent for expiry — a real undercount, so emit here.
+                    if prevStatus == .active || prevStatus == .trialing {
+                        self.eventTracker?.track(event: "web_entitlement_expired", properties: [
+                            "plan_name": previous.planName ?? "",
+                            "reason": "deleted",
+                        ])
+                    }
                 }
                 return
             }
