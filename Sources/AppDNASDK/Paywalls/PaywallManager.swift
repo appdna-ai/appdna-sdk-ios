@@ -444,6 +444,12 @@ final class PaywallManager {
                 let restored = try await bridge.restore(
                     appAccountToken: AppAccountTokenResolver.tokenForCurrentUser()
                 )
+                // Per-product purchase_restored, one per restored product id — matches Android
+                // (NativeBillingManager emits N per-product + 1 aggregate). iOS previously emitted ONLY the
+                // aggregate below, so a per-product restore funnel worked on Android and was empty on iOS.
+                for productId in restored {
+                    eventTracker.track(event: "purchase_restored", properties: ["product_id": productId])
+                }
                 eventTracker.track(event: "purchase_restored", properties: [
                     "paywall_id": paywallId,
                     "restored_count": restored.count,
