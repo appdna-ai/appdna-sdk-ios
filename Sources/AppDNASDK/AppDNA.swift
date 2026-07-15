@@ -1366,6 +1366,9 @@ public final class AppDNA: @unchecked Sendable {
         // SPEC-070-B PN row 1: every envelope carries the last-announced screen. Reads the static
         // through the lock, so a host announcing from a background thread is safe.
         tracker.setScreenProvider { AppDNA.lastScreenName }
+        // Attach the current push_id (30-min window) to every event envelope — mirrors Android's
+        // setPushIdProvider, so push→conversion attribution works on iOS too.
+        tracker.setPushIdProvider { PushSessionContext.currentPushId() }
 
         // SPEC-070-B PN row 14 (AC-36): resolve consent from the PERSISTED decision before anything
         // can be tracked — including the pre-init buffer drain and `sdk_initialized`. A denied user

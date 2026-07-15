@@ -17,6 +17,10 @@ final class EventTracker {
     /// with ZERO callers, so every iOS event shipped `experiment_exposures = nil`. Nil in tests.
     private var experimentExposureProvider: (() -> [ExperimentExposure]?)?
 
+    /// Source of the current push_id (within the 30-min window), attached to every envelope as
+    /// `context.push_id`. Mirrors Android's push-id provider. Nil in tests.
+    private var pushIdProvider: (() -> String?)?
+
     init(identityManager: IdentityManager) {
         self.identityManager = identityManager
     }
@@ -34,6 +38,11 @@ final class EventTracker {
     /// `setExperimentExposureProvider`.
     func setExperimentExposureProvider(_ provider: (() -> [ExperimentExposure]?)?) {
         self.experimentExposureProvider = provider
+    }
+
+    /// Wire the push-id source. Passing nil disables the field. Mirrors Android's push-id provider.
+    func setPushIdProvider(_ provider: (() -> String?)?) {
+        self.pushIdProvider = provider
     }
 
     /// Test-only observation seam. The built envelope is otherwise unobservable — it goes straight
@@ -93,6 +102,7 @@ final class EventTracker {
             analyticsConsent: analyticsConsent,
             experimentExposures: experimentExposureProvider?() ?? nil,
             screen: screenProvider?(),
+            pushId: pushIdProvider?() ?? nil,
             clientSeq: clientSeq // SPEC-428 STEP-9: a pre-init event carries the seq it stamped at track() time
         )
 
@@ -112,7 +122,8 @@ final class EventTracker {
             identity: identity,
             sessionId: sessionId,
             analyticsConsent: analyticsConsent,
-            screen: screenProvider?()
+            screen: screenProvider?(),
+            pushId: pushIdProvider?() ?? nil
         )
         // SPEC-428 STEP-4: decrement by exactly `count` ONLY after the meta is durably persisted (never a
         // zero-reset). Crash before persist → counter keeps `count` → re-emit (no under-count).

@@ -39,6 +39,10 @@ struct EventDevice: Codable {
 struct EventContext: Codable {
     let session_id: String
     let screen: String?
+    // The push_id of the most recent push received within the last 30 min, so conversions can be
+    // attributed to the push that drove them. Mirrors Android's `context.push_id`; iOS shipped no such
+    // field, so push→conversion attribution was Android-only.
+    let push_id: String?
     let experiment_exposures: [ExperimentExposure]?
     // SPEC-428 CL-3/D6: per-device monotonic sequence, assigned at buildEnvelope.
     let client_seq: Int64?
@@ -183,6 +187,9 @@ enum EventEnvelopeBuilder {
         // SPEC-070-B PN row 1: the currently-visible screen, supplied by EventTracker's screenProvider.
         // Mirrors Android's `screen = screenProvider?.invoke()` (EventTracker.kt:116).
         screen: String? = nil,
+        // The current push_id (within the 30-min window), supplied by EventTracker's pushIdProvider.
+        // Mirrors Android's `pushId = pushIdProvider?.invoke()`.
+        pushId: String? = nil,
         // SPEC-428 STEP-9/§4.E: a PRE-STAMPED client_seq (a pre-init event stamped its seq at facade
         // track() time). When present, buildEnvelope MUST use it verbatim and NOT re-mint at drain — else
         // a post-configure event minting during the drain window gets a LOWER seq than an earlier pre-init
@@ -214,6 +221,7 @@ enum EventEnvelopeBuilder {
             context: EventContext(
                 session_id: sessionId,
                 screen: screen,
+                push_id: pushId,
                 experiment_exposures: experimentExposures,
                 // SPEC-428 CL-3/D6/STEP-9: stamp the monotonic sequence at the single choke point every
                 // event's envelope is built. ts_ms stays but is no longer the ordering key. A pre-init

@@ -21,6 +21,9 @@ public class PushNotificationHandler: NSObject, UNUserNotificationCenterDelegate
         let userInfo = notification.request.content.userInfo
         let pushId = userInfo["push_id"] as? String ?? ""
         pushTokenManager?.trackDelivered(pushId: pushId)
+        // Fold push_id into the 30-min window so subsequent events carry context.push_id (mirrors
+        // Android's PushSessionContext.recordPushReceived on delivery).
+        PushSessionContext.recordPushReceived(pushId)
 
         // SPEC-084: Register action categories if present
         registerActionCategories(from: userInfo)
@@ -42,6 +45,7 @@ public class PushNotificationHandler: NSObject, UNUserNotificationCenterDelegate
         let pushId = userInfo["push_id"] as? String ?? ""
         let actionIdentifier = response.actionIdentifier
         pushTokenManager?.trackTapped(pushId: pushId, action: actionIdentifier)
+        PushSessionContext.recordPushReceived(pushId)
 
         // Build payload and notify delegate
         let payload = buildPayload(from: response.notification.request.content)
@@ -212,5 +216,32 @@ enum PushTapRouter {
         default:
             return .ignored
         }
+    }
+}
+
+/// Rolling 30-minute record of the last push_id received, so events emitted shortly after a push can
+/// be attributed to it (`context.push_id`). Mirrors Android's `PushSessionContext`
+/// (integrations/AppDNAMessagingService.kt): persisted in UserDefaults so it survives restart; the
+/// window logic ages stale ids out so callers never clear it.
+enum PushSessionContext {
+    private static let keyLastId = "ai.appdna.sdk.push.last_push_id"
+    private static let keyLastAt = "ai.appdna.sdk.push.last_push_at"
+    private static let windowMs: Double = 30 * 60 * 1000
+
+    static func recordPushReceived(_ pushId: String) {
+        guard !pushId.isEmpty else { return }
+        let d = UserDefaults.standard
+        d.set(pushId, forKey: keyLastId)
+        d.set(Date().timeIntervalSince1970 * 1000, forKey: keyLastAt)
+    }
+
+    /// The last push_id received within the rolling 30-minute window, or nil.
+    static func currentPushId() -> String? {
+        let d = UserDefaults.standard
+        guard let pushId = d.string(forKey: keyLastId) else { return nil }
+        let at = d.double(forKey: keyLastAt)
+        if at == 0 { return nil }
+        if Date().timeIntervalSince1970 * 1000 - at > windowMs { return nil }
+        return pushId
     }
 }
