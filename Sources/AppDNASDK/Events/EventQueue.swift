@@ -111,6 +111,17 @@ final class EventQueue {
             name: UIApplication.didEnterBackgroundNotification,
             object: nil
         )
+        // Round-14 F1 — observe foregrounding to CLEAR the consecutive-failure pause latch and retry.
+        // Without this, 5 transient upload failures paused the in-process queue for the REMAINDER of the
+        // process's life (consecutiveFailures only reset on a successful upload or a fresh EventQueue), so
+        // after a transient ingest outage iOS event delivery stalled until force-quit — while Android
+        // self-heals on the next foreground (ProcessLifecycleOwner onStart). This brings iOS into parity.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
     }
 
     deinit {
@@ -172,6 +183,20 @@ final class EventQueue {
         flushTimer?.invalidate()
         flushTimer = Timer.scheduledTimer(withTimeInterval: flushInterval, repeats: true) { [weak self] _ in
             self?.flush()
+        }
+    }
+
+    @objc private func appWillEnterForeground() {
+        // Round-14 F1 — clear the failure-pause latch on foreground so a queue paused by a transient
+        // outage resumes (mirrors Android onAppForeground: paused=false; consecutiveFailures=0), then
+        // attempt a drain. Reset on the serial queue to stay consistent with all other failure-count writes.
+        queue.async { [weak self] in
+            guard let self else { return }
+            if self.consecutiveFailures >= self.maxConsecutiveFailures {
+                Log.info("Foregrounded — clearing event-upload pause and retrying")
+            }
+            self.consecutiveFailures = 0
+            self.performFlush()
         }
     }
 
