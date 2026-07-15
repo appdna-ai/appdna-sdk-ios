@@ -526,12 +526,29 @@ struct FormStepView: View {
         }
 
         if errors.isEmpty {
-            // Convert values for response: dates to ISO strings, etc.
+            // Round-22 — serialize each date/time field to a deterministic LOCAL-component format that
+            // BOTH platforms produce identically (no UTC conversion → no local-vs-UTC divergence):
+            //   date     → "yyyy-MM-dd"
+            //   time     → "HH:mm"
+            //   datetime → "yyyy-MM-dd'T'HH:mm:ss"
+            // Was a uniform full ISO8601 (UTC) for EVERY date field, so a DATE carried an arbitrary
+            // time-of-day and a TIME carried today's date — neither matched Android's date-only / bare
+            // "HH:mm" strings. Formatters use no explicit timeZone → device-local components (what the
+            // user picked), matching Android's picker-derived Y/M/D + H:M.
+            let fieldTypeById = Dictionary(fields.map { ($0.id, $0.type) }, uniquingKeysWith: { first, _ in first })
+            let dateFmt = DateFormatter(); dateFmt.locale = Locale(identifier: "en_US_POSIX"); dateFmt.dateFormat = "yyyy-MM-dd"
+            let timeFmt = DateFormatter(); timeFmt.locale = Locale(identifier: "en_US_POSIX"); timeFmt.dateFormat = "HH:mm"
+            // Literal ':00' seconds: the pickers are minute-granularity, but the seeded Date carries
+            // wall-clock seconds — hardcoding :00 keeps it identical to Android's "...THH:mm:00".
+            let dtFmt = DateFormatter(); dtFmt.locale = Locale(identifier: "en_US_POSIX"); dtFmt.dateFormat = "yyyy-MM-dd'T'HH:mm':00'"
             var response: [String: Any] = [:]
             for (key, val) in values {
                 if let date = val as? Date {
-                    let formatter = ISO8601DateFormatter()
-                    response[key] = formatter.string(from: date)
+                    switch fieldTypeById[key] {
+                    case .date: response[key] = dateFmt.string(from: date)
+                    case .time: response[key] = timeFmt.string(from: date)
+                    default: response[key] = dtFmt.string(from: date) // datetime (or unknown Date)
+                    }
                 } else {
                     response[key] = val
                 }
