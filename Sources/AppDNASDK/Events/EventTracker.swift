@@ -11,6 +11,12 @@ final class EventTracker {
     /// iOS half of a chain Android already had end to end (`EventTracker.kt:65`).
     private var screenProvider: (() -> String?)?
 
+    /// Source of the active experiment exposures, attached to EVERY event envelope as
+    /// `context.experiment_exposures`. Android wires this end to end (`AppDNA.kt` →
+    /// `setExperimentExposureProvider`); iOS had the envelope field and a `trackWithExposures` method
+    /// with ZERO callers, so every iOS event shipped `experiment_exposures = nil`. Nil in tests.
+    private var experimentExposureProvider: (() -> [ExperimentExposure]?)?
+
     init(identityManager: IdentityManager) {
         self.identityManager = identityManager
     }
@@ -22,6 +28,12 @@ final class EventTracker {
     /// Wire the screen-name source. Passing nil disables the field (used in tests).
     func setScreenProvider(_ provider: (() -> String?)?) {
         self.screenProvider = provider
+    }
+
+    /// Wire the experiment-exposure source. Passing nil disables the field. Mirrors Android's
+    /// `setExperimentExposureProvider`.
+    func setExperimentExposureProvider(_ provider: (() -> [ExperimentExposure]?)?) {
+        self.experimentExposureProvider = provider
     }
 
     /// Test-only observation seam. The built envelope is otherwise unobservable — it goes straight
@@ -79,6 +91,7 @@ final class EventTracker {
             identity: identity,
             sessionId: sessionId,
             analyticsConsent: analyticsConsent,
+            experimentExposures: experimentExposureProvider?() ?? nil,
             screen: screenProvider?(),
             clientSeq: clientSeq // SPEC-428 STEP-9: a pre-init event carries the seq it stamped at track() time
         )
@@ -108,24 +121,7 @@ final class EventTracker {
         Log.debug("Emitted _sdk_events_dropped meta-event (count=\(count))")
     }
 
-    /// Track event with experiment exposure context attached.
-    func trackWithExposures(event: String, properties: [String: Any]?, exposures: [ExperimentExposure]) {
-        guard analyticsConsent else { return }
-
-        let identity = identityManager.currentIdentity
-        let sessionId = identityManager.sessionManager?.sessionId ?? "unknown"
-
-        let sdkEvent = EventEnvelopeBuilder.build(
-            event: event,
-            properties: properties,
-            identity: identity,
-            sessionId: sessionId,
-            analyticsConsent: analyticsConsent,
-            experimentExposures: exposures,
-            screen: screenProvider?()
-        )
-
-        eventQueue?.enqueue(sdkEvent)
-        eventSink?(sdkEvent)
-    }
+    // NB: the old `trackWithExposures(...)` method was removed — it had ZERO callers, so iOS shipped
+    // `experiment_exposures = nil` on every event. `track(...)` now attaches exposures from
+    // `experimentExposureProvider` on the primary path, matching Android.
 }

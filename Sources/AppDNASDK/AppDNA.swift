@@ -1589,6 +1589,12 @@ public final class AppDNA: @unchecked Sendable {
             eventTracker: tracker
         )
         self.experimentManager = experimentMgr
+        // Attach the active experiment exposures to EVERY event envelope (context.experiment_exposures),
+        // matching Android's setExperimentExposureProvider (AppDNA.kt). Previously iOS shipped nil on
+        // every event because the only method that passed exposures had zero callers.
+        tracker.setExperimentExposureProvider {
+            experimentMgr.getExposures().map { ExperimentExposure(exp: $0.experimentId, variant: $0.variant) }
+        }
 
         // SPEC-036-F §1.2 — surface managers receive the ExperimentManager so
         // they can consult it for a running experiment targeting the surface+
