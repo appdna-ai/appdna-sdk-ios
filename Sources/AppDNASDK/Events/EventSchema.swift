@@ -203,7 +203,11 @@ enum EventEnvelopeBuilder {
             app_version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0",
             sdk_version: AppDNA.sdkVersion,
             bundle_version: bundleVer,
-            locale: Locale.current.identifier,
+            // Round-15 F1 — emit a BCP-47 hyphenated tag (e.g. "en-US"), matching Android's
+            // `Locale.getDefault().toLanguageTag()`. `Locale.current.identifier` returns the ICU form with
+            // an UNDERSCORE region separator ("en_US"), so the same device split into two `device.locale`
+            // rows by platform in BigQuery. `.bcp47` canonicalizes to hyphens (iOS 16+, our min target).
+            locale: Locale.current.identifier(.bcp47),
             country: (Locale.current as NSLocale).countryCode ?? "",
             framework: AppDNA.framework,
             framework_version: AppDNA.frameworkVersion
