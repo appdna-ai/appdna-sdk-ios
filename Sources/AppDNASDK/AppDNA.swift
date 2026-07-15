@@ -619,7 +619,8 @@ public final class AppDNA: @unchecked Sendable {
     /// Force flush all queued events immediately.
     public static func flush() {
         shared.queue.async {
-            shared.eventQueue?.flush()
+            // Host-initiated: clear the failure-pause gate (matches Android's public flush()).
+            shared.eventQueue?.flushClearingPause()
         }
     }
 

@@ -157,14 +157,23 @@ final class EventQueue {
         }
     }
 
-    /// Force flush all pending events.
+    /// Force flush all pending events. SHARED entrypoint — the 30s timer, the retry reschedule, and
+    /// backgrounding all call this, so it must NOT clear the failure-pause gate (that would reset the
+    /// backoff every 30s and let it hammer a failing server forever). Host-initiated flushes use
+    /// `flushClearingPause()`.
     func flush() {
         queue.async { [weak self] in
+            self?.performFlush()
+        }
+    }
+
+    /// Host-initiated flush (`AppDNA.flush()`): clears the failure-pause gate first so a queue paused
+    /// after N permanent-4xx failures gets another chance. Round-32 — matches Android's public flush()
+    /// (SPEC-070-A A.16), which resets paused + consecutiveFailures before draining; iOS previously
+    /// no-op'd while paused. Deliberately NOT called by the timer/retry/background paths.
+    func flushClearingPause() {
+        queue.async { [weak self] in
             guard let self else { return }
-            // Round-32 — a manual/host flush implies UI intent: clear the failure-pause gate so a
-            // queue paused after N permanent-4xx failures gets another chance. Matches Android
-            // flush() (SPEC-070-A A.16), which resets paused + consecutiveFailures before draining;
-            // iOS previously just hit the pause guard in performFlush() and no-op'd while paused.
             self.consecutiveFailures = 0
             self.performFlush()
         }
