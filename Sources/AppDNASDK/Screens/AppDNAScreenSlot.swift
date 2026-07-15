@@ -79,7 +79,12 @@ public struct AppDNAScreenSlot: View {
         let context = SectionContext(
             screenId: config.id ?? "",
             onAction: { action in
-                handleSlotAction(action, config: config)
+                // Round-33 — consult the host onScreenAction veto (+ async wrapper) before performing
+                // a slot action, matching Android AppDNAScreenSlot + the full-screen path. Previously
+                // slot actions bypassed the veto entirely, so a host returning false was ignored.
+                ScreenManager.shared.dispatchSlotAction(action, screenId: config.id ?? "") {
+                    handleSlotAction(action, config: config)
+                }
             }
         )
         let contextHolder = ScreenContextHolder(context: context)

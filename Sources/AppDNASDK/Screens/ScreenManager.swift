@@ -299,6 +299,30 @@ internal class ScreenManager {
         performAction(action, screenId: screenId, startTime: startTime, completion: completion)
     }
 
+    /// Run `perform` only if the host's `onScreenAction` veto (sync + async wrapper) allows it.
+    /// Round-33 — inline-slot actions must honor the SAME veto as full-screen actions. The iOS slot
+    /// previously called `handleSlotAction` directly, bypassing the veto that Android's slot
+    /// (`dispatchScreenAction`) and the full-screen `handleAction` both consult — so a host that
+    /// returned `false` from `onScreenAction` had its slot buttons fire anyway.
+    func dispatchSlotAction(_ action: SectionAction, screenId: String, perform: @escaping () -> Void) {
+        if AppDNA.screenDelegate?.onScreenAction(screenId: screenId, action: action) == false {
+            Log.debug("Slot action vetoed by host onScreenAction: \(screenId)")
+            return
+        }
+        if let asyncVeto = AppDNA.asyncOnScreenAction {
+            Task { @MainActor in
+                let allow = await asyncVeto(screenId, action)
+                guard allow else {
+                    Log.debug("Slot action vetoed by host asyncOnScreenAction: \(screenId)")
+                    return
+                }
+                perform()
+            }
+            return
+        }
+        perform()
+    }
+
     /// Perform a screen action after the D10 veto gate has allowed it.
     private func performAction(_ action: SectionAction, screenId: String, startTime: Date, completion: ((ScreenResult) -> Void)?) {
         switch action {
