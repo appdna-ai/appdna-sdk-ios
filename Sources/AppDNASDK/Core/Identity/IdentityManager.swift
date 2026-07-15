@@ -63,11 +63,15 @@ final class IdentityManager {
             if let traits = traits {
                 _traits = traits
                 keychainStore.setUserTraits(traits)
-            } else if previousUserId != userId {
+            } else if let previousUserId, previousUserId != userId {
+                // Clear only on a genuine account SWITCH (a known user → a DIFFERENT known user), not on
+                // the first anonymous→login transition (previousUserId == nil). Device-scoped traits such
+                // as bootstrap geo (merged via mergeTraits before the host's first identify) should
+                // survive first login.
                 _traits = nil
                 keychainStore.clearUserTraits()
             }
-            // else: same user, no new traits → keep existing traits (in-memory + persisted).
+            // else: same user or first login with no new traits → keep existing traits.
         }
     }
 
