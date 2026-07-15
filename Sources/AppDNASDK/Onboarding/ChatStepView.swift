@@ -575,8 +575,12 @@ struct ChatStepView: View {
             completeChat(reason: "ai_completed")
         }
 
-        // Check if max turns reached
-        if turnsRemaining <= 0 {
+        // Check if max turns reached.
+        // Round-17 — guard on `!isCompleted` (matches Android ChatStepComposable). Without it, a webhook
+        // that returns force_complete on the FINAL allowed turn ran completeChat("ai_completed") above and
+        // then fell through here to emit a SECOND chat_completed ("max_turns") + a second completion
+        // bubble. `completeChat` sets isCompleted = true, so this now skips when already completed.
+        if turnsRemaining <= 0 && !isCompleted {
             if let completionMsg = chatConfig?.completion_message?.content {
                 messages.append(ChatMessage(id: "completion", role: .ai, content: completionMsg, media: nil, timestamp: Date()))
             }

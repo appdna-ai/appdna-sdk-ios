@@ -20,7 +20,14 @@ public struct VideoBlockView: View {
 
     init(block: VideoBlock) {
         self.block = block
-        self._showThumbnail = State(initialValue: !(block.autoplay ?? false))
+        let autoplay = block.autoplay ?? false
+        self._showThumbnail = State(initialValue: !autoplay)
+        // Round-17 — actually AUTOPLAY: create the player up-front when autoplay is set. Previously
+        // `player` stayed nil until a tap, so with autoplay:true the `if let player…` guard failed and
+        // the view fell to the thumbnail — never autoplaying, while Android honors playWhenReady=autoplay.
+        if autoplay, let url = URL(string: block.video_url) {
+            self._player = State(initialValue: AVPlayer(url: url))
+        }
     }
 
     public var body: some View {
