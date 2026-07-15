@@ -1316,10 +1316,11 @@ struct FormInputSliderBlock: View {
                 formFieldLabel(block)
                 Spacer()
                 if showValue {
-                    // Round-24 — decide the label format by the STEP (Android: step in (0,1) → one decimal,
-                    // else integer), not by the value. iOS decided by value, so a step-0.5 slider resting
-                    // on a whole number showed "8" while Android showed "8.0". Written value is identical.
-                    let formatted = (stepVal > 0 && stepVal < 1) ? String(format: "%.1f", value) : "\(Int(value))"
+                    // Round-24/30 — decide the label format by the STEP, not the value. One decimal for
+                    // ANY fractional step (Round-30: was step<1, so a step of 2.5 truncated to "2"; now "2.5"
+                    // matching Android), integer (rounded, to match Android roundToInt under FP drift) otherwise.
+                    let formatted = (stepVal > 0 && stepVal.truncatingRemainder(dividingBy: 1) != 0)
+                        ? String(format: "%.1f", value) : "\(Int(value.rounded()))"
                     Text("\(formatted)\(unitStr)")
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(fillCol)
@@ -1507,10 +1508,12 @@ struct FormInputRatingBlock: View {
     }
 }
 
-/// Round-29 — range-slider value-label formatter: one decimal for a fractional step (matches Android
-/// `ContentBlockRenderer` + the single slider), integer otherwise. Was `Int()` which dropped half-steps.
+/// Round-29/30 — range-slider value-label formatter: one decimal for ANY fractional step (Round-30:
+/// was step<1, so a step of 2.5 truncated to "2"; now "2.5", matching Android + the single slider),
+/// integer (rounded to match Android roundToInt under FP drift) otherwise.
 private func rangeSliderValueText(_ v: Double, _ step: Double) -> String {
-    (step > 0 && step < 1) ? String(format: "%.1f", v) : "\(Int(v))"
+    (step > 0 && step.truncatingRemainder(dividingBy: 1) != 0)
+        ? String(format: "%.1f", v) : "\(Int(v.rounded()))"
 }
 
 /// Range slider (dual-thumb) input.
