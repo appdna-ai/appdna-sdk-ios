@@ -108,23 +108,30 @@ internal class AutoTriggerEngine {
             }
         }
 
-        // Session count triggers
+        // Session count triggers. min/max/exact — mirrors Android's `minOk && maxOk && (min|max)` so a
+        // MAX-ONLY rule ("first N sessions": session_count.max=3, no min) fires. iOS previously had no
+        // max-only branch (only exact / min+max / min-only), so a max-only campaign never presented on
+        // iOS while Android showed it.
         if let sessionTrigger = triggerRules.session_count {
-            if let exact = sessionTrigger.exact, sessionCount == exact { anyTriggerMatched = true }
-            if let min = sessionTrigger.min, let max = sessionTrigger.max,
-               sessionCount >= min && sessionCount <= max { anyTriggerMatched = true }
-            if sessionTrigger.exact == nil && sessionTrigger.max == nil,
-               let min = sessionTrigger.min, sessionCount >= min { anyTriggerMatched = true }
-        }
-
-        // Days since install triggers
-        if let timeTrigger = triggerRules.days_since_install {
-            if let min = timeTrigger.min, daysSinceInstall >= min {
-                if let max = timeTrigger.max {
-                    if daysSinceInstall <= max { anyTriggerMatched = true }
-                } else {
+            if let exact = sessionTrigger.exact {
+                if sessionCount == exact { anyTriggerMatched = true }
+            } else {
+                let minOk = sessionTrigger.min.map { sessionCount >= $0 } ?? true
+                let maxOk = sessionTrigger.max.map { sessionCount <= $0 } ?? true
+                if (sessionTrigger.min != nil || sessionTrigger.max != nil) && minOk && maxOk {
                     anyTriggerMatched = true
                 }
+            }
+        }
+
+        // Days since install triggers. Same min/max shape — a MAX-ONLY rule ("first N days":
+        // days_since_install.max=7) fires. iOS previously gated the whole block on `if let min`, so a
+        // max-only rule never fired while Android's `minOk && maxOk` presented it.
+        if let timeTrigger = triggerRules.days_since_install {
+            let minOk = timeTrigger.min.map { daysSinceInstall >= $0 } ?? true
+            let maxOk = timeTrigger.max.map { daysSinceInstall <= $0 } ?? true
+            if (timeTrigger.min != nil || timeTrigger.max != nil) && minOk && maxOk {
+                anyTriggerMatched = true
             }
         }
 
