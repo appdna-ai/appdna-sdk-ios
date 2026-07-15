@@ -892,7 +892,10 @@ struct PaywallRenderer: View {
         let duration = data?.durationSeconds ?? data?.countdownSeconds ?? 3600
         let valueTextStyle = style?.elements?["value"]?.textStyle
         let layout = data?.layout ?? "inline"
-        let labelText = data?.label ?? data?.labelText
+        // Round-11 Finding 4 — prefer `label_text` (the countdown-specific console field) over the
+        // generic `label`, matching Android (PaywallActivity: `label_text ?: label`). iOS had the
+        // precedence inverted, so a section with both set rendered a different string per platform.
+        let labelText = data?.labelText ?? data?.label
 
         VStack(spacing: 8) {
             // Label text (e.g. "Offer ends in")

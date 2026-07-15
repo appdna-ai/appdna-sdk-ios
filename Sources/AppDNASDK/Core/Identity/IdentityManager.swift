@@ -48,14 +48,26 @@ final class IdentityManager {
     }
 
     /// Link anonymous user to a known user.
+    ///
+    /// Round-11 Finding 1 — traits behavior on a nil `traits` argument now matches Android AND is
+    /// internally consistent (in-memory + keychain agree): clear traits ONLY when the user actually
+    /// CHANGES (an account switch — the prior user's traits don't apply to the new one); retain them on a
+    /// same-user re-identify (the common per-launch call). The old iOS code wiped in-memory traits on
+    /// every nil-traits identify while leaving the keychain intact (inconsistent), and Android retained
+    /// them even across a user switch (stale-trait targeting).
     func identify(userId: String, traits: [String: Any]? = nil) {
         queue.sync {
+            let previousUserId = _userId
             _userId = userId
-            _traits = traits
             keychainStore.setUserId(userId)
             if let traits = traits {
+                _traits = traits
                 keychainStore.setUserTraits(traits)
+            } else if previousUserId != userId {
+                _traits = nil
+                keychainStore.clearUserTraits()
             }
+            // else: same user, no new traits → keep existing traits (in-memory + persisted).
         }
     }
 

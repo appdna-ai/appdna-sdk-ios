@@ -473,7 +473,10 @@ struct FormInputSelectBlock: View {
     @Binding var inputValues: [String: Any]
 
     @State private var selectedValue: String = ""
-    @State private var selectedValues: Set<String> = []
+    // Round-11 Finding 3 — an ordered [String] (append-on-select, acting as an ordered set) so the
+    // written array preserves SELECTION order, matching Android's LinkedHashSet. A Swift Set is
+    // hash-ordered and non-deterministic across runs, so `Array(Set)` produced arbitrary ordering.
+    @State private var selectedValues: [String] = []
 
     private var isMultiSelect: Bool {
         block.multi_select == true ||
@@ -514,7 +517,7 @@ struct FormInputSelectBlock: View {
                 selectedValue = saved
             }
             if selectedValues.isEmpty, let saved = inputValues[fieldId] as? [String] {
-                selectedValues = Set(saved)
+                selectedValues = saved
             }
         }
     }
@@ -1025,12 +1028,12 @@ struct FormInputSelectBlock: View {
 
     private func toggleSelection(option: InputOption, fieldId: String) {
         if isMultiSelect {
-            if selectedValues.contains(option.resolvedValue) {
-                selectedValues.remove(option.resolvedValue)
+            if let idx = selectedValues.firstIndex(of: option.resolvedValue) {
+                selectedValues.remove(at: idx)
             } else {
-                selectedValues.insert(option.resolvedValue)
+                selectedValues.append(option.resolvedValue)
             }
-            inputValues[fieldId] = Array(selectedValues)
+            inputValues[fieldId] = selectedValues
         } else {
             selectedValue = option.resolvedValue
             inputValues[fieldId] = option.resolvedValue
@@ -1574,7 +1577,10 @@ struct FormInputChipsBlock: View {
     let block: ContentBlock
     @Binding var inputValues: [String: Any]
 
-    @State private var selectedValues: Set<String> = []
+    // Round-11 Finding 3 — an ordered [String] (append-on-select, acting as an ordered set) so the
+    // written array preserves SELECTION order, matching Android's LinkedHashSet. A Swift Set is
+    // hash-ordered and non-deterministic across runs, so `Array(Set)` produced arbitrary ordering.
+    @State private var selectedValues: [String] = []
 
     var body: some View {
         let fieldId = block.field_id ?? block.id
@@ -1591,14 +1597,14 @@ struct FormInputChipsBlock: View {
                     let isSelected = selectedValues.contains(option.resolvedValue)
                     Button {
                         if isSelected {
-                            selectedValues.remove(option.resolvedValue)
+                            selectedValues.removeAll { $0 == option.resolvedValue }
                         } else {
                             if let max = maxSelections, selectedValues.count >= max {
                                 return // At max selections
                             }
-                            selectedValues.insert(option.resolvedValue)
+                            selectedValues.append(option.resolvedValue)
                         }
-                        inputValues[fieldId] = Array(selectedValues)
+                        inputValues[fieldId] = selectedValues
                     } label: {
                         Text(option.label ?? "")
                             .font(.subheadline)
@@ -1617,7 +1623,7 @@ struct FormInputChipsBlock: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
             let fieldId = block.field_id ?? block.id
-            if let saved = inputValues[fieldId] as? [String] { selectedValues = Set(saved) }
+            if let saved = inputValues[fieldId] as? [String] { selectedValues = saved }
         }
     }
 }
