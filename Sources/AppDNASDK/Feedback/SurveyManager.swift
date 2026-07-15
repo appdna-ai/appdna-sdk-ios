@@ -93,25 +93,29 @@ final class SurveyManager {
     private func presentSurvey(surveyId: String, config activeConfig: SurveyConfig, triggerEvent: String) {
         guard !isPresenting else { return }
 
-        // SPEC-036-F §1.2 — experiment-aware presentation, attached inside the
-        // present path (surveys are event-auto-triggered, not host present()).
-        // A running survey experiment targeting this survey + a treatment
-        // bucket renders the treatment payload; control / none / old-doc →
-        // active (cohort isolation §1.3).
-        var config = activeConfig
-        if let experimentManager,
-           case let .renderTreatment(_, _, payload) = experimentManager.resolveSurfacePresentation(surfaceType: "survey", entityId: surveyId),
-           let treatment = remoteConfigManager.decodeSurveyPayload(payload) {
-            Log.info("Survey \(surveyId) rendering experiment treatment variant")
-            config = treatment
-        }
-
         // SPEC-404 — pause new survey presentation while the SDK is
         // backend-locked (per-key suspended day 20+ OR org cancelled). No
         // analytics event, no delegate fire.
         if AppDNA.runtimeLock != nil {
             Log.debug("Survey \(surveyId) suppressed — SDK in runtime-locked mode")
             return
+        }
+
+        // SPEC-036-F §1.2 — experiment-aware presentation, attached inside the
+        // present path (surveys are event-auto-triggered, not host present()).
+        // A running survey experiment targeting this survey + a treatment
+        // bucket renders the treatment payload; control / none / old-doc →
+        // active (cohort isolation §1.3).
+        // Round-13 F2 — resolveSurfacePresentation records an experiment_exposure as a side effect, so it
+        // MUST run AFTER every synchronous suppression gate (isPresenting above + runtimeLock here): a
+        // survey that is never shown must never count as exposed. Was above the runtimeLock guard, so a
+        // runtime-locked (suspended/cancelled) org recorded exposures for surveys it never displayed.
+        var config = activeConfig
+        if let experimentManager,
+           case let .renderTreatment(_, _, payload) = experimentManager.resolveSurfacePresentation(surfaceType: "survey", entityId: surveyId),
+           let treatment = remoteConfigManager.decodeSurveyPayload(payload) {
+            Log.info("Survey \(surveyId) rendering experiment treatment variant")
+            config = treatment
         }
 
         isPresenting = true
