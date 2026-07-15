@@ -26,7 +26,15 @@ public struct VideoBlockView: View {
     public var body: some View {
         ZStack {
             if let player = player, !showThumbnail {
-                VideoPlayer(player: player)
+                // Round-16 — honor `controls` and `loop` (both were decoded but ignored: SwiftUI's
+                // VideoPlayer always shows transport controls and has no loop hook, so iOS played once
+                // and always showed controls while Android honored both). AVPlayerViewController lets us
+                // suppress controls; a didPlayToEndTime observer restarts the video when loop is set.
+                AVPlayerControllerView(
+                    player: player,
+                    showsControls: block.controls ?? true,
+                    loop: block.loop ?? false
+                )
                     .frame(height: CGFloat(block.video_height))
                     .clipShape(RoundedRectangle(cornerRadius: CGFloat(block.video_corner_radius ?? 0)))
                     .onAppear {
@@ -68,5 +76,47 @@ public struct VideoBlockView: View {
                 }
             }
         }
+    }
+}
+
+/// Wraps `AVPlayerViewController` so the content-block video can honor `controls` (SwiftUI's
+/// `VideoPlayer` can't hide them) and `loop` (restart on play-to-end). Matches Android's
+/// `useController` + `REPEAT_MODE_ONE`. The loop observer is torn down in `dismantleUIViewController`.
+private struct AVPlayerControllerView: UIViewControllerRepresentable {
+    let player: AVPlayer
+    let showsControls: Bool
+    let loop: Bool
+
+    func makeUIViewController(context: Context) -> AVPlayerViewController {
+        let vc = AVPlayerViewController()
+        vc.player = player
+        vc.showsPlaybackControls = showsControls
+        vc.videoGravity = .resizeAspect
+        if loop {
+            player.actionAtItemEnd = .none
+            context.coordinator.observer = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: player.currentItem,
+                queue: .main
+            ) { [weak player] _ in
+                player?.seek(to: .zero)
+                player?.play()
+            }
+        }
+        return vc
+    }
+
+    func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    static func dismantleUIViewController(_ uiViewController: AVPlayerViewController, coordinator: Coordinator) {
+        if let observer = coordinator.observer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    final class Coordinator {
+        var observer: NSObjectProtocol?
     }
 }
