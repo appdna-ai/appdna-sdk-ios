@@ -324,8 +324,14 @@ private struct CountdownSectionView: View {
         let duration = data?.durationSeconds ?? data?.countdownSeconds ?? 3600
         let layout = data?.layout ?? "inline"
         VStack(spacing: 8) {
-            if let label = data?.label ?? data?.labelText {
-                Text(label).font(.caption.weight(.medium)).foregroundColor(.secondary)
+            // Round-24 — the SDUI/Screens countdown renderer had the SAME hardcoded grey `.caption`
+            // label bug the main PaywallRenderer just fixed (ignoring label_font_size + label_color), plus
+            // the label-vs-labelText precedence inversion (Round-11 F4). Honor both + prefer label_text,
+            // matching PaywallRenderer.swift + Android (14pt/semibold/#7F1D1D).
+            if let label = data?.labelText ?? data?.label {
+                Text(label)
+                    .font(.system(size: data?.labelFontSize ?? 14, weight: .semibold))
+                    .foregroundColor(Color(hex: data?.labelColor ?? "#7F1D1D"))
             }
             Group {
                 if layout == "boxed" || layout == "banner" {

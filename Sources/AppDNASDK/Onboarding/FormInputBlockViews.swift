@@ -1316,7 +1316,10 @@ struct FormInputSliderBlock: View {
                 formFieldLabel(block)
                 Spacer()
                 if showValue {
-                    let formatted = value == value.rounded() ? "\(Int(value))" : String(format: "%.1f", value)
+                    // Round-24 — decide the label format by the STEP (Android: step in (0,1) → one decimal,
+                    // else integer), not by the value. iOS decided by value, so a step-0.5 slider resting
+                    // on a whole number showed "8" while Android showed "8.0". Written value is identical.
+                    let formatted = (stepVal > 0 && stepVal < 1) ? String(format: "%.1f", value) : "\(Int(value))"
                     Text("\(formatted)\(unitStr)")
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(fillCol)
@@ -1521,6 +1524,10 @@ struct FormInputRangeSliderBlock: View {
         // SPEC-419 pass-22 — clamp the now-authorable range so minVal...maxVal can't trap (min<max).
         let minVal = min(rawMin, rawMax)
         let maxVal = max(rawMax, minVal + 1)
+        // Round-24 — honor `step_value` (default 1.0) like the single slider + Android, which snaps both
+        // thumbs to the step grid. iOS ignored step here entirely → captured continuous values (33.7)
+        // while Android snapped (34.0), so the same drag produced different response data every time.
+        let stepVal = cfgDouble(block.field_config?["step_value"]) ?? 1
         let unitStr = block.unit ?? ""
         let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
 
@@ -1538,14 +1545,14 @@ struct FormInputRangeSliderBlock: View {
                     Text((block.field_config?["min_label"]?.value as? String) ?? "Min")
                         .font(.caption2)
                         .foregroundColor(.secondary)
-                    Slider(value: $lowValue, in: minVal...maxVal)
+                    Slider(value: $lowValue, in: minVal...maxVal, step: stepVal)
                         .tint(fillCol)
                 }
                 HStack {
                     Text((block.field_config?["max_label"]?.value as? String) ?? "Max")
                         .font(.caption2)
                         .foregroundColor(.secondary)
-                    Slider(value: $highValue, in: minVal...maxVal)
+                    Slider(value: $highValue, in: minVal...maxVal, step: stepVal)
                         .tint(fillCol)
                 }
             }
