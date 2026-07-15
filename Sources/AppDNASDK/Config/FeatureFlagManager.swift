@@ -23,7 +23,16 @@ final class FeatureFlagManager {
             return bool
         }
 
-        // Treat numeric 1 as true
+        // Round-19 — string-typed flags are first-class on the server (FeatureFlagValue.type can be
+        // 'string'), but iOS had NO String branch → every string flag read `false` while Android read
+        // "true"/"1" as truthy. Handle them case-insensitively (trimmed), matching Android's set.
+        if let str = value as? String {
+            return ["true", "1", "yes", "on"].contains(
+                str.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            )
+        }
+
+        // Any non-zero number → true (NSNumber.boolValue). Matches Android's non-zero rule.
         if let num = value as? NSNumber {
             return num.boolValue
         }
