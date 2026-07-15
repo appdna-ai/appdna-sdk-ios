@@ -249,6 +249,8 @@ struct FormInputDateBlock: View {
     // Pre-warm state: an offscreen hidden wheel forces UIKit's UIPickerView
     // subsystem to init eagerly so the first tap → sheet open isn't laggy.
     @State private var prewarmDate = Date()
+    // Round-10 #6 — allow_future/allow_past validation message for the form-input date variant.
+    @State private var dateError: String?
 
     var body: some View {
         let fieldId = block.field_id ?? block.id
@@ -436,8 +438,29 @@ struct FormInputDateBlock: View {
             )
             .environment(\.colorScheme, resolvedScheme ?? .light)
             .onChange(of: selectedDate) { newValue in
+                // Round-10 #6 — enforce allow_future / allow_past on the form-input date variant,
+                // matching Android's FormInputDateBlock and iOS's own DateWheelPickerBlockView. Before
+                // this, input_date silently accepted any date. An out-of-range pick is NOT committed
+                // (so the required gate still blocks the step) and surfaces the inline message.
+                let now = Date()
+                if block.allow_future == false && newValue > now {
+                    dateError = block.date_validation_message ?? "Future dates are not allowed"
+                    inputValues[fieldId] = nil
+                    return
+                }
+                if block.allow_past == false && newValue < now {
+                    dateError = block.date_validation_message ?? "Past dates are not allowed"
+                    inputValues[fieldId] = nil
+                    return
+                }
+                dateError = nil
                 let formatter = ISO8601DateFormatter()
                 inputValues[fieldId] = formatter.string(from: newValue)
+            }
+            if let dateError {
+                Text(dateError)
+                    .font(.caption)
+                    .foregroundColor(.red)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
