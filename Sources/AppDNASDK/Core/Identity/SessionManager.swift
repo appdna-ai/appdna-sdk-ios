@@ -9,6 +9,10 @@ final class SessionManager {
 
     private static let sessionTimeoutInterval: TimeInterval = 30 * 60 // 30 minutes
     private static let lastActiveKey = "ai.appdna.sdk.lastActiveAt"
+    /// Per-install session counter. SurveyManager READS this key for `min_sessions` triggers and for the
+    /// survey-response `session_count`, but nothing WROTE it — so every min_sessions trigger was
+    /// unsatisfiable and every response reported 0. Incremented on each new session below.
+    static let sessionCountKey = "ai.appdna.sdk.session_count"
 
     private var _sessionId: String = UUID().uuidString.lowercased()
 
@@ -53,6 +57,9 @@ final class SessionManager {
         queue.sync {
             _sessionId = UUID().uuidString.lowercased()
         }
+        // Bump the per-install session counter the survey engine reads (see sessionCountKey).
+        let d = UserDefaults.standard
+        d.set(d.integer(forKey: Self.sessionCountKey) + 1, forKey: Self.sessionCountKey)
         eventTracker.track(event: "session_start", properties: nil)
         Log.info("New session started: \(sessionId)")
     }
