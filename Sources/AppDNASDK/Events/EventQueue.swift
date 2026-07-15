@@ -160,7 +160,13 @@ final class EventQueue {
     /// Force flush all pending events.
     func flush() {
         queue.async { [weak self] in
-            self?.performFlush()
+            guard let self else { return }
+            // Round-32 — a manual/host flush implies UI intent: clear the failure-pause gate so a
+            // queue paused after N permanent-4xx failures gets another chance. Matches Android
+            // flush() (SPEC-070-A A.16), which resets paused + consecutiveFailures before draining;
+            // iOS previously just hit the pause guard in performFlush() and no-op'd while paused.
+            self.consecutiveFailures = 0
+            self.performFlush()
         }
     }
 
