@@ -295,4 +295,15 @@ final class SubscriptionStatusObserver {
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         defaults.set(data, forKey: Self.snapshotKey)
     }
+
+    /// Clear the persisted subscription snapshot. MUST be called on any identity change — sign-out
+    /// (`reset()`) and sign-in to a DIFFERENT user (`identify()`). The snapshot is device-global but the
+    /// reconcile filters entitlements to the currently-identified user. Without clearing, user B's first
+    /// reconcile after A signs out diffs B's (filtered) entitlements against A's snapshot, sees A's
+    /// product "vanish", and fabricates a phantom `subscription_canceled` / `subscription_renewal_failed`
+    /// in B's session — corrupting churn/renewal analytics on every account switch. A fresh (empty)
+    /// snapshot makes the next reconcile establish a clean baseline and emit nothing.
+    static func clearPersistedSnapshot() {
+        UserDefaults.standard.removeObject(forKey: snapshotKey)
+    }
 }

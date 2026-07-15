@@ -459,6 +459,13 @@ public final class AppDNA: @unchecked Sendable {
             // racy across concurrent identify() calls.
             AppAccountTokenResolver.recordFirstIdentifiedUserIdIfNeeded(userId)
 
+            // Identity changed → clear the device-global subscription snapshot, or the new user's first
+            // reconcile diffs their (user-filtered) entitlements against the PREVIOUS user's snapshot and
+            // fabricates a phantom subscription_canceled/_renewal_failed. A fresh baseline emits nothing.
+            if previousUserId != userId {
+                SubscriptionStatusObserver.clearPersistedSnapshot()
+            }
+
             shared.identityManager?.identify(userId: userId, traits: traits)
             Log.info("Identified user: \(userId)")
 
@@ -538,6 +545,10 @@ public final class AppDNA: @unchecked Sendable {
             shared.surveyManager?.resetSession()
             shared.webEntitlementManager?.stopObserving()
             shared.pendingMessageListener?.stopObserving()
+            // The subscription snapshot is device-global; identity is not. Clear it on sign-out so the
+            // next user's first reconcile does not diff their entitlements against this user's snapshot
+            // and fabricate a phantom subscription_canceled/_renewal_failed. See clearPersistedSnapshot().
+            SubscriptionStatusObserver.clearPersistedSnapshot()
 
             // 🔴 USER A'S ONBOARDING ANSWERS SURVIVED THE SIGN-OUT AND RENDERED INTO USER B'S PAYWALL.
             //
