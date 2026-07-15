@@ -139,6 +139,10 @@ public struct AppDNAScreenSlot: View {
             ScreenManager.shared.showScreen(id)
         case .showPaywall(let id):
             if let paywallId = id { AppDNA.showPaywall(paywallId) }
+        case .showSurvey(let id):
+            // Parity with Android's slot handler (AppDNAScreenSlot.kt) — a slot button configured with
+            // a showSurvey action did nothing on iOS (fell to `default`), while Android presented it.
+            if let surveyId = id { AppDNA.showSurvey(surveyId) }
         default:
             break
         }
