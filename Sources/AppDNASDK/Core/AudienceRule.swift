@@ -138,8 +138,15 @@ internal enum AudienceRuleEvaluator {
             // Closed interval on a numeric trait. Previously unimplemented — it fell into
             // `default: return true`, so a between-rule passed VACUOUSLY for every user.
             guard let t = asDouble(traitValue) else { return false }
-            let lower = asDouble(rule.min?.value)
-            let upper = asDouble(rule.max?.value)
+            var lower = asDouble(rule.min?.value)
+            var upper = asDouble(rule.max?.value)
+            // Round-31 — bounds may also arrive as a 2-element `value` list (matches Android
+            // `betweenBounds`). Without this iOS ignored `{between, value:[18,65]}` entirely and
+            // returned false where Android matched. min/max keys win when present.
+            if lower == nil && upper == nil, let list = rule.value?.value as? [Any], list.count >= 2 {
+                lower = asDouble(list[0])
+                upper = asDouble(list[1])
+            }
             guard lower != nil || upper != nil else { return false }
             if let lower, t < lower { return false }
             if let upper, t > upper { return false }

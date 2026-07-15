@@ -45,7 +45,12 @@ final class SurveyManager {
     func onEvent(eventName: String, properties: [String: Any]?) {
         guard !isPresenting else { return }
 
-        for (surveyId, config) in surveyConfigs {
+        // Round-31 — iterate in ASCENDING surveyId order for a DETERMINISTIC winner when
+        // multiple surveys match one event. `surveyConfigs` is an unordered Dictionary, so the
+        // plain `for-in ... break` picked a hash-order survey that varied run-to-run AND diverged
+        // from Android. SurveyConfig has no priority field, so id-asc is the tie-break — the same
+        // rule MessageManager uses (priority desc, then id asc). Both platforms now agree.
+        for (surveyId, config) in surveyConfigs.sorted(by: { $0.key < $1.key }) {
             // 1. Event name match
             guard config.trigger_rules?.event == eventName else { continue }
 

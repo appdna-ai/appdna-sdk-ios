@@ -324,9 +324,20 @@ final class EventQueue {
                     if loss > 0 { DroppedEventsCounter.increment(loss) }
                     self.pendingEvents.removeAll { eventIds.contains($0.event_id) }
                     self.eventStore.removeSent(eventIds: eventIds)
-                    self.consecutiveFailures = self.maxConsecutiveFailures
+                    // Round-31 — INCREMENT the failure latch (was: jump straight to
+                    // maxConsecutiveFailures). The poison batch is already dropped above, so a
+                    // single 400 (one malformed event) must NOT pause the whole queue for the
+                    // session — that stalled every subsequent HEALTHY event until foreground.
+                    // Android increments here (bumpFailureCounter → pause only at 5); iOS now
+                    // matches, so it pauses only on SUSTAINED failure (e.g. a persistent 401),
+                    // and a lone bad batch self-heals on the next successful flush.
+                    self.consecutiveFailures += 1
                     self.retryCount = 0
-                    Log.error("Dropping batch of \(batch.count) events after permanent 4xx (retry won't help). Paused until next session.")
+                    if self.consecutiveFailures >= self.maxConsecutiveFailures {
+                        Log.error("Dropped batch of \(batch.count) after permanent 4xx; \(self.consecutiveFailures) consecutive failures — uploads paused until next foreground.")
+                    } else {
+                        Log.error("Dropping batch of \(batch.count) events after permanent 4xx (retry won't help); continuing with next batch.")
+                    }
                 } else {
                     if self.retryCount < self.maxRetries {
                         // A server-supplied Retry-After wins over our backoff schedule.
