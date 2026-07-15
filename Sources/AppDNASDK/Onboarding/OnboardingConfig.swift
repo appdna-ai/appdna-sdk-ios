@@ -90,13 +90,16 @@ public struct OnboardingSettings: Codable {
     public let content_padding: CGFloat?
     /// Global vertical spacing between content blocks in points. Default 12.
     public let block_spacing: CGFloat?
+    /// Console-configured haptic feedback (mirrors Android `flow.settings.haptic`). iOS onboarding
+    /// previously had no such field and fired no haptics, so a flow's haptic config was iOS-ignored.
+    public let haptic: HapticConfig?
 
     public init(show_progress: Bool = true, allow_back: Bool = true, skip_to_step: String? = nil,
                 progress_style: String? = nil, progress_color: String? = nil, progress_track_color: String? = nil,
                 progress_height: CGFloat? = nil, progress_gradient_colors: [String]? = nil,
                 progress_skip_label: String? = nil, progress_flash_color: String? = nil,
                 back_button_style: BackButtonStyle? = nil, dismiss_allowed: Bool? = nil,
-                content_padding: CGFloat? = nil, block_spacing: CGFloat? = nil) {
+                content_padding: CGFloat? = nil, block_spacing: CGFloat? = nil, haptic: HapticConfig? = nil) {
         self.show_progress = show_progress
         self.allow_back = allow_back
         self.skip_to_step = skip_to_step
@@ -111,6 +114,7 @@ public struct OnboardingSettings: Codable {
         self.dismiss_allowed = dismiss_allowed
         self.content_padding = content_padding
         self.block_spacing = block_spacing
+        self.haptic = haptic
     }
 
     public init(from decoder: Decoder) throws {
@@ -129,12 +133,13 @@ public struct OnboardingSettings: Codable {
         self.dismiss_allowed = try c.decodeIfPresent(Bool.self, forKey: .dismiss_allowed)
         self.content_padding = try c.decodeIfPresent(CGFloat.self, forKey: .content_padding)
         self.block_spacing = try c.decodeIfPresent(CGFloat.self, forKey: .block_spacing)
+        self.haptic = try c.decodeIfPresent(HapticConfig.self, forKey: .haptic)
     }
 
     enum CodingKeys: String, CodingKey {
         case show_progress, allow_back, skip_to_step, progress_style
         case progress_color, progress_track_color, progress_height, progress_gradient_colors, progress_skip_label, progress_flash_color, back_button_style, dismiss_allowed
-        case content_padding, block_spacing
+        case content_padding, block_spacing, haptic
     }
 }
 

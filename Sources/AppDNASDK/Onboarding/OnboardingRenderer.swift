@@ -340,6 +340,7 @@ struct OnboardingFlowHost: View {
                     // complete this step — but the pending would otherwise be fired by the NEXT
                     // `applyOutcome`, recording a completion for the step they just abandoned. Clear it.
                     pendingStepCompletion = nil
+                    HapticEngine.triggerIfEnabled(flow.settings.haptic?.triggers?.on_step_advance, config: flow.settings.haptic)
                     navigationHistory.removeLast()
                     withAnimation(.easeInOut(duration: 0.25)) { currentIndex = previousIndex }
                 } label: {
@@ -365,6 +366,7 @@ struct OnboardingFlowHost: View {
                     // discard a completion waiting on that hook, or the next `applyOutcome` records
                     // a phantom completion for the step the user dismissed away from.
                     pendingStepCompletion = nil
+                    HapticEngine.triggerIfEnabled(flow.settings.haptic?.triggers?.on_button_tap, config: flow.settings.haptic)
                     onFlowDismissed(step.id, currentIndex)
                 } label: {
                     Image(systemName: "xmark")
@@ -386,6 +388,7 @@ struct OnboardingFlowHost: View {
                     let step = flow.steps[currentIndex]
                     // See leading-close above: clear a hook-pending completion before dismissing.
                     pendingStepCompletion = nil
+                    HapticEngine.triggerIfEnabled(flow.settings.haptic?.triggers?.on_button_tap, config: flow.settings.haptic)
                     onFlowDismissed(step.id, currentIndex)
                 } label: {
                     Image(systemName: "xmark")
@@ -915,6 +918,9 @@ struct OnboardingFlowHost: View {
     /// Evaluate next-step rules and route. All decision logic lives in the pure
     /// `OnboardingAdvance` state machine; this is the execute half.
     private func advanceOrComplete() {
+        // Console-configured step-advance haptic (mirrors Android's on_step_advance). iOS onboarding
+        // fired no haptics at all before `settings.haptic` was wired.
+        HapticEngine.triggerIfEnabled(flow.settings.haptic?.triggers?.on_step_advance, config: flow.settings.haptic)
         applyOutcome(OnboardingAdvance.advance(
             flow: flow,
             currentIndex: currentIndex,
