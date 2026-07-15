@@ -475,8 +475,13 @@ struct PaywallPlan: Codable, Identifiable {
     var displayName: String { label ?? name ?? "" }
     /// Display price — try price_display first (Firestore), then price (legacy)
     var displayPrice: String { price_display ?? price ?? "" }
-    /// Trial display — try trial.label first, then legacy trialDuration string
-    var trialLabel: String? { trial?.label ?? trialDuration }
+    /// Trial display — an authored `trial.label` wins verbatim; a bare
+    /// `trialDuration` ("7-day") is enriched to "7-day free trial" (Round-30:
+    /// the " free trial" suffix used to live at the PlanCard render site only,
+    /// so grid cards read "7-day free trial" while every other layout showed
+    /// "7-day", and an authored label got a double "Free week free trial").
+    /// Now centralised so all layouts + Android render the identical string.
+    var trialLabel: String? { trial?.label ?? trialDuration.map { "\($0) free trial" } }
 
     enum CodingKeys: String, CodingKey {
         case _id = "id"

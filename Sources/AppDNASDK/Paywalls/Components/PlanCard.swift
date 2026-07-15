@@ -121,12 +121,15 @@ struct PlanCard: View {
                         }
 
                         if let trial = plan.trialLabel {
+                            // Round-30 — render `trialLabel` verbatim; the " free trial"
+                            // suffix for duration-only trials now lives in the computed
+                            // property (PaywallConfig.swift) so every layout + Android match.
                             if let ts = featureTextStyle {
-                                Text(loc?("plan.\(planIndex).trial", "\(trial) free trial") ?? "\(trial) free trial")
+                                Text(loc?("plan.\(planIndex).trial", trial) ?? trial)
                                     .applyTextStyle(ts)
                                     .foregroundColor(isSelected && selectedTextColor != nil ? effectiveTextColor : nil)
                             } else {
-                                Text(loc?("plan.\(planIndex).trial", "\(trial) free trial") ?? "\(trial) free trial")
+                                Text(loc?("plan.\(planIndex).trial", trial) ?? trial)
                                     .font(.caption)
                                     .foregroundColor(isSelected ? effectiveTextColor : Color(hex: (AppDNA.brandAccentHex ?? "#6366F1")))
                             }
