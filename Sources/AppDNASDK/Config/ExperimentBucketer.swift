@@ -89,7 +89,13 @@ public enum ExperimentBucketer {
 
         var cumulative: UInt32 = 0
         for variant in variants {
-            cumulative += UInt32((variant.weight ?? 0) * 10000)
+            // Round-35 — clamp (finite, 0…UInt32.max) + wrapping add so a malformed weight (negative,
+            // NaN, infinite, or huge) can't TRAP `UInt32(_:)` or overflow `+=` — a single bad Firestore
+            // weight crashed the app on any getVariant()/isInVariant() call. Kotlin's Double.toUInt() /
+            // UInt `+=` already saturate + wrap, so this also restores parity with Android.
+            let raw = (variant.weight ?? 0) * 10000
+            let clamped = raw.isFinite ? max(0.0, min(Double(UInt32.max), raw)) : 0.0
+            cumulative = cumulative &+ UInt32(clamped)
             if bucket < cumulative {
                 return variant.id ?? "unknown"
             }
