@@ -154,6 +154,10 @@ final class APIClient {
                 request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+                // Round-10 #15 — backend version-gating/attribution keys on these; Android sends both on
+                // every request, iOS sent neither, so every iOS call looked like an unknown SDK version.
+                request.setValue(AppDNA.sdkVersion, forHTTPHeaderField: "x-sdk-version")
+                request.setValue("ios", forHTTPHeaderField: "x-sdk-platform")
                 request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
                 let (_, response) = try await session.data(for: request)
@@ -283,6 +287,9 @@ final class APIClient {
         request.httpMethod = endpoint.method
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        // Round-10 #15 — SDK identity headers (parity with Android's SdkIdentityInterceptor).
+        request.setValue(AppDNA.sdkVersion, forHTTPHeaderField: "x-sdk-version")
+        request.setValue("ios", forHTTPHeaderField: "x-sdk-platform")
         // SPEC-067: Request compressed responses from server
         request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
 

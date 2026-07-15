@@ -60,6 +60,11 @@ final class RemoteConfigManager {
     private var messages: [String: MessageConfig] = [:]
     private var surveys: [String: SurveyConfig] = [:]
 
+    /// Round-10 #13 — consecutive fully-failed (e.g. offline) config fetches, so the retry backs off and
+    /// caps instead of recording a false success. Accessed on `queue`.
+    private var configFetchFailures = 0
+    private static let maxConfigFetchRetries = 5
+
     /// Called by SurveyManager to get current survey configs.
     private var surveyUpdateHandler: (([String: SurveyConfig]) -> Void)?
 
@@ -448,6 +453,38 @@ final class RemoteConfigManager {
         }
 
         group.notify(queue: .global()) {
+            // Round-10 #13 — a fully-failed fetch (offline at launch: every getDocument errors, but each
+            // `defer { group.leave() }` still fires) used to unconditionally markFetched + emit
+            // config_fetched. That set `fetchedAt=now` so `isStale` was false, and the ONLY reschedule
+            // below is gated on `isStale` — so the SDK was stranded on cache with no periodic refresh and
+            // no connectivity hook (Android recovers via ConfigRefreshWorker). Detect "got nothing" and
+            // retry with bounded backoff instead of recording a false success. (A genuinely empty project
+            // is indistinguishable here, but it has no config to serve and the capped retry is cheap.)
+            let gotAnything = self.queue.sync {
+                !self.paywalls.isEmpty || !self.onboardingFlows.isEmpty || !self.experiments.isEmpty
+                    || !self.flags.isEmpty || !self.flows.isEmpty || !self.messages.isEmpty
+                    || !self.surveys.isEmpty
+            }
+            if !gotAnything {
+                let attempt = self.queue.sync { () -> Int in
+                    self.configFetchFailures += 1
+                    return self.configFetchFailures
+                }
+                if attempt <= Self.maxConfigFetchRetries {
+                    let backoff = min(pow(2.0, Double(attempt)), 30.0) // 2,4,8,16,30s
+                    Log.warning("Remote config fetch returned nothing (offline?) — retry \(attempt)/\(Self.maxConfigFetchRetries) in \(Int(backoff))s")
+                    DispatchQueue.global().asyncAfter(deadline: .now() + backoff) { [weak self] in
+                        self?.fetchConfigs()
+                    }
+                } else {
+                    Log.warning("Remote config fetch still empty after \(Self.maxConfigFetchRetries) retries — serving cache")
+                }
+                return
+            }
+
+            // Success — reset the failure streak.
+            self.queue.sync { self.configFetchFailures = 0 }
+
             // Re-cache all in-memory configs to disk. This ensures the disk
             // cache stays fresh whether configs came from per-item docs (index)
             // or from the legacy mega-doc. Without this, per-item fetches would

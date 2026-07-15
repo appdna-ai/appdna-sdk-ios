@@ -3,11 +3,33 @@ import FirebaseFirestore
 
 /// Caches entitlements locally and listens to Firestore for real-time updates.
 class EntitlementCache {
-    private(set) var entitlements: [ServerEntitlement] = []
+    // Round-10 #10 — the Firestore snapshot callback and StoreKit `update()` mutate this cache from
+    // different threads; the old in-place mutation of `entitlements` + append-while-iterating over
+    // `changeHandlers` raced. All access to the two mutable stores now goes through `lock`. Handlers are
+    // ALWAYS invoked OUTSIDE the lock (snapshot under lock, call out after) so a host callback that
+    // re-enters the cache can't deadlock. Android uses CopyOnWriteArrayList + immutable-list swap.
+    private let lock = NSLock()
+    private func locked<T>(_ body: () -> T) -> T {
+        lock.lock(); defer { lock.unlock() }; return body()
+    }
+
+    private var _entitlements: [ServerEntitlement] = []
+    private var _changeHandlers: [([ServerEntitlement]) -> Void] = []
+
+    private(set) var entitlements: [ServerEntitlement] {
+        get { locked { _entitlements } }
+        set { locked { _entitlements = newValue } }
+    }
     private var firestoreListener: ListenerRegistration?
-    private var changeHandlers: [([ServerEntitlement]) -> Void] = []
 
     private let userDefaultsKey = "com.appdna.entitlements"
+
+    // Round-10 #11 — remove the Firestore snapshot listener when the cache is deallocated (e.g. on
+    // re-configure), mirroring the sibling WebEntitlementManager's teardown. Without this the old
+    // listener leaked on every re-create.
+    deinit {
+        firestoreListener?.remove()
+    }
 
     /// The single set of statuses that count as "entitled". Used by BOTH the global check and the
     /// per-product lookup so they can't disagree — matches Android's one `ACTIVE_STATUSES`. Previously
@@ -24,10 +46,13 @@ class EntitlementCache {
     }
 
     func update(_ entitlement: ServerEntitlement) {
-        if let index = entitlements.firstIndex(where: { $0.productId == entitlement.productId }) {
-            entitlements[index] = entitlement
-        } else {
-            entitlements.append(entitlement)
+        // Atomic read-modify-write under the lock (not two separate locked ops).
+        locked {
+            if let index = _entitlements.firstIndex(where: { $0.productId == entitlement.productId }) {
+                _entitlements[index] = entitlement
+            } else {
+                _entitlements.append(entitlement)
+            }
         }
         persistLocally()
         notifyHandlers()
@@ -50,7 +75,7 @@ class EntitlementCache {
     }
 
     func onEntitlementsChanged(_ handler: @escaping ([ServerEntitlement]) -> Void) {
-        changeHandlers.append(handler)
+        locked { _changeHandlers.append(handler) }
     }
 
     func persistLocally() {
@@ -87,8 +112,10 @@ class EntitlementCache {
     }
 
     private func notifyHandlers() {
-        let current = entitlements
-        for handler in changeHandlers {
+        // Snapshot state + handlers under the lock, then call OUT after releasing it — a host handler
+        // that re-enters the cache (e.g. reads hasActiveSubscription) must not deadlock.
+        let (current, handlers) = locked { (_entitlements, _changeHandlers) }
+        for handler in handlers {
             handler(current)
         }
         NotificationCenter.default.post(name: .entitlementsChanged, object: nil, userInfo: ["entitlements": current])
