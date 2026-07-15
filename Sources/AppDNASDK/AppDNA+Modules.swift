@@ -163,6 +163,10 @@ extension AppDNA {
             if let tracker {
                 PurchaseSuccessEvents.emit(tracker: tracker, paywallId: nil, result: result)
             }
+            // Round-34 — refresh the entitlement cache so onEntitlementsChanged fires after a
+            // purchase, matching Android (handleSuccessfulPurchase → update → notifyBillingDelegate).
+            // Diff-guarded inside refreshEntitlementCache, so an unchanged set fires nothing.
+            await refreshEntitlementCache()
             return TransactionInfo(
                 transactionId: result.transactionId,
                 productId: result.productId,
@@ -183,7 +187,11 @@ extension AppDNA {
                 Log.warning("BillingModule: No billing provider configured")
                 throw BillingModuleError.noBillingProvider
             }
-            return try await bridge.restore(appAccountToken: AppAccountTokenResolver.tokenForCurrentUser())
+            let restored = try await bridge.restore(appAccountToken: AppAccountTokenResolver.tokenForCurrentUser())
+            // Round-34 — refresh entitlements so onEntitlementsChanged fires after a restore, matching
+            // Android (restorePurchases → replaceAll → notifyBillingDelegate). Diff-guarded.
+            await refreshEntitlementCache()
+            return restored
         }
 
         /// Get current entitlements as `Entitlement` objects.

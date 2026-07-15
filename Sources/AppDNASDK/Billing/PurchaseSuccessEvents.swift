@@ -40,6 +40,13 @@ enum PurchaseSuccessEvents {
             "currency": result.currency,
             "provider": result.provider,
         ]
+        // Round-34 — emit transaction_id (Android includes purchase.orderId; PurchaseResult already
+        // carries it, it was just never added). A dashboard de-duping by transaction_id dropped
+        // every iOS row. (is_trial parity still pending — needs an isTrial field on PurchaseResult
+        // threaded through all three bridges like isSubscription; tracked as a follow-up.)
+        if !result.transactionId.isEmpty {
+            props["transaction_id"] = result.transactionId
+        }
         // Omitted rather than fabricated on the non-paywall paths (a direct/host-driven purchase has no
         // paywall), matching what those call sites emitted before.
         if let paywallId {

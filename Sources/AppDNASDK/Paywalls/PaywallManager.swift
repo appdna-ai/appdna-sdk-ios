@@ -279,6 +279,9 @@ final class PaywallManager {
                     paywallId: paywallId,
                     result: result
                 )
+                // Round-34 — refresh entitlements so onEntitlementsChanged fires after a paywall
+                // purchase too (matches Android + the direct billing.purchase path). Diff-guarded.
+                await AppDNA.billing.refreshEntitlementCache()
                 DispatchQueue.main.async { [weak self] in
                     delegate?.onPaywallPurchaseCompleted(
                         paywallId: paywallId,
@@ -454,6 +457,9 @@ final class PaywallManager {
                     "paywall_id": paywallId,
                     "restored_count": restored.count,
                 ])
+                // Round-34 — refresh entitlements so onEntitlementsChanged fires after a paywall
+                // restore too (matches Android + the direct restorePurchases path). Diff-guarded.
+                await AppDNA.billing.refreshEntitlementCache()
                 // SPEC-401 Fix 1C — fire delegate forward FIRST so a host
                 // that wants to handle dismiss itself can call dismiss
                 // synchronously inside the delegate body (its dismiss flips
