@@ -419,6 +419,9 @@ struct SurveyContainerView: View {
                 answers[qId] = newValue
                 // Track individual question answer
                 if let answer = newValue {
+                    // Round-26 — fire the on_option_select haptic like Android (SurveyActivity onAnswer).
+                    // iOS never invoked this configurable survey trigger.
+                    HapticEngine.triggerIfEnabled(theme?.haptic?.triggers?.on_option_select, config: theme?.haptic)
                     onQuestionAnswered?(config.name ?? "", question, answer)
                 }
                 // Recompute visible questions when answers change (for conditional show_if)
