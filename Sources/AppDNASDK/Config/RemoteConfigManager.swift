@@ -64,6 +64,13 @@ final class RemoteConfigManager {
     /// caps instead of recording a false success. Accessed on `queue`.
     private var configFetchFailures = 0
     private static let maxConfigFetchRetries = 5
+    /// Round-11 regression fix — whether the current fetch REACHED the server (any config document
+    /// returned with no error). A missing doc is a successful round-trip (error==nil), so this is true
+    /// online regardless of WHAT is published — including screens-only / brand-only / empty projects
+    /// (which the earlier content-based `gotAnything` heuristic wrongly treated as failures, since
+    /// screens write to ScreenManager and brand writes async to AppDNA.brandAccentHex, neither in that
+    /// check). Only a genuine network failure (offline, no cache) leaves it false. Accessed on `queue`.
+    private var configFetchReachedServer = false
 
     /// Called by SurveyManager to get current survey configs.
     private var surveyUpdateHandler: (([String: SurveyConfig]) -> Void)?
@@ -329,6 +336,9 @@ final class RemoteConfigManager {
         // For paywalls, onboarding, and surveys: prefer per-item docs (via index)
         // to avoid the 1MB mega-doc limit. Fall back to legacy mega-doc if no index.
         let group = DispatchGroup()
+        // Round-11 regression fix — reset the per-fetch server-reachability flag; the always-present
+        // getDocument closures below set it true the moment any of them returns without a network error.
+        self.queue.sync { self.configFetchReachedServer = false }
 
         // Paywalls: index → per-item docs (subcollection), fallback → mega-doc
         group.enter()
@@ -379,6 +389,7 @@ final class RemoteConfigManager {
         db.document("\(basePath)/experiments").getDocument { [weak self] snapshot, error in
             defer { group.leave() }
             guard let self else { return }
+            if error == nil { self.queue.sync { self.configFetchReachedServer = true } }
             if let data = snapshot?.data() {
                 self.parseExperiments(data)
                 self.prefetchVariantDocs(db: db, group: group)
@@ -404,6 +415,7 @@ final class RemoteConfigManager {
         group.enter()
         db.document("\(basePath)/flows").getDocument { [weak self] snapshot, error in
             defer { group.leave() }
+            if error == nil { self?.queue.sync { self?.configFetchReachedServer = true } }
             if let data = snapshot?.data() {
                 self?.queue.async { self?.flows = data }
                 if let jsonData = try? JSONSerialization.data(withJSONObject: data) {
@@ -432,6 +444,7 @@ final class RemoteConfigManager {
         group.enter()
         db.document("\(basePath)/screen_index").getDocument { [weak self] snapshot, error in
             defer { group.leave() }
+            if error == nil { self?.queue.sync { self?.configFetchReachedServer = true } }
             if let data = snapshot?.data() {
                 self?.parseScreenIndex(data)
             } else if let error {
@@ -445,6 +458,7 @@ final class RemoteConfigManager {
         group.enter()
         db.document("\(basePath)/brand").getDocument { [weak self] snapshot, error in
             defer { group.leave() }
+            if error == nil { self?.queue.sync { self?.configFetchReachedServer = true } }
             if let data = snapshot?.data() {
                 self?.parseBrand(data)
             } else if let error {
@@ -457,15 +471,14 @@ final class RemoteConfigManager {
             // `defer { group.leave() }` still fires) used to unconditionally markFetched + emit
             // config_fetched. That set `fetchedAt=now` so `isStale` was false, and the ONLY reschedule
             // below is gated on `isStale` — so the SDK was stranded on cache with no periodic refresh and
-            // no connectivity hook (Android recovers via ConfigRefreshWorker). Detect "got nothing" and
-            // retry with bounded backoff instead of recording a false success. (A genuinely empty project
-            // is indistinguishable here, but it has no config to serve and the capped retry is cheap.)
-            let gotAnything = self.queue.sync {
-                !self.paywalls.isEmpty || !self.onboardingFlows.isEmpty || !self.experiments.isEmpty
-                    || !self.flags.isEmpty || !self.flows.isEmpty || !self.messages.isEmpty
-                    || !self.surveys.isEmpty
-            }
-            if !gotAnything {
+            // no connectivity hook (Android recovers via ConfigRefreshWorker). Detect a fetch that never
+            // REACHED the server and retry with bounded backoff instead of recording a false success.
+            // Round-11 regression fix — this uses server-reachability (any getDocument returned without a
+            // network error), NOT "did we parse any config": a missing doc is a successful round-trip, so
+            // screens-only / brand-only / empty projects (which parse into ScreenManager / async
+            // brandAccentHex / nothing, none visible to a content check) are correctly treated as success.
+            let reachedServer = self.queue.sync { self.configFetchReachedServer }
+            if !reachedServer {
                 let attempt = self.queue.sync { () -> Int in
                     self.configFetchFailures += 1
                     return self.configFetchFailures
