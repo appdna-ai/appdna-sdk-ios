@@ -253,7 +253,19 @@ enum OnboardingAdvance {
         let layoutRules = effectiveConfig.next_step_rules ?? []
         let hasLayoutConditions = layoutRules.contains { !($0.conditions?.isEmpty ?? true) }
         let hasStepConditions = stepRules.contains { !($0.conditions?.isEmpty ?? true) }
-        let rules: [NextStepRule] = hasLayoutConditions && !hasStepConditions ? layoutRules : stepRules
+        // Mirror Android's 3-way precedence (OnboardingAdvance.kt): conditioned layout rules win
+        // over conditioned step rules; otherwise step rules; otherwise fall back to layout rules.
+        // The old iOS ternary dropped to (empty) stepRules when layout rules were UNCONDITIONAL —
+        // so an unconditional layout `next_step_rules` (e.g. straight to a paywall/end_ step) was
+        // silently ignored and iOS sequential-advanced while Android routed.
+        let rules: [NextStepRule]
+        if hasLayoutConditions && !hasStepConditions {
+            rules = layoutRules
+        } else if !stepRules.isEmpty {
+            rules = stepRules
+        } else {
+            rules = layoutRules
+        }
 
         if !rules.isEmpty {
             for rule in rules {
@@ -393,7 +405,10 @@ enum OnboardingAdvance {
             return true // No condition = always match.
         }
 
-        let logic = rule.logic ?? "and"
+        // Normalize case to match Android's `.lowercase()` (NextStepRuleEvaluator.kt) — a console/webhook
+        // value of "AND"/"OR" otherwise never matched the lowercase literals below, so an all-conditions-
+        // passed "AND" rule returned false and the rule silently never fired.
+        let logic = (rule.logic ?? "and").lowercased()
         let stepResponses = responses[stepId] as? [String: Any] ?? [:]
         let step = flow.steps.first(where: { $0.id == stepId })
 

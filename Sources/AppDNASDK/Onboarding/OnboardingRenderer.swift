@@ -1736,6 +1736,10 @@ enum RequiredFieldGate {
             if value == nil { return (false, fieldId) }
             if let str = value as? String, str.isEmpty { return (false, fieldId) }
             if let dict = value as? [String: Any], dict.isEmpty { return (false, fieldId) }
+            // Multi-select / chips write `[selectedValues]`; select-then-deselect-all leaves `[]`, which
+            // must NOT satisfy a required field. Android's ContentBlockRenderer already blocks empty lists;
+            // iOS lacked this branch and advanced past a required question with zero selections.
+            if let arr = value as? [Any], arr.isEmpty { return (false, fieldId) }
         }
         return (true, nil)
     }

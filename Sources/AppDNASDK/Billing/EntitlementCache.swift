@@ -9,12 +9,18 @@ class EntitlementCache {
 
     private let userDefaultsKey = "com.appdna.entitlements"
 
+    /// The single set of statuses that count as "entitled". Used by BOTH the global check and the
+    /// per-product lookup so they can't disagree — matches Android's one `ACTIVE_STATUSES`. Previously
+    /// `hasActiveSubscription` included `grace_period` but `entitlement(for:)` did not, so a grace-period
+    /// subscriber reported subscribed globally yet had every per-product feature locked.
+    private static let activeStatuses: Set<String> = ["active", "trialing", "grace_period"]
+
     var hasActiveSubscription: Bool {
-        entitlements.contains { $0.status == "active" || $0.status == "trialing" || $0.status == "grace_period" }
+        entitlements.contains { Self.activeStatuses.contains($0.status) }
     }
 
     func entitlement(for productId: String) -> ServerEntitlement? {
-        entitlements.first { $0.productId == productId && ($0.status == "active" || $0.status == "trialing") }
+        entitlements.first { $0.productId == productId && Self.activeStatuses.contains($0.status) }
     }
 
     func update(_ entitlement: ServerEntitlement) {
