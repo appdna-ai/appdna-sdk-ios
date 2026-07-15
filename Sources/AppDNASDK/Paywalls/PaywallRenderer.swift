@@ -900,9 +900,13 @@ struct PaywallRenderer: View {
         VStack(spacing: 8) {
             // Label text (e.g. "Offer ends in")
             if let label = labelText {
+                // Round-23 — honor the authored `label_font_size` + `label_color` (both decoded but
+                // ignored) with Android's exact defaults (14pt, semibold, #7F1D1D dark-red). iOS was
+                // hardcoded to `.caption`(~12pt)/medium/system-grey, so the label size was silently
+                // dropped and the default color differed on every countdown (grey vs dark-red) from Android.
                 Text(loc("countdown.label", label))
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: data?.labelFontSize ?? 14, weight: .semibold))
+                    .foregroundColor(Color(hex: data?.labelColor ?? "#7F1D1D"))
             }
 
             if layout == "boxed" || layout == "banner" {
