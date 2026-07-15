@@ -1507,6 +1507,12 @@ struct FormInputRatingBlock: View {
     }
 }
 
+/// Round-29 — range-slider value-label formatter: one decimal for a fractional step (matches Android
+/// `ContentBlockRenderer` + the single slider), integer otherwise. Was `Int()` which dropped half-steps.
+private func rangeSliderValueText(_ v: Double, _ step: Double) -> String {
+    (step > 0 && step < 1) ? String(format: "%.1f", v) : "\(Int(v))"
+}
+
 /// Range slider (dual-thumb) input.
 struct FormInputRangeSliderBlock: View {
     let block: ContentBlock
@@ -1538,7 +1544,9 @@ struct FormInputRangeSliderBlock: View {
             HStack {
                 formFieldLabel(block)
                 Spacer()
-                Text("\(Int(lowValue))\(unitStr) - \(Int(highValue))\(unitStr)")
+                // Round-29 — show one decimal for a fractional step (matches Android + the single slider);
+                // `Int()` silently dropped the half-step the user selected (2.5 rendered "2").
+                Text("\(rangeSliderValueText(lowValue, stepVal))\(unitStr) - \(rangeSliderValueText(highValue, stepVal))\(unitStr)")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(fillCol)
             }

@@ -52,7 +52,11 @@ struct RatingBlockView: View {
             selectedRating = block.default_rating ?? 0
         }
         .accessibilityElement(children: .combine)
-        .accessibilityValue("\(Int(selectedRating)) of \(maxStars) stars")
+        // Round-29 — announce the half value when allow_half is on (matches Android TalkBack); was
+        // unconditional Int() so VoiceOver said "2 of 5 stars" for a 2.5 selection.
+        .accessibilityValue(halfEnabled
+            ? "\(String(format: "%.1f", selectedRating)) of \(maxStars) stars"
+            : "\(Int(selectedRating)) of \(maxStars) stars")
     }
 
     @ViewBuilder
