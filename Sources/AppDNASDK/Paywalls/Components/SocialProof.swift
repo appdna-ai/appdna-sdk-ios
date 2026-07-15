@@ -57,9 +57,21 @@ struct SocialProof: View {
     }
 
     private func formatCount(_ count: Int) -> String {
-        if count >= 1000 {
-            return "\(count / 1000).\((count % 1000) / 100)K"
+        // Round-27 — match Android formatCompactCount exactly: an M tier + suppress the tenths digit
+        // when it's 0 or the whole is >= 10. iOS was naive (no M tier, always a decimal), so 1,000,000
+        // rendered "1000.0K" (vs "1M") and 12,450 rendered "12.4K" (vs "12K") on the paywall's
+        // social-proof review count — a user-visible conversion surface.
+        let abs = Swift.abs(count)
+        if abs >= 1_000_000 {
+            let whole = abs / 1_000_000
+            let tenths = (abs % 1_000_000) / 100_000
+            return (tenths == 0 || whole >= 10) ? "\(whole)M" : "\(whole).\(tenths)M"
         }
-        return "\(count)"
+        if abs >= 1_000 {
+            let whole = abs / 1_000
+            let tenths = (abs % 1_000) / 100
+            return (tenths == 0 || whole >= 10) ? "\(whole)K" : "\(whole).\(tenths)K"
+        }
+        return "\(abs)"
     }
 }
