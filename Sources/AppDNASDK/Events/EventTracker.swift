@@ -122,6 +122,7 @@ final class EventTracker {
             identity: identity,
             sessionId: sessionId,
             analyticsConsent: analyticsConsent,
+            experimentExposures: experimentExposureProvider?() ?? nil,
             screen: screenProvider?(),
             pushId: pushIdProvider?() ?? nil
         )

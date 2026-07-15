@@ -112,4 +112,33 @@ final class ExperimentVariantDocResolutionTests: XCTestCase {
         rcm._injectVariantDocForTesting(path: docPath, config: ["id": "pw-draft"])
         XCTAssertEqual(rcm.getVariantDoc(path: docPath)?["id"] as? String, "pw-draft")
     }
+
+    /// 🔴 REGRESSION GUARD: wiring the experiment-exposure provider (exactly as `performConfigure` does)
+    /// must NOT deadlock. `trackExposure` records the exposure under `queue.sync`; every `track()` now
+    /// attaches exposures via the provider → `getExposures()` → `queue.sync` on the SAME serial queue.
+    /// If the exposure event is emitted INSIDE the first `queue.sync`, the second re-enters the
+    /// (non-reentrant) serial queue and deadlocks the caller — hanging the first `getVariant()` of the
+    /// session. The shared-fixture exposure test never sets the provider, so it cannot catch this; this
+    /// drives the real wired path and asserts the call returns promptly.
+    func testExposureProviderWiredGetVariantDoesNotDeadlock() {
+        let cache = ConfigCache(ttl: 3600, suiteName: "ai.appdna.sdk.test.\(UUID().uuidString)")
+        let rcm = RemoteConfigManager(firestorePath: "orgs/o/apps/a", configCache: cache, configTTL: 3600)
+        let keychain = KeychainStore(service: "ai.appdna.sdk.test.\(UUID().uuidString)")
+        let identity = IdentityManager(keychainStore: keychain)
+        let tracker = EventTracker(identityManager: identity)
+        let em = ExperimentManager(remoteConfigManager: rcm, identityManager: identity, eventTracker: tracker)
+        // Wire the provider the same way performConfigure does.
+        tracker.setExperimentExposureProvider {
+            em.getExposures().map { ExperimentExposure(exp: $0.experimentId, variant: $0.variant) }
+        }
+        rcm._injectExperimentsForTesting(makeExperiment(treatmentWeight: 1.0))
+
+        let done = expectation(description: "getVariant returned without deadlock")
+        // Off the test thread so a deadlock trips the timeout instead of hanging XCTest itself.
+        DispatchQueue.global().async {
+            _ = em.getVariant(experimentId: "exp-1") // → trackExposure → track → provider → getExposures
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 5)
+    }
 }

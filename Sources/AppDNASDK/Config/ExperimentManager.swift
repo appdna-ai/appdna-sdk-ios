@@ -214,16 +214,24 @@ final class ExperimentManager {
     }
 
     private func trackExposure(experimentId: String, variant: String) {
-        queue.sync {
-            if exposedExperiments[experimentId] == nil {
-                exposedExperiments[experimentId] = variant
-                eventTracker.track(event: "experiment_exposure", properties: [
-                    "experiment_id": experimentId,
-                    "variant": variant,
-                    "source": "sdk",
-                ])
-            }
+        // Record the exposure under the lock, capturing whether it is NEW this session.
+        let isNew: Bool = queue.sync {
+            guard exposedExperiments[experimentId] == nil else { return false }
+            exposedExperiments[experimentId] = variant
+            return true
         }
+        guard isNew else { return }
+        // 🔴 track() MUST be called OUTSIDE `queue.sync`. Every event now attaches experiment exposures
+        // via the provider, which calls `getExposures()` → `queue.sync` on THIS serial queue. Calling
+        // track() while still holding the queue re-enters it and deadlocks (GCD serial queues are
+        // non-reentrant) — hanging the first getVariant()/isInVariant() of the session on the caller's
+        // (usually main) thread. Emitting after the critical section closes breaks the cycle; the
+        // check-and-set above already made this exposure exactly-once.
+        eventTracker.track(event: "experiment_exposure", properties: [
+            "experiment_id": experimentId,
+            "variant": variant,
+            "source": "sdk",
+        ])
     }
 }
 
