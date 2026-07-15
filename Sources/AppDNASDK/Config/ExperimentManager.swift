@@ -4,6 +4,16 @@ import Foundation
 /// Tracks exposure events once per session per experiment.
 final class ExperimentManager {
     private let queue = DispatchQueue(label: "ai.appdna.sdk.experiments")
+
+    /// The bucketing salt: the configured salt if it has any non-whitespace content, else the
+    /// experimentId. Mirrors Android's `config.salt.ifBlank { experimentId }` — iOS used `?? experimentId`
+    /// (nil ONLY), so an empty/whitespace salt (a hand-edited/imported/legacy Firestore doc) hashed with
+    /// the literal empty salt on iOS but substituted experimentId on Android → the same user bucketed to
+    /// different variants across platforms.
+    private static func resolvedSalt(_ salt: String?, _ experimentId: String) -> String {
+        if let s = salt, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return s }
+        return experimentId
+    }
     private let remoteConfigManager: RemoteConfigManager
     private let identityManager: IdentityManager
     private let eventTracker: EventTracker
@@ -33,7 +43,7 @@ final class ExperimentManager {
         guard let variant = ExperimentBucketer.assignVariant(
             experimentId: experimentId,
             userId: userId,
-            salt: config.salt ?? experimentId,
+            salt: Self.resolvedSalt(config.salt, experimentId),
             variants: config.variants ?? []
         ) else {
             return nil
@@ -60,7 +70,7 @@ final class ExperimentManager {
         guard let variantId = ExperimentBucketer.assignVariant(
             experimentId: experimentId,
             userId: userId,
-            salt: config.salt ?? experimentId,
+            salt: Self.resolvedSalt(config.salt, experimentId),
             variants: config.variants ?? []
         ) else {
             return nil
@@ -113,7 +123,7 @@ final class ExperimentManager {
             // platform (`resolveConfig` enforces both — reuse it).
             guard config.status == "running" else { continue }
             guard config.type == surfaceType else { continue }
-            guard (config.platforms ?? []).contains("ios") else { continue }
+            guard (config.platforms ?? ["ios"]).contains("ios") else { continue }
 
             // The control variant's config_ref names the live active entity.
             let variants = config.variants ?? []
@@ -127,7 +137,7 @@ final class ExperimentManager {
             guard let variantId = ExperimentBucketer.assignVariant(
                 experimentId: experimentId,
                 userId: userId,
-                salt: config.salt ?? experimentId,
+                salt: Self.resolvedSalt(config.salt, experimentId),
                 variants: variants
             ) else {
                 continue
@@ -195,7 +205,7 @@ final class ExperimentManager {
             return nil
         }
 
-        guard (config.platforms ?? []).contains("ios") else {
+        guard (config.platforms ?? ["ios"]).contains("ios") else {
             Log.debug("Experiment '\(experimentId)' does not target iOS")
             return nil
         }
