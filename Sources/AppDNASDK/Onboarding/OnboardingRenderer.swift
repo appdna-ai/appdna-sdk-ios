@@ -1345,11 +1345,11 @@ struct OnboardingStepRouter: View {
             Button(alert.label) {
                 permissionManager.openSettings()
                 permissionSettingsAlert = nil
-                advancePermissionStep()
+                advancePermissionStep(type: alert.type)
             }
             Button("Continue", role: .cancel) {
                 permissionSettingsAlert = nil
-                advancePermissionStep()
+                advancePermissionStep(type: alert.type)
             }
         } message: { _ in
             Text("You can enable this in Settings.")
@@ -1630,10 +1630,14 @@ struct OnboardingStepRouter: View {
 
     /// Advance via the same collect-and-`onNext` path the step's primary CTA uses, so the freshly
     /// stored `permission_{type}` value rides along in the step response.
-    private func advancePermissionStep() {
-        var data: [String: Any] = [:]
-        for (key, value) in toggleValues { data["toggle_\(key)"] = value }
-        for (key, value) in inputValues { data[key] = value }
+    ///
+    /// Round-12 Finding 2 — build the payload via `permissionActionPayload` so it carries `action` +
+    /// `action_value` (the button identity), matching Android's runPipeline path AND iOS's own
+    /// safeFallbackAdvance path (and the contract in PermissionAction.swift). Previously this path
+    /// omitted those keys, so a permission step that actually prompted advanced with a different
+    /// `selection_data` shape than Android and than the same step's fallback path.
+    private func advancePermissionStep(type: String) {
+        let data = permissionActionPayload(type: type, toggleValues: toggleValues, inputValues: inputValues)
         onNext(data.isEmpty ? nil : data)
     }
 
@@ -1659,7 +1663,7 @@ struct OnboardingStepRouter: View {
                             eventTracker?.track(event: "permission_denied", properties: permissionProps(type))
                         }
                         storePermissionResult(type, granted: granted)
-                        advancePermissionStep()
+                        advancePermissionStep(type: type)
                     }
                     return
                 case .proceed:
@@ -1674,7 +1678,7 @@ struct OnboardingStepRouter: View {
                 await MainActor.run {
                     eventTracker?.track(event: "permission_already_granted", properties: permissionProps(type))
                     storePermissionResult(type, granted: true)
-                    advancePermissionStep()
+                    advancePermissionStep(type: type)
                 }
 
             case .denied:
@@ -1687,7 +1691,7 @@ struct OnboardingStepRouter: View {
                         // Offer an "Open Settings" affordance; advance on the user's choice.
                         presentSettingsFallback(type: type, label: label)
                     } else {
-                        advancePermissionStep()
+                        advancePermissionStep(type: type)
                     }
                 }
 
@@ -1695,7 +1699,7 @@ struct OnboardingStepRouter: View {
                 await MainActor.run {
                     eventTracker?.track(event: "permission_unavailable", properties: permissionProps(type))
                     Log.warning("[Permission] '\(type)' unavailable (missing Info.plist usage description or unsupported type) — advancing without prompting.")
-                    advancePermissionStep()
+                    advancePermissionStep(type: type)
                 }
 
             case .undetermined:
@@ -1710,7 +1714,7 @@ struct OnboardingStepRouter: View {
                         eventTracker?.track(event: "permission_denied", properties: permissionProps(type))
                     }
                     storePermissionResult(type, granted: granted)
-                    advancePermissionStep()
+                    advancePermissionStep(type: type)
                 }
             }
         }
