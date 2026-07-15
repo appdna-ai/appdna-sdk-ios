@@ -20,14 +20,7 @@ public struct VideoBlockView: View {
 
     init(block: VideoBlock) {
         self.block = block
-        let autoplay = block.autoplay ?? false
-        self._showThumbnail = State(initialValue: !autoplay)
-        // Round-17 — actually AUTOPLAY: create the player up-front when autoplay is set. Previously
-        // `player` stayed nil until a tap, so with autoplay:true the `if let player…` guard failed and
-        // the view fell to the thumbnail — never autoplaying, while Android honors playWhenReady=autoplay.
-        if autoplay, let url = URL(string: block.video_url) {
-            self._player = State(initialValue: AVPlayer(url: url))
-        }
+        self._showThumbnail = State(initialValue: !(block.autoplay ?? false))
     }
 
     public var body: some View {
@@ -81,6 +74,18 @@ public struct VideoBlockView: View {
                         showThumbnail = false
                     }
                 }
+            }
+        }
+        .onAppear {
+            // Round-17/18 — actually AUTOPLAY: `player` used to stay nil until a tap, so autoplay:true
+            // fell to the thumbnail and never played (Android honors playWhenReady=autoplay). Create it
+            // HERE (once, on appear) rather than in init — `State(initialValue: AVPlayer(url:))` isn't an
+            // autoclosure, so a SwiftUI View re-init would eagerly construct + discard an AVPlayer every
+            // time. showThumbnail is already false for autoplay; setting the player flips to the player
+            // view, whose own onAppear calls play().
+            if (block.autoplay ?? false), player == nil, let url = URL(string: block.video_url) {
+                player = AVPlayer(url: url)
+                showThumbnail = false
             }
         }
     }
