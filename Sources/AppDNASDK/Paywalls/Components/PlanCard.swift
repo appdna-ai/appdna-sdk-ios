@@ -264,13 +264,21 @@ struct PlanCard: View {
 
     // MARK: - Badge helpers
 
-    private var badgePositionValue: String { cardStyle.badgePosition ?? "top_right" }
+    // Round-21 F2 — the console writes HYPHENATED positions ("top-left"/"top-right"/"top-center"), but
+    // the switch matched only UNDERSCORED constants, so every authored value hit the default. Normalize
+    // hyphen→underscore. Also: the default was `.topLeading` while the nil-fallback is "top_right"
+    // (`.topTrailing`) and Android's `else` is TopEnd (top-right) — so an authored "top-right" landed on
+    // the OPPOSITE corner per platform. Default is now `.topTrailing` (top-right) on both; top_center added.
+    private var badgePositionValue: String {
+        (cardStyle.badgePosition ?? "top_right").replacingOccurrences(of: "-", with: "_").lowercased()
+    }
 
     private var badgeAlignment: Alignment {
         switch badgePositionValue {
         case "top_left": return .topLeading
+        case "top_center": return .top
         case "top_right": return .topTrailing
-        default: return .topLeading
+        default: return .topTrailing
         }
     }
 
