@@ -99,8 +99,15 @@ final class MessageManager {
             Log.debug("[Messages] \(candidates.count) candidate(s) passed all filters for '\(eventName)'")
         }
 
-        // 5. Sort by priority (highest first)
-        guard let winner = candidates.sorted(by: { ($0.config.priority ?? 0) > ($1.config.priority ?? 0) }).first else {
+        // 5. Sort by priority (highest first), tie-broken by id (lowest wins) for a DETERMINISTIC winner.
+        // `sorted(by:)` is not guaranteed stable and `candidates` derives from an unordered Dictionary
+        // (`getActiveMessages()`), so priority-only sorting picked a nondeterministic message run-to-run
+        // among equal-priority candidates — and diverged from Android, which does
+        // `compareByDescending { priority }.thenBy { it.first }` (lowest id wins).
+        guard let winner = candidates.sorted(by: {
+            let p0 = $0.config.priority ?? 0, p1 = $1.config.priority ?? 0
+            return p0 != p1 ? p0 > p1 : $0.id < $1.id
+        }).first else {
             return
         }
 
