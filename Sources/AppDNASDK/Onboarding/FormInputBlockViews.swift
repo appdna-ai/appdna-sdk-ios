@@ -1524,10 +1524,11 @@ struct FormInputRangeSliderBlock: View {
         // SPEC-419 pass-22 — clamp the now-authorable range so minVal...maxVal can't trap (min<max).
         let minVal = min(rawMin, rawMax)
         let maxVal = max(rawMax, minVal + 1)
-        // Round-24 — honor `step_value` (default 1.0) like the single slider + Android, which snaps both
-        // thumbs to the step grid. iOS ignored step here entirely → captured continuous values (33.7)
-        // while Android snapped (34.0), so the same drag produced different response data every time.
-        let stepVal = cfgDouble(block.field_config?["step_value"]) ?? 1
+        // Round-24/25 — honor the authored step (default 1.0) like the single slider + Android, which
+        // snap both thumbs to the step grid. iOS ignored step here entirely → captured continuous values
+        // (33.7) while Android snapped (34.0). The console writes the step under field_config["step"]
+        // (NOT "step_value"), so read it exactly like the single slider: block.step_value ?? config.step.
+        let stepVal = block.step_value ?? cfgDouble(block.field_config?["step"]) ?? 1
         let unitStr = block.unit ?? ""
         let fillCol = Color(hex: block.field_style?.fill_color ?? block.active_color ?? (AppDNA.brandAccentHex ?? "#6366F1"))
 

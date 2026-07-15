@@ -132,6 +132,10 @@ struct RangeSliderFieldView: View {
         let maxV = cfg?.max_value ?? 100
         let unit = cfg?.unit ?? ""
         let decimalPlaces = cfg?.decimal_places ?? 0
+        // Round-25 — honor the authored step (like the single field slider FormStepView:415 + Android
+        // FormFieldRendererExtras.kt:302). This range slider snapped continuously while Android snapped
+        // to the step grid — the same drag produced different captured values.
+        let stepV: Double = { let s = cfg?.step ?? 1; return s > 0 ? s : 1 }()
 
         // Decode existing range from value (dictionary form: low/high)
         let stored = value as? [String: Double]
@@ -163,8 +167,8 @@ struct RangeSliderFieldView: View {
             VStack(spacing: 4) {
                 // SPEC-419 pass-28 — guard the ClosedRange against an inverted/degenerate config
                 // (min_value > max_value) or a coupled value out of order, mirroring FormInputRangeSliderBlock.
-                Slider(value: low, in: minV...max(minV, high.wrappedValue))
-                Slider(value: high, in: min(maxV, low.wrappedValue)...maxV)
+                Slider(value: low, in: minV...max(minV, high.wrappedValue), step: stepV)
+                Slider(value: high, in: min(maxV, low.wrappedValue)...maxV, step: stepV)
             }
             HStack {
                 Text(cfg?.min_label?.interpolated() ?? formatNumber(minV, places: decimalPlaces))
