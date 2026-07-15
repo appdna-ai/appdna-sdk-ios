@@ -1316,11 +1316,14 @@ struct FormInputSliderBlock: View {
                 formFieldLabel(block)
                 Spacer()
                 if showValue {
-                    // Round-24/30 — decide the label format by the STEP, not the value. One decimal for
-                    // ANY fractional step (Round-30: was step<1, so a step of 2.5 truncated to "2"; now "2.5"
-                    // matching Android), integer (rounded, to match Android roundToInt under FP drift) otherwise.
+                    // Round-24/30/31 — decide the label format by the STEP, not the value. One decimal
+                    // for ANY fractional step (Round-30: was step<1, so a step of 2.5 truncated to "2";
+                    // now "2.5" matching Android). Integer branch uses floor(x+0.5) — EXACTLY Kotlin
+                    // roundToInt (Math.round, half toward +inf) — so it matches Android for every value
+                    // incl. NEGATIVE ties (Round-31: Int(v.rounded()) is half-AWAY-from-zero, which split
+                    // -2.5 into iOS "-3" vs Android "-2" for a whole step with a fractional min).
                     let formatted = (stepVal > 0 && stepVal.truncatingRemainder(dividingBy: 1) != 0)
-                        ? String(format: "%.1f", value) : "\(Int(value.rounded()))"
+                        ? String(format: "%.1f", value) : "\(Int((value + 0.5).rounded(.down)))"
                     Text("\(formatted)\(unitStr)")
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(fillCol)
@@ -1508,12 +1511,14 @@ struct FormInputRatingBlock: View {
     }
 }
 
-/// Round-29/30 — range-slider value-label formatter: one decimal for ANY fractional step (Round-30:
-/// was step<1, so a step of 2.5 truncated to "2"; now "2.5", matching Android + the single slider),
-/// integer (rounded to match Android roundToInt under FP drift) otherwise.
+/// Round-29/30/31 — range-slider value-label formatter: one decimal for ANY fractional step (Round-30:
+/// was step<1, so a step of 2.5 truncated to "2"; now "2.5", matching Android + the single slider).
+/// Integer branch uses floor(v+0.5) — EXACTLY Kotlin roundToInt (half toward +inf) — so it matches
+/// Android for every value incl. negative ties (Round-31: v.rounded() is half-away-from-zero, splitting
+/// -2.5 into iOS "-3" vs Android "-2").
 private func rangeSliderValueText(_ v: Double, _ step: Double) -> String {
     (step > 0 && step.truncatingRemainder(dividingBy: 1) != 0)
-        ? String(format: "%.1f", v) : "\(Int(v.rounded()))"
+        ? String(format: "%.1f", v) : "\(Int((v + 0.5).rounded(.down)))"
 }
 
 /// Range slider (dual-thumb) input.
