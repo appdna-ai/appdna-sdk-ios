@@ -6,6 +6,12 @@ struct MultiChoiceView: View {
     @Binding var answer: SurveyAnswer?
     // SPEC-084: Gap #19 — option_style from SurveyAppearance applied to each option card
     var optionStyle: ElementStyleConfig? = nil
+    // R89 — honor the survey theme's resolved accent + text colors (was hardcoded
+    // #6366F1 checkbox / `.primary` label, which ignored SurveyTheme.accent_color /
+    // text_color and diverged from the console SurveyPreview). Defaults preserve
+    // prior behavior for any caller that does not pass them.
+    var accentColor: Color = Color(hex: "#6366F1")
+    var textColor: Color = .primary
 
     private var selectedIds: [String] {
         answer?.answer as? [String] ?? []
@@ -24,21 +30,22 @@ struct MultiChoiceView: View {
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: selectedIds.contains(option.id ?? "") ? "checkmark.square.fill" : "square")
-                            .foregroundColor(selectedIds.contains(option.id ?? "") ? Color(hex: "#6366F1") : .gray)
+                            .foregroundColor(selectedIds.contains(option.id ?? "") ? accentColor : .gray)
 
                         if let icon = option.icon {
                             Text(icon)
                         }
 
                         Text(option.text ?? "")
-                            .foregroundColor(.primary)
+                            .foregroundColor(textColor)
 
                         Spacer()
                     }
                     .padding(.vertical, optionStyle == nil ? 8 : 0)
                     .padding(.horizontal, optionStyle == nil ? 12 : 0)
                     // SPEC-084: Apply option_style if provided, otherwise fall back to default card border
-                    .applyContainerStyleOrDefault(optionStyle, isSelected: selectedIds.contains(option.id ?? ""))
+                    // R89 — thread the survey accent so the selected card border honors accent_color.
+                    .applyContainerStyleOrDefault(optionStyle, isSelected: selectedIds.contains(option.id ?? ""), accentColor: accentColor)
                 }
             }
         }

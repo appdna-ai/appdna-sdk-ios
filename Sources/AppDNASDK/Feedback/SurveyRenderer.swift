@@ -299,10 +299,13 @@ struct SurveyContainerView: View {
             RatingQuestionView(question: q, answer: binding)
         case "single_choice":
             // SPEC-084: Gap #19 — pass option_style from appearance to option card views
-            SingleChoiceView(question: q, answer: binding, optionStyle: config.appearance?.option_style)
+            // R89 — thread the resolved theme accent/text colors so the selected radio +
+            // option label honor SurveyTheme.accent_color / text_color (console parity).
+            SingleChoiceView(question: q, answer: binding, optionStyle: config.appearance?.option_style, accentColor: accentColor, textColor: textColor)
         case "multi_choice":
             // SPEC-084: Gap #19 — pass option_style from appearance to option card views
-            MultiChoiceView(question: q, answer: binding, optionStyle: config.appearance?.option_style)
+            // R89 — thread the resolved theme accent/text colors (console parity).
+            MultiChoiceView(question: q, answer: binding, optionStyle: config.appearance?.option_style, accentColor: accentColor, textColor: textColor)
         case "free_text":
             FreeTextView(question: q, answer: binding)
         case "yes_no":

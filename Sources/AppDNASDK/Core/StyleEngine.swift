@@ -255,14 +255,18 @@ extension View {
 
     /// Apply ElementStyleConfig to an option card, or fall back to the default survey option border style.
     /// SPEC-084: Gap #19 — used by SingleChoiceView and MultiChoiceView.
-    func applyContainerStyleOrDefault(_ style: ElementStyleConfig?, isSelected: Bool) -> some View {
+    /// R89 — `accentColor` is the survey theme's resolved accent_color (threaded from the
+    /// choice view). Was `Color.accentColor` (the app-global SwiftUI tint), which ignored
+    /// SurveyTheme.accent_color so the selected card border rendered the host brand indigo
+    /// instead of the console-authored accent. Defaults to `.accentColor` for other callers.
+    func applyContainerStyleOrDefault(_ style: ElementStyleConfig?, isSelected: Bool, accentColor: Color = .accentColor) -> some View {
         if let s = style {
             return AnyView(self.applyContainerStyle(s))
         } else {
             return AnyView(
                 self.background(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(isSelected ? Color.accentColor : Color.gray.opacity(0.3), lineWidth: 1)
+                        .stroke(isSelected ? accentColor : Color.gray.opacity(0.3), lineWidth: 1)
                 )
             )
         }

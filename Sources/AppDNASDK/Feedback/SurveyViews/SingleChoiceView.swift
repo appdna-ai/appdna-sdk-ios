@@ -6,6 +6,13 @@ struct SingleChoiceView: View {
     @Binding var answer: SurveyAnswer?
     // SPEC-084: Gap #19 — option_style from SurveyAppearance applied to each option card
     var optionStyle: ElementStyleConfig? = nil
+    // R89 — honor the survey theme's resolved accent + text colors. Previously the
+    // selected radio was hardcoded `Color(hex: "#6366F1")` and the option label was
+    // `.primary`, ignoring SurveyTheme.accent_color / text_color and diverging from
+    // the console SurveyPreview (which paints both with the theme colors). Defaults
+    // preserve prior behavior for any caller that does not pass them.
+    var accentColor: Color = Color(hex: "#6366F1")
+    var textColor: Color = .primary
 
     private var selectedId: String? {
         answer?.answer as? String
@@ -24,21 +31,22 @@ struct SingleChoiceView: View {
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: selectedId == option.id ? "circle.inset.filled" : "circle")
-                            .foregroundColor(selectedId == option.id ? Color(hex: "#6366F1") : .gray)
+                            .foregroundColor(selectedId == option.id ? accentColor : .gray)
 
                         if let icon = option.icon {
                             Text(icon)
                         }
 
                         Text(option.text ?? "")
-                            .foregroundColor(.primary)
+                            .foregroundColor(textColor)
 
                         Spacer()
                     }
                     .padding(.vertical, optionStyle == nil ? 8 : 0)
                     .padding(.horizontal, optionStyle == nil ? 12 : 0)
                     // SPEC-084: Apply option_style if provided, otherwise fall back to default card border
-                    .applyContainerStyleOrDefault(optionStyle, isSelected: selectedId == option.id)
+                    // R89 — thread the survey accent so the selected card border honors accent_color.
+                    .applyContainerStyleOrDefault(optionStyle, isSelected: selectedId == option.id, accentColor: accentColor)
                 }
             }
         }
