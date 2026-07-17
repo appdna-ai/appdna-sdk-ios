@@ -4,6 +4,12 @@ import SwiftUI
 struct NPSQuestionView: View {
     let question: SurveyQuestion
     @Binding var answer: SurveyAnswer?
+    // R89 — honor the survey theme's resolved colors. Selected score fill was hardcoded
+    // Color(hex:"#6366F1") with a `.white` label (white-on-white when accent is white);
+    // unselected label was `.primary`. Defaults preserve prior behavior.
+    var accentColor: Color = Color(hex: "#6366F1")
+    var buttonTextColor: Color = .white
+    var textColor: Color = .primary
 
     private var selectedScore: Int? {
         answer?.answer as? Int
@@ -22,8 +28,8 @@ struct NPSQuestionView: View {
                         answer = SurveyAnswer(question_id: question.id ?? "", answer: score)
                     }
                     .frame(width: 30, height: 40)
-                    .background(selectedScore == score ? Color(hex: "#6366F1") : Color.gray.opacity(0.1))
-                    .foregroundColor(selectedScore == score ? .white : .primary)
+                    .background(selectedScore == score ? accentColor : Color.gray.opacity(0.1))
+                    .foregroundColor(selectedScore == score ? buttonTextColor : textColor)
                     .cornerRadius(8)
                     .font(.system(size: 14, weight: .medium))
                 }

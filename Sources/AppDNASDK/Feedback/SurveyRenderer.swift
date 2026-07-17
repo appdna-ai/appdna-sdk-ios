@@ -292,11 +292,13 @@ struct SurveyContainerView: View {
 
         switch q.type ?? "" {
         case "nps":
-            NPSQuestionView(question: q, answer: binding)
+            // R89 — thread the resolved theme colors so the selected score honors accent_color.
+            NPSQuestionView(question: q, answer: binding, accentColor: accentColor, buttonTextColor: buttonTextColor, textColor: textColor)
         case "csat":
             CSATQuestionView(question: q, answer: binding)
         case "rating":
-            RatingQuestionView(question: q, answer: binding)
+            // R89 — thread the resolved accent so filled rating icons honor accent_color.
+            RatingQuestionView(question: q, answer: binding, accentColor: accentColor)
         case "single_choice":
             // SPEC-084: Gap #19 — pass option_style from appearance to option card views
             // R89 — thread the resolved theme accent/text colors so the selected radio +
@@ -309,7 +311,8 @@ struct SurveyContainerView: View {
         case "free_text":
             FreeTextView(question: q, answer: binding)
         case "yes_no":
-            YesNoView(question: q, answer: binding)
+            // R89 — thread the resolved theme colors so the selected button honors accent_color.
+            YesNoView(question: q, answer: binding, accentColor: accentColor, buttonTextColor: buttonTextColor, textColor: textColor)
         case "emoji_scale":
             EmojiScaleView(question: q, answer: binding)
         default:

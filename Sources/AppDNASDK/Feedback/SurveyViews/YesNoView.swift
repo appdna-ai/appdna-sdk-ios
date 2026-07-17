@@ -4,6 +4,13 @@ import SwiftUI
 struct YesNoView: View {
     let question: SurveyQuestion
     @Binding var answer: SurveyAnswer?
+    // R89 — honor the survey theme's resolved colors. Selected button fill was hardcoded
+    // Color(hex:"#6366F1") and the selected label was `.white` (white-on-white when the
+    // theme accent is white); the unselected label was `.primary`. Defaults preserve prior
+    // behavior for any caller that does not pass them.
+    var accentColor: Color = Color(hex: "#6366F1")
+    var buttonTextColor: Color = .white
+    var textColor: Color = .primary
 
     private var selectedValue: String? {
         answer?.answer as? String
@@ -23,8 +30,8 @@ struct YesNoView: View {
                         .font(.body.weight(.medium))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(selectedValue == "yes" ? Color(hex: "#6366F1") : Color.gray.opacity(0.1))
-                        .foregroundColor(selectedValue == "yes" ? .white : .primary)
+                        .background(selectedValue == "yes" ? accentColor : Color.gray.opacity(0.1))
+                        .foregroundColor(selectedValue == "yes" ? buttonTextColor : textColor)
                         .cornerRadius(10)
                 }
 

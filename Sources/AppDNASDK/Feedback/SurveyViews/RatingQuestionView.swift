@@ -4,6 +4,11 @@ import SwiftUI
 struct RatingQuestionView: View {
     let question: SurveyQuestion
     @Binding var answer: SurveyAnswer?
+    // R89 — filled rating icons honor the survey theme's resolved accent_color, matching
+    // the console SurveyPreview (which fills rating icons with accentColor for every style).
+    // Was hardcoded per-style (heart .red / thumb #6366F1 / star #FBBF24), which ignored
+    // SurveyTheme.accent_color. Defaults to the brand indigo for callers that don't pass it.
+    var accentColor: Color = Color(hex: "#6366F1")
 
     private var maxRating: Int {
         question.rating_config?.resolvedMax ?? 5
@@ -46,18 +51,10 @@ struct RatingQuestionView: View {
                     } label: {
                         Image(systemName: (selectedRating ?? 0) >= rating ? filledIcon : emptyIcon)
                             .font(.system(size: 28))
-                            .foregroundColor((selectedRating ?? 0) >= rating ? ratingColor : Color(hex: "#D1D5DB"))
+                            .foregroundColor((selectedRating ?? 0) >= rating ? accentColor : Color(hex: "#D1D5DB"))
                     }
                 }
             }
-        }
-    }
-
-    private var ratingColor: Color {
-        switch style {
-        case "heart": return .red
-        case "thumb": return Color(hex: "#6366F1")
-        default: return Color(hex: "#FBBF24")
         }
     }
 }
