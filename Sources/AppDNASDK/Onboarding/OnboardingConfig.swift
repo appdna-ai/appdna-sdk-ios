@@ -161,17 +161,35 @@ public struct OnboardingStep: Codable, Identifiable {
     public let next_step_rules: [NextStepRule]?
     /// When true, the progress indicator is hidden on this step but the step still counts toward total progress.
     public let hide_progress: Bool?
+    /// When true, the back button is hidden on this step (the step still counts toward total progress).
+    public let hide_back: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, config, layout, hook, hide_progress, content_blocks, next_step_rules
+        case id, type, config, layout, hook, hide_progress, hide_back, content_blocks, next_step_rules
     }
+
+    /// `hide_progress` / `hide_back` are authored per-step but the console publishes them INSIDE the
+    /// step's `layout` object (verified against `OnboardingFlowConfigSyncService.mapStepsForFirestore`,
+    /// which never hoists `layout.*` to the step root). Read them from `layout` with a step-root
+    /// fallback for any older/hand-written config.
+    private enum LayoutFlagKeys: String, CodingKey { case hide_progress, hide_back }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
         self.type = try c.decodeIfPresent(StepType.self, forKey: .type) ?? .custom
         self.hook = try c.decodeIfPresent(StepHookConfig.self, forKey: .hook)
-        self.hide_progress = try c.decodeIfPresent(Bool.self, forKey: .hide_progress)
+        // Step-root first (legacy path), then the layout object where the console actually writes them.
+        let rootHideProgress = try c.decodeIfPresent(Bool.self, forKey: .hide_progress)
+        let rootHideBack = try c.decodeIfPresent(Bool.self, forKey: .hide_back)
+        var layoutHideProgress: Bool? = nil
+        var layoutHideBack: Bool? = nil
+        if let layoutFlags = try? c.nestedContainer(keyedBy: LayoutFlagKeys.self, forKey: .layout) {
+            layoutHideProgress = try? layoutFlags.decodeIfPresent(Bool.self, forKey: .hide_progress)
+            layoutHideBack = try? layoutFlags.decodeIfPresent(Bool.self, forKey: .hide_back)
+        }
+        self.hide_progress = rootHideProgress ?? layoutHideProgress
+        self.hide_back = rootHideBack ?? layoutHideBack
         // Read next_step_rules from step level, but also check layout.next_step_rules
         // which may have richer conditions from the Logic panel
         let stepRules = try c.decodeIfPresent([NextStepRule].self, forKey: .next_step_rules)
@@ -204,15 +222,17 @@ public struct OnboardingStep: Codable, Identifiable {
         try c.encode(config, forKey: .config)
         try c.encodeIfPresent(hook, forKey: .hook)
         try c.encodeIfPresent(hide_progress, forKey: .hide_progress)
+        try c.encodeIfPresent(hide_back, forKey: .hide_back)
         try c.encodeIfPresent(next_step_rules, forKey: .next_step_rules)
     }
 
-    public init(id: String = "", type: StepType = .custom, config: StepConfig = StepConfig(), hook: StepHookConfig? = nil, hide_progress: Bool? = nil, next_step_rules: [NextStepRule]? = nil) {
+    public init(id: String = "", type: StepType = .custom, config: StepConfig = StepConfig(), hook: StepHookConfig? = nil, hide_progress: Bool? = nil, hide_back: Bool? = nil, next_step_rules: [NextStepRule]? = nil) {
         self.id = id
         self.type = type
         self.config = config
         self.hook = hook
         self.hide_progress = hide_progress
+        self.hide_back = hide_back
         self.next_step_rules = next_step_rules
     }
 

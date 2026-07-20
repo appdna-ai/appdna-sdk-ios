@@ -84,8 +84,9 @@ struct OnboardingFlowHost: View {
                 progressBar
             }
 
-            // Navigation bar — only render when back button or dismiss button is visible
-            if (flow.settings.allow_back && !navigationHistory.isEmpty) || (flow.settings.dismiss_allowed ?? true) {
+            // Navigation bar — only render when back button or dismiss button is visible.
+            // Per-step `hide_back` suppresses the back affordance on this step (mirrors hide_progress).
+            if (flow.settings.allow_back && !navigationHistory.isEmpty && !currentStepHidesBack) || (flow.settings.dismiss_allowed ?? true) {
                 navigationBar
             }
 
@@ -147,6 +148,17 @@ struct OnboardingFlowHost: View {
                 .frame(maxHeight: .infinity)
                 .onAppear {
                     handleStepAppear(step: step)
+                }
+                // The step content view above is re-created per step via `.id(currentIndex)`, but this
+                // container ZStack is NOT — its `.onAppear` fires only once (first step) and again only
+                // when a modal (paywall) covers/uncovers the flow. Without this, `onBeforeStepRender`,
+                // `onOnboardingStepChanged`, and the `onboarding_step_viewed` event never fire on steps
+                // 2..N. `navigate(to:)` only mutates `currentIndex`, so observe it here and re-run the
+                // step-appear side effects on every genuine transition (mirrors Android's
+                // `LaunchedEffect(currentIndex)` in OnboardingActivity.kt:635).
+                .onChange(of: currentIndex) { _ in
+                    guard currentIndex < flow.steps.count else { return }
+                    handleStepAppear(step: flow.steps[currentIndex])
                 }
                 // Hide step content on the very first render until the initial
                 // image prefetch completes, so users never see an unstyled
@@ -323,7 +335,7 @@ struct OnboardingFlowHost: View {
         let backStyle = flow.settings.back_button_style
         let backSize = backStyle?.icon_size ?? 16
         let backColor: Color = backStyle?.icon_color.flatMap { Color(hex: $0) } ?? Color(hex: "#6B7280")
-        let hasBack = flow.settings.allow_back && !navigationHistory.isEmpty
+        let hasBack = flow.settings.allow_back && !navigationHistory.isEmpty && !currentStepHidesBack
         let dismissAllowed = flow.settings.dismiss_allowed ?? true
         // EPIC-2 — back⇄X switch: show the dismiss in the leading slot on the first/no-history step.
         let leadingIsClose = !hasBack && dismissAllowed && (backStyle?.close_on_first == true)
@@ -530,6 +542,12 @@ struct OnboardingFlowHost: View {
     }
 
     // MARK: - Step lifecycle
+
+    /// True when the current step's `hide_back` flag (authored in the step's `layout`) is set.
+    /// Mirrors the per-step `hide_progress` treatment in `content`.
+    private var currentStepHidesBack: Bool {
+        currentIndex < flow.steps.count && flow.steps[currentIndex].hide_back == true
+    }
 
     private func handleStepAppear(step: OnboardingStep) {
         Task {
