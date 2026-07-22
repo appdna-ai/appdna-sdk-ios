@@ -349,7 +349,10 @@ internal class ScreenManager {
             }
 
         case .openWebview(let url):
-            if let url = URL(string: url) {
+            // Config-driven URL: scheme-check before it reaches the OS (as .openURL does, as the iOS
+            // slot path does, and as Android does for all three verbs). A screen config could otherwise
+            // hand `file:`/`javascript:`/`data:`/cleartext-`http:` straight to the system opener.
+            if let url = URLSafety.sanitized(url) {
                 DispatchQueue.main.async { [urlOpener = self.urlOpener] in
                     // SFSafariViewController would be used here
                     urlOpener(url)
@@ -368,7 +371,9 @@ internal class ScreenManager {
             }
 
         case .deepLink(let url):
-            if let url = URL(string: url) {
+            // Same scheme-check as .openURL / the slot path / Android — a raw opener here was an
+            // allowlist bypass for full-screen SDUI deep-link CTAs.
+            if let url = URLSafety.sanitized(url) {
                 DispatchQueue.main.async { [urlOpener = self.urlOpener] in urlOpener(url) }
             }
 
