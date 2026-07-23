@@ -115,6 +115,15 @@ final class FlowActionRoutingTests: XCTestCase {
     }
 
     func testDeepLinkInAFlowReachesTheScreenRouter() {
+        // A custom-scheme deep link is only allowed when the HOST registers that scheme
+        // (URLSafety.hostSchemes ← CFBundleURLTypes). Under XCTest `Bundle.main` is the test runner,
+        // which registers nothing — so without this stand-in the URL is refused by policy and this
+        // test fails for a reason that never occurs in a real app, masking what it actually asserts:
+        // that a flow action reaches the router at all.
+        let realHostSchemes = URLSafety.hostSchemes
+        URLSafety.hostSchemes = ["myapp"]
+        defer { URLSafety.hostSchemes = realHostSchemes }
+
         let flowManager = manager(conditionalFlow)
         let router = ScreenManager()
         let opened = expectation(description: "deep link opened")

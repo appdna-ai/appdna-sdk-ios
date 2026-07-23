@@ -1780,6 +1780,17 @@ public final class AppDNA: @unchecked Sendable {
         shared.isConfigured = false
         shared.initLock.unlock()
 
+        // 🔴 DROP THE ENTITLEMENT HANDLERS SYNCHRONOUSLY, FOR THE SAME REASON `isConfigured` IS CLEARED
+        // SYNCHRONOUSLY ABOVE. This used to live inside the async `billing.teardown()` below, which made
+        // it a race against the caller rather than a guarantee: `shutdown(); configure()` on one tick
+        // (sign-out→sign-in, an RN reload) re-registers a handler the moment `shutdown()` RETURNS, and
+        // the teardown then landed and removed THAT handler — so entitlement changes stopped being
+        // delivered at all, which is strictly worse than the duplicate delivery the removal exists to
+        // prevent. Clearing here makes the contract positional instead of temporal: once `shutdown()`
+        // returns, the pre-shutdown handlers are gone and anything registered afterwards is the
+        // caller's and survives. `teardown()` deliberately no longer clears them.
+        billing.removeAllEntitlementsChangedHandlers()
+
         shared.queue.async {
             // 🔴 BILLING GOES DOWN FIRST — BEFORE THE PIPELINE THAT REPORTS IT.
             //

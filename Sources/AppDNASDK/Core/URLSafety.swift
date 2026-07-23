@@ -27,7 +27,13 @@ internal enum URLSafety {
 
     /// The custom URL schemes the host app declares in its Info.plist. A deep link back into the
     /// host is not external navigation, so it is allowed.
-    static let hostSchemes: Set<String> = {
+    ///
+    /// `var`, not `let`, purely so tests can stand in for a host that registers a scheme. Under XCTest
+    /// `Bundle.main` is the test runner, which declares no `CFBundleURLTypes` — so a genuine
+    /// custom-scheme deep link (`myapp://…`) is refused there for a reason that never applies in a real
+    /// app, and a routing test would fail on POLICY rather than on the routing it exists to assert.
+    /// Production never assigns this; it stays the bundle-derived set computed below.
+    static var hostSchemes: Set<String> = {
         guard let urlTypes = Bundle.main.infoDictionary?["CFBundleURLTypes"] as? [[String: Any]] else {
             return []
         }

@@ -78,7 +78,10 @@ extension AppDNA {
         internal func teardown() {
             bridge = nil
             eventTracker = nil
-            removeAllEntitlementsChangedHandlers()
+            // Entitlement handlers are dropped SYNCHRONOUSLY by `AppDNA.shutdown()`, before this async
+            // teardown is even queued. Clearing them again here would remove a handler the caller
+            // legitimately registered after `shutdown()` returned — the `shutdown(); configure()`
+            // one-tick sequence every wrapper uses. See the note at the top of `AppDNA.shutdown()`.
         }
         /// SPEC-070-B PN row 3 (E3): keyed by token so a handler can be removed. An append-only array
         /// had no removal method anywhere in the SDK, so a wrapper that re-`configure()`s (a React
